@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+build/
+dist/
+.env*
+*credentials*.json
+*token*.json
+data/
+runs/
+private/
+local*.json
+*.xlsx
+*.csv

@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "record-of-counsel"
+version = "0.1.0"
+description = "Deterministic PACER case indexing and client-specific docket enrichment"
+requires-python = ">=3.11"
+dependencies = ["openpyxl>=3.1,<4"]
+
+[project.optional-dependencies]
+live = ["playwright>=1.50,<2"]
+
+[project.scripts]
+roc = "roc.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["roc*"]

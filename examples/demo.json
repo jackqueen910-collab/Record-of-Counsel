@@ -1,0 +1,7 @@
+{
+  "lawyer": {"firstName": "Jordan", "lastName": "Lawyer", "aliases": []},
+  "indexFile": "demo-index.json",
+  "runDirectory": "../runs/demo",
+  "budgetCents": 0,
+  "savedDockets": [{"courtId":"nysdc","caseNumber":"1:24-cr-00001","path":"demo-docket.html"}]
+}
