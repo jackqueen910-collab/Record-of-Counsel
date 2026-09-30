@@ -164,10 +164,14 @@ class ApiTests(unittest.TestCase):
             session = Session("token", requester=request)
             rows = collect_index(session, {"lastName": "Lawyer"}, store, delay=0)
             self.assertEqual(len(rows), 2)
-            collect_index(session, {"lastName": "Lawyer"}, store, delay=0)
+            updates = []
+            collect_index(session, {"lastName": "Lawyer"}, store, delay=0,
+                          progress=lambda stage, message, **details: updates.append((message, details)))
             self.assertEqual(calls, [0, 1])
             self.assertEqual(session.token, "rotated")
             self.assertEqual(store.spent, 20)
+            self.assertTrue(all("no new charge" in msg for msg, details in updates))
+            self.assertTrue(all(details["newSearchChargesCents"] == 0 for msg, details in updates))
 
 
 class IndexOutputTests(unittest.TestCase):

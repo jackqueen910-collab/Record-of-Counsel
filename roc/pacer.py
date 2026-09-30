@@ -125,6 +125,7 @@ class Session:
 
 def collect_index(session, criteria, store, delay=5, max_pages=1000, progress=None):
     rows, total, seen_pages = [], None, set()
+    spent_at_start = store.spent
     for page in range(max_pages):
         if page:
             time.sleep(delay)
@@ -144,10 +145,11 @@ def collect_index(session, criteria, store, delay=5, max_pages=1000, progress=No
         seen_pages.add(signature)
         rows.extend(content)
         if progress:
-            source = "Saved PCL API response" if session.last_page_cached else "Fresh PCL API response"
+            source = "Cached PCL page - no new charge" if session.last_page_cached else "Fresh PCL API response"
             progress("searching", f"{source}: page {page + 1}; {len(rows)} of {total} attorney records collected. "
-                     f"Receipts so far: ${store.spent / 100:.2f}.", recordsCollected=len(rows),
-                     totalRecords=total, chargedCents=store.spent)
+                     f"New search charges this launch: ${(store.spent - spent_at_start) / 100:.2f}. "
+                     f"Job total including earlier launches: ${store.spent / 100:.2f}.", recordsCollected=len(rows),
+                     totalRecords=total, chargedCents=store.spent, newSearchChargesCents=store.spent - spent_at_start)
         if info.get("last"):
             if len(rows) != total:
                 raise RocError("Incomplete PCL collection.")
