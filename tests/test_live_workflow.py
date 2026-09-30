@@ -11,6 +11,7 @@ from roc.cli import run
 from roc.common import RocError, read_json, write_json
 from roc.index import build_index
 from roc.pacer import Session
+from roc.retrieve import court_cookies
 from roc.select import select_dockets, validate_options
 from tests.test_roc import report, party, count
 
@@ -51,6 +52,17 @@ class SelectionTests(unittest.TestCase):
 
 
 class LiveWorkflowTests(unittest.TestCase):
+    def test_api_token_uses_case_sensitive_court_cookie(self):
+        session = Session.login("user", "password", requester=lambda *args: (
+            '{"loginResult":"0","nextGenCSO":"fictional-token"}', {}))
+        cookies = court_cookies(session, "https://ecf.njd.uscourts.gov")
+        self.assertEqual(cookies[0]["name"], "NextGenCSO")
+        self.assertEqual(cookies[0]["value"], "fictional-token")
+        self.assertEqual(cookies[0]["url"], "https://ecf.njd.uscourts.gov")
+        self.assertNotIn("domain", cookies[0])  # Never broadcast to all .uscourts.gov hosts.
+        with self.assertRaises(RocError):
+            court_cookies(session, "https://example.com")
+
     def test_fresh_search_to_selected_docket_to_output_without_saved_input(self):
         requests = []
         def request(url, payload, headers):

@@ -108,6 +108,7 @@ class Session:
     def search_page(self, criteria, page, store):
         parameters = {"criteria": criteria, "page": page}
         cached = store.cached("pcl", parameters)
+        self.last_page_cached = bool(cached)
         if cached:
             return json.loads(cached.read_text(encoding="utf-8"))
         t = store.reserve("pcl", parameters, 10)
@@ -143,7 +144,8 @@ def collect_index(session, criteria, store, delay=5, max_pages=1000, progress=No
         seen_pages.add(signature)
         rows.extend(content)
         if progress:
-            progress("searching", f"PCL API: page {page + 1}; {len(rows)} of {total} attorney records collected. "
+            source = "Saved PCL API response" if session.last_page_cached else "Fresh PCL API response"
+            progress("searching", f"{source}: page {page + 1}; {len(rows)} of {total} attorney records collected. "
                      f"Receipts so far: ${store.spent / 100:.2f}.", recordsCollected=len(rows),
                      totalRecords=total, chargedCents=store.spent)
         if info.get("last"):

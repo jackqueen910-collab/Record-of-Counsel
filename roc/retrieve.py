@@ -10,6 +10,17 @@ from .common import RocError, normalize_case_number, fingerprint, write_json
 from .docket import parse_report
 
 SUPPORTED_HOSTS = {"ecf.nysd.uscourts.gov", "ecf.njd.uscourts.gov"}
+COURT_TOKEN_COOKIE = "NextGenCSO"  # Court cookie is case-sensitive; API JSON uses nextGenCSO.
+
+
+def court_cookies(session, origin):
+    court_origin(origin)
+    cookies = [{"name": COURT_TOKEN_COOKIE, "value": session.token, "url": origin,
+                "secure": True, "httpOnly": True, "sameSite": "Lax"}]
+    if session.client_code:
+        cookies.append({"name": "PacerClientCode", "value": session.client_code, "url": origin,
+                        "secure": True, "httpOnly": True, "sameSite": "Lax"})
+    return cookies
 
 
 def court_origin(url):
@@ -63,10 +74,7 @@ class CourtRetriever:
                 raise RocError("The standalone Chromium runtime could not start. Install it with python -m playwright install chromium; no court report was requested.") from None
             context = browser.new_context()
             # Token is sent only to this selected court, never persisted as browser state.
-            cookies = [{"name": "nextGenCSO", "value": self.session.token, "url": origin, "secure": True}]
-            if self.session.client_code:
-                cookies.append({"name": "PacerClientCode", "value": self.session.client_code, "url": origin, "secure": True})
-            context.add_cookies(cookies)
+            context.add_cookies(court_cookies(self.session, origin))
             page = context.new_page()
             page.set_default_timeout(30000)
             phase = "opening the court report form"
@@ -126,7 +134,7 @@ class CourtRetriever:
                 if report["caseNumber"] != number:
                     raise RocError("Court returned a different case; saved response requires review.")
                 for cookie in context.cookies(origin):
-                    if cookie["name"] == "nextGenCSO":
+                    if cookie["name"] == COURT_TOKEN_COOKIE:
                         self.session.token = cookie["value"]
                 self.progress("docket_saved", f"Saved docket and receipt for {case['key']}. Total receipts: ${self.store.spent / 100:.2f}.",
                               chargedCents=self.store.spent)

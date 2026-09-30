@@ -2,7 +2,7 @@
 
 An on-demand, deterministic PACER workflow. No AI model, Codex session, chat connector, or web host is required to run the program.
 
-**Current release: 0.1 prototype.** The complete saved-data workflow runs independently. Official API transport and the court-web retrieval adapter are implemented; the new standalone live retrieval path still needs its own authorized, paid acceptance test. Do not mistake offline tests for nationwide live coverage.
+**Current release: 0.1 prototype.** A standalone live attorney search has been verified through the official authentication and PCL APIs. The court-web retrieval adapter is implemented but has not yet completed its live acceptance test. Do not mistake API indexing or offline parser tests for verified docket retrieval or nationwide coverage.
 
 ## What it does
 
@@ -136,3 +136,5 @@ This creates a new workbook and returns its URL. It does not overwrite the exist
 | `roc/cli.py` | Single runnable workflow |
 
 Public interface references: [PACER authentication API](https://pacer.uscourts.gov/sites/default/files/files/PACER%20Authentication%20API-2025_v2_0.pdf), [PCL API](https://pacer.uscourts.gov/sites/default/files/files/PCL-API-08-2026-1.pdf), [Playwright](https://playwright.dev/python/docs/intro), [Google Sheets API](https://developers.google.com/workspace/sheets/api/reference/rest/v4/spreadsheets/batchUpdate).
+
+Court cookie naming is case-sensitive: the authentication JSON property is `nextGenCSO`, while the court cookie is `NextGenCSO` (also used by [Juriscraper's PACER session implementation](https://github.com/freelawproject/juriscraper/blob/main/juriscraper/pacer/http.py)). ROC scopes that cookie to the selected court host, preserves it only in memory, and stops if the court redirects to login.
