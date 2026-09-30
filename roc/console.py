@@ -26,17 +26,20 @@ def reload_workflow():
     # Explicit Resume allows code fixes to take effect without re-authentication.
     # Do not reload common/store/pacer: keep exception identities and the session intact.
     importlib.invalidate_caches()
-    for name in ("courts", "docket", "index", "output", "retrieve", "select", "cli"):
+    for name in ("courts", "docket", "index", "output", "retrieve", "select", "validation", "cli"):
         importlib.reload(importlib.import_module("roc." + name))
 
 
-def run_live_session(config_path, publish=False, *, reader=input, attempt=None, reloader=reload_workflow):
+def run_live_session(config_path, publish=False, *, workflow="run", reader=input, attempt=None, reloader=reload_workflow):
     if attempt is None and (not sys.stdin.isatty() or not sys.stdout.isatty()):
         raise RocError("--keep-session needs an interactive terminal.")
     config_path = Path(config_path).resolve()
     holder = SessionHolder()
     if attempt is None:
         def attempt(provider):
+            if workflow == "validate-courts":
+                from .validation import execute_validation
+                return execute_validation(config_path, True, provider)
             from .cli import execute_run
             return execute_run(config_path, True, publish, provider)
     try:

@@ -40,6 +40,7 @@ def build_index(records, court_labels=None):
         cases = [r.get("courtCase", r) for r in entries]
         warnings = []
         jurisdictions = {clean(c.get("jurisdictionType") or r.get("jurisdictionType")).lower() for r, c in zip(entries, cases)}
+        jurisdictions = {{"cr": "criminal", "cv": "civil", "bk": "bankruptcy"}.get(j, j) for j in jurisdictions}
         kind = "Criminal" if jurisdictions == {"criminal"} else "Civil" if jurisdictions <= {"civil", "bankruptcy"} and jurisdictions else ""
         if not kind:
             warnings.append("Case Type not unambiguously supplied by PCL.")

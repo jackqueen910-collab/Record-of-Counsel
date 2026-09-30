@@ -131,6 +131,28 @@ This fragment belongs in an otherwise complete run configuration. Actual retriev
 
 Coverage is recorded in `docket-plan.json`, per-docket evidence and output cell notes, without adding columns to the ten-column index. PCL indexing remains separate: records from other court types can still be retained in the index, but this expansion never retrieves their dockets.
 
+### Run a bounded court-validation batch
+
+`validate-courts` exercises the court adapter without depending on a particular lawyer or earlier dataset. Configure explicit district IDs, civil/criminal types, a filing-date window and a run-folder spending cap. Preview it without sign-in or network access:
+
+```console
+python -m roc validate-courts examples/court-batch.json
+```
+
+Copy that example to a local configuration and set the authorized budget before a live run:
+
+```console
+python -m roc validate-courts local-court-validation.json --live --keep-session
+```
+
+On Windows, `Validate-Courts.cmd` opens the same workflow using `local-court-validation.json` by default, or a configuration path supplied as its first argument. The ordinary `Run-ROC.cmd` attorney workflow remains separate.
+
+The batch buys **one official PCL case-search results page (up to 54 records) per court/type**, then selects **at most one full docket from that page**. At the current page/report rates, each slot reserves at most $0.10 for discovery and $3 for the docket. A 14-court civil/criminal batch therefore has 28 slots and a planned ceiling of $86.80. Its configured cap is enforced independently by the persistent ledger. Discovery pages are samples, not comprehensive indexes. No further result pages or replacement dockets are purchased automatically. An empty or unusable page is recorded as `no-candidate`.
+
+All discovery finishes through the official API before reports are requested from court websites. Authentication, API, form, receipt and report-identity failures stop the batch; no browser search or login fallback occurs. Resume reuses saved search pages and reports. Changing the court/type/date scope requires a new run folder, preventing an unnoticed expansion of an existing batch.
+
+Each saved report is parsed once and tested against the attorneys found in its party/counsel blocks. This exercises civil plaintiff/defense or prosecution/criminal defense roles and client-specific counts without additional report purchases. `validation-results.json` preserves parsed parties, individual attorney trials, warnings and source file paths; `validation-report.html` gives a readable progress/results table. These are automated structural and consistency checks, **not independent verification of every source field**. Missing roles, missing civil Nature of Suit or absent usable defense counts produce review items. The command never promotes a court's registry status automatically; source review is a separate step.
+
 ## Receipts, interrupted runs and duplicate charges
 
 Every paid operation is reserved in `ledger.json` before submission. Its raw reply is saved before receipt interpretation. Successful identical requests reuse the saved response. An unresolved request blocks further paid operations, including retries of the same request.

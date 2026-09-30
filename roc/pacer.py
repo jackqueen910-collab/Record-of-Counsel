@@ -9,6 +9,7 @@ from .common import RocError
 
 AUTH_URL = "https://pacer.login.uscourts.gov/services/cso-auth"
 PCL_URL = "https://pcl.uscourts.gov/pcl-public-api/rest/parties/find"
+PCL_CASE_URL = "https://pcl.uscourts.gov/pcl-public-api/rest/cases/find"
 REDACTION_NOTICE = (
     "All filers must redact Social Security/taxpayer IDs, dates of birth, names of minor children, "
     "financial account numbers, and (in criminal cases) home addresses in accordance with the "
@@ -100,16 +101,23 @@ class Session:
                 raise RocError("Sign-in cancelled. No automatic login retry.")
 
     def search_page(self, criteria, page, store):
+        return self._search_page(criteria, page, store, "pcl", PCL_URL)
+
+    def search_cases_page(self, criteria, page, store):
+        """Official case search; its cache cannot collide with party searches."""
+        return self._search_page(criteria, page, store, "pcl-case", PCL_CASE_URL)
+
+    def _search_page(self, criteria, page, store, kind, endpoint):
         parameters = {"criteria": criteria, "page": page}
-        cached = store.cached("pcl", parameters)
+        cached = store.cached(kind, parameters)
         self.last_page_cached = bool(cached)
         if cached:
             return json.loads(cached.read_text(encoding="utf-8"))
-        t = store.reserve("pcl", parameters, 10)
+        t = store.reserve(kind, parameters, 10)
         headers = {"X-NEXT-GEN-CSO": self.token}
         if self.client_code:
             headers["X-CLIENT-CODE"] = self.client_code
-        raw, response_headers = self.requester(f"{PCL_URL}?page={page}", criteria, headers)
+        raw, response_headers = self.requester(f"{endpoint}?page={page}", criteria, headers)
         path = store.finish(t, raw)
         rotated = next((v for k, v in response_headers.items() if k.lower() == "x-next-gen-cso"), None)
         if rotated:

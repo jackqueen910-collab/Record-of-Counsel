@@ -1,0 +1,10 @@
+{
+  "courts": ["nyedc", "dcdc"],
+  "caseTypes": ["Civil", "Criminal"],
+  "allowUnverifiedCourts": true,
+  "dateFiledFrom": "2025-09-01",
+  "dateFiledTo": "2025-09-30",
+  "runDirectory": "../runs/example-court-batch",
+  "budgetCents": 0,
+  "requestDelaySeconds": 5
+}

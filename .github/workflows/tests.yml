@@ -15,6 +15,7 @@ jobs:
           ROC_BROWSER_TESTS: '1'
       - run: python -m roc run examples/demo.json
       - run: python -m roc plan examples/district-validation.json
+      - run: python -m roc validate-courts examples/court-batch.json
       - run: python -m pip wheel --no-deps . --wheel-dir dist
       - name: Verify packaged court registry
         run: |

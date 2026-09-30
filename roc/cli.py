@@ -161,8 +161,20 @@ def main(argv=None):
     inventory.add_argument("--json", action="store_true", help="Print the court registry as JSON.")
     plan = sub.add_parser("plan", help="Preview docket selection from saved index data; no login, network or purchases.")
     plan.add_argument("config", type=Path)
+    validate = sub.add_parser("validate-courts", help="One API results page and one full docket per court/type; preview by default.")
+    validate.add_argument("config", type=Path)
+    validate.add_argument("--live", action="store_true")
+    validate.add_argument("--keep-session", action="store_true")
     args = parser.parse_args(argv)
     try:
+        if args.command == "validate-courts":
+            if args.keep_session:
+                if not args.live:
+                    raise RocError("--keep-session requires --live.")
+                from .console import run_live_session
+                return run_live_session(args.config, workflow="validate-courts")
+            from .validation import execute_validation
+            return execute_validation(args.config, args.live)
         if args.command == "courts":
             summary = registry_summary()
             if args.json:
