@@ -171,6 +171,55 @@ def save_results(root, plan, samples, store, status, reason=None):
     return summary
 
 
+def save_plan(root, plan, continuation=None):
+    """Allow removal-only resumes, retaining the previous scope and results."""
+    manifest_path = root / "validation-plan.json"
+    identity = fingerprint({"slots": plan["slots"], "methods": plan["methods"]})
+    if manifest_path.exists():
+        message = "Validation scope differs from this run folder. Use a new folder for a different batch."
+        try:
+            prior = read_json(manifest_path)
+            # Rebuild the saved scope to reject incomplete or inconsistent metadata.
+            criteria = prior["slots"][0]["criteria"]
+            rebuilt = validation_plan({"courts": prior["courts"], "caseTypes": prior["caseTypes"],
+                "dateFiledFrom": criteria["dateFiledFrom"], "dateFiledTo": criteria["dateFiledTo"],
+                "runDirectory": str(root), "budgetCents": prior["budgetCents"],
+                "allowUnverifiedCourts": True})
+            if (prior["slots"] != rebuilt["slots"] or prior["methods"] != rebuilt["methods"]
+                    or prior["identity"] != fingerprint({"slots": prior["slots"], "methods": prior["methods"]})):
+                raise RocError(message)
+        except (KeyError, IndexError, TypeError, ValueError, RocError):
+            raise RocError(message) from None
+        if prior["identity"] != identity:
+            old_slots = {fingerprint(s) for s in prior["slots"]}
+            new_slots = {fingerprint(s) for s in plan["slots"]}
+            if plan["methods"] != prior["methods"] or not new_slots < old_slots:
+                raise RocError(message)
+            if continuation:
+                raise RocError("Resolve the pending report confirmation before reducing validation scope.")
+            history = root / "scope-history" / (prior["identity"][:12] + "-to-" + identity[:12])
+            history.mkdir(parents=True, exist_ok=True)
+            # Never replace a prior snapshot, including after an interrupted update.
+            for name in ("validation-plan.json", "validation-results.json", "validation-report.html"):
+                source, target = root / name, history / name
+                if not source.exists():
+                    continue
+                raw = source.read_bytes()
+                if target.exists():
+                    if target.read_bytes() != raw:
+                        raise RocError("Scope history already exists with different contents; review before resuming.")
+                else:
+                    with target.open("xb") as stream:
+                        stream.write(raw)
+            change_path = history / "scope-change.json"
+            if not change_path.exists():
+                write_json(change_path, {"changedUtc": now(), "previousIdentity": prior["identity"],
+                    "newIdentity": identity, "reason": "Operator removed slots from the configured scope.",
+                    "removedSlots": [s for s in prior["slots"] if fingerprint(s) not in new_slots],
+                    "accounting": "All earlier receipts and responses remain in the same run and count toward its cap."})
+    write_json(manifest_path, {"identity": identity, **plan})
+
+
 def run_validation(config_path, live=False, session_provider=None):
     path = Path(config_path).resolve()
     config = read_json(path)
@@ -182,11 +231,7 @@ def run_validation(config_path, live=False, session_provider=None):
     with RunStore(root, config["budgetCents"]) as store:
         continuation = pending_confirmation(store)
         progress = Progress(root)
-        manifest_path = root / "validation-plan.json"
-        identity = fingerprint({"slots": plan["slots"], "methods": plan["methods"]})
-        if manifest_path.exists() and read_json(manifest_path).get("identity") != identity:
-            raise RocError("Validation scope differs from this run folder. Use a new folder for a different batch.")
-        write_json(manifest_path, {"identity": identity, **plan})
+        save_plan(root, plan, continuation)
         progress("awaiting_sign_in", f"Validation: {len(plan['courts'])} courts, at most {plan['maximumDockets']} full reports. "
                  f"Total run cap ${config['budgetCents'] / 100:.2f}. Official API sign-in required.")
         session = (session_provider or Session.prompt)()

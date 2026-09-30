@@ -70,6 +70,27 @@ class ParserTests(unittest.TestCase):
         self.assertEqual(enrich(parsed, ["Sample City Interpreter"])["team"], "")
         self.assertEqual(enrich(parsed, ["Jordan Lawyer"])["team"], "Criminal Defense")
 
+    def test_probation_and_marshal_accounts_require_agency_block_evidence(self):
+        html = report(party("Plaintiff", "USA", "Jordan Lawyer"))
+        html = html.replace("<b>Jordan Lawyer</b>",
+            "<b>Jordan Lawyer</b><br>Designation: Retained"
+            "<b>US Probation</b><br>UNITED STATES PROBATION OFFICE<br>LEAD ATTORNEY<br>Designation: Retained"
+            "<b>USM</b><br>UNITED STATES MARSHAL<br>LEAD ATTORNEY<br>Designation: Retained")
+        parsed = parse_report(html)
+        self.assertEqual(parsed["parties"][0]["counsel"], ["Jordan Lawyer"])
+        self.assertEqual(parsed["parties"][0]["courtContacts"], ["US Probation", "USM"])
+        self.assertEqual(parse_report(report(party("Plaintiff", "USA", "USM")))["parties"][0]["counsel"], ["USM"])
+
+    def test_claimant_and_intervenor_counsel_are_retained_without_invented_team(self):
+        for role in ("Claimant", "Intervenor"):
+            parsed = parse_report(report(party("Defendant", "Property", "") +
+                                         party(role, "Other Party", "Jordan Lawyer"), "CIVIL"))
+            self.assertEqual(parsed["parties"][1]["role"], role)
+            evidence = enrich(parsed, ["Jordan Lawyer"])
+            self.assertEqual(evidence["representedParties"], ["Other Party"])
+            self.assertEqual(evidence["team"], "")
+            self.assertIn("Counsel side is ambiguous or unsupported.", evidence["warnings"])
+
     def test_superseded_versions_not_double_counted(self):
         html = report(party("Defendant", "Client", "Jordan Lawyer",
             count("18:1343.F FRAUD BY WIRE", "1", "Superseded") + count("18:1343.F FRAUD BY WIRE", "1s-3s", "Guilty")))

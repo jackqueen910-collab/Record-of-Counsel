@@ -110,7 +110,11 @@ def counsel_blocks(cell):
         if re.search(r"\bPRO[\s-]*SE\b", block["text"], re.I):
             target = self_represented
         elif (re.search(r"\bDesignation:\s*(?:Pretrial Services|Probation Department|Interpreter)\b", block["text"], re.I)
-              or re.fullmatch(r"[A-Za-z .-]*\bInterpreter", block["name"], re.I)):
+              or re.fullmatch(r"[A-Za-z .-]*\bInterpreter", block["name"], re.I)
+              or (name_key(block["name"]) == "us probation" and
+                  re.search(r"\bUNITED STATES PROBATION OFFICE\b", block["text"], re.I))
+              or (name_key(block["name"]) == "usm" and
+                  re.search(r"\bUNITED STATES MARSHAL\b", block["text"], re.I))):
             # Court notification entries can appear in the representation cell.
             # Use explicit staff labels, never an attorney's office/address text.
             target = court_contacts
@@ -138,7 +142,7 @@ def parse_report(html):
         values = [clean(c.text()) for c in cells]
         if len(values) >= 3 and values[0] == "Date Filed" and "Docket Text" in values[-1]:
             break
-        role = re.fullmatch(r"(Defendant|Plaintiff|Interested Party|Petitioner|Respondent|Movant|Debtor|Creditor)(?:\s*\((\d+)\))?", values[0], re.I)
+        role = re.fullmatch(r"(Defendant|Plaintiff|Interested Party|Petitioner|Respondent|Movant|Debtor|Creditor|Claimant|Intervenor)(?:\s*\((\d+)\))?", values[0], re.I)
         if role:
             party = {"role": role[1].title(), "defendantNumber": role[2], "name": "", "counsel": [], "counts": [], "warnings": []}
             result["parties"].append(party)

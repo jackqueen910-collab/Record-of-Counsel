@@ -409,7 +409,9 @@
       "origin": "https://ecf.gud.uscourts.gov",
       "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/GUDC",
       "adapter": "district-cmecf",
-      "headingAliases": [],
+      "headingAliases": [
+        "District Court of Guam"
+      ],
       "validation": {
         "status": "unverified"
       }

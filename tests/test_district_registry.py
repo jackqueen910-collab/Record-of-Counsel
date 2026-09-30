@@ -209,6 +209,10 @@ class OfflinePlanAndAdapterTests(unittest.TestCase):
         profile = court_profile("nmidc")
         self.assertTrue(profile.matches_heading("District Court for the Northern Mariana Islands CRIMINAL DOCKET"))
         self.assertFalse(profile.matches_heading("District of Guam CRIMINAL DOCKET"))
+        guam = court_profile('gudc')
+        self.assertTrue(guam.matches_heading('District Court of Guam (Hagatna) CIVIL DOCKET'))
+        self.assertFalse(profile.matches_heading('District Court of Guam (Hagatna) CIVIL DOCKET'))
+        self.assertFalse(guam.matches_heading('District Court for the Northern Mariana Islands'))
 
     def test_state_first_heading_keeps_district_identity(self):
         heading = "U.S. District Court California Northern District (San Francisco) CIVIL DOCKET FOR CASE #: 3:25-cv-00001"

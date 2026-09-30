@@ -8,12 +8,12 @@ import unittest
 from unittest.mock import patch
 
 from roc.cli import main
-from roc.common import RocError, read_json, write_json
+from roc.common import RocError, fingerprint, read_json, write_json
 from roc.courts import court_profile
 from roc.index import build_index
 from roc.pacer import Session
 from roc.store import RunStore
-from roc.validation import assess_report, pick_case, run_validation, validation_plan
+from roc.validation import assess_report, pick_case, run_validation, save_plan, validation_plan
 from tests.test_roc import party, count, report
 
 
@@ -135,6 +135,23 @@ class BatchValidationTests(unittest.TestCase):
             self.assertFalse(result["registryPromoted"])
             self.assertTrue((Path(folder) / "run/validation-report.html").exists())
             self.assertNotIn("rotated-fictional", (Path(folder) / "run/validation-results.json").read_text())
+            root = Path(folder) / "run"
+            before = {name: (root / name).read_bytes() for name in
+                      ("validation-plan.json", "validation-results.json", "validation-report.html", "ledger.json")}
+            write_json(path, config(courts=["nyedc"]))
+            with patch("roc.validation.CourtRetriever", FakeCourt), patch("roc.validation.time.sleep"), contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(run_validation(path, True, lambda: Session("fictional", requester=requester)), 0)
+            self.assertEqual((len(requests), len(FakeCourt.calls)), (4, 4))
+            result = read_json(root / "validation-results.json")
+            self.assertEqual((result["chargedCents"], result["downloadedDockets"]), (1240, 2))
+            self.assertEqual((root / "ledger.json").read_bytes(), before["ledger.json"])
+            history = list((root / "scope-history").iterdir())
+            self.assertEqual(len(history), 1)
+            for name in ("validation-plan.json", "validation-results.json", "validation-report.html"):
+                self.assertEqual((history[0] / name).read_bytes(), before[name])
+            change = read_json(history[0] / "scope-change.json")
+            self.assertEqual({s["courtId"] for s in change["removedSlots"]}, {"dcdc"})
+            self.assertEqual(len(read_json(root / "validation-plan.json")["slots"]), 2)
 
     def test_api_failure_does_not_fall_back_to_court_retrieval(self):
         def requester(*_):
@@ -183,3 +200,55 @@ class BatchValidationTests(unittest.TestCase):
             with patch("roc.validation.Session.prompt") as login, self.assertRaisesRegex(RocError, "scope differs"):
                 run_validation(path, True)
             login.assert_not_called()
+
+    def test_scope_expansion_replacement_and_date_changes_refused_before_sign_in(self):
+        for changes in ({"courts": ["nyedc", "dcdc", "gudc"]}, {"courts": ["nyedc", "gudc"]},
+                        {"dateFiledTo": "2024-01-30"}, {"courts": ["nyedc"], "dateFiledFrom": "2024-01-02"}):
+            with self.subTest(changes=changes), tempfile.TemporaryDirectory() as folder:
+                path, root = Path(folder) / "config.json", Path(folder) / "run"
+                save_plan(root, validation_plan(config()))
+                before = (root / "validation-plan.json").read_bytes()
+                write_json(path, config(**changes))
+                with patch("roc.validation.Session.prompt") as login, self.assertRaisesRegex(RocError, "scope differs"):
+                    run_validation(path, True)
+                login.assert_not_called()
+                self.assertEqual((root / "validation-plan.json").read_bytes(), before)
+                self.assertFalse((root / "scope-history").exists())
+
+    def test_reduction_refuses_modified_methods_or_corrupt_saved_metadata(self):
+        for change in ("method", "criteria", "identity"):
+            with self.subTest(change=change), tempfile.TemporaryDirectory() as folder:
+                root = Path(folder)
+                save_plan(root, validation_plan(config()))
+                saved = read_json(root / "validation-plan.json")
+                if change == "method":
+                    saved["methods"]["discovery"] = "a different method"
+                elif change == "criteria":
+                    saved["slots"][1]["criteria"]["dateFiledTo"] = "2024-01-02"
+                saved["identity"] = fingerprint({"slots": saved["slots"], "methods": saved["methods"]})
+                if change == "identity":
+                    saved["identity"] = "incorrect"
+                write_json(root / "validation-plan.json", saved)
+                with self.assertRaisesRegex(RocError, "scope differs"):
+                    save_plan(root, validation_plan(config(courts=["nyedc"])))
+                self.assertFalse((root / "scope-history").exists())
+
+    def test_pending_confirmation_blocks_scope_reduction_before_sign_in(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path, root = Path(folder) / "config.json", Path(folder) / "run"
+            save_plan(root, validation_plan(config()))
+            write_json(path, config(courts=["nyedc"]))
+            with patch("roc.validation.pending_confirmation", return_value={"parameters": {"court": "dcdc"}}), \
+                    patch("roc.validation.Session.prompt") as login, \
+                    self.assertRaisesRegex(RocError, "pending report confirmation"):
+                run_validation(path, True)
+            login.assert_not_called()
+            self.assertEqual(len(read_json(root / "validation-plan.json")["slots"]), 4)
+
+    def test_case_type_reduction_preserves_original_scope(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            save_plan(root, validation_plan(config()))
+            save_plan(root, validation_plan(config(caseTypes=["Civil"])))
+            self.assertEqual(read_json(root / "validation-plan.json")["caseTypes"], ["Civil"])
+            self.assertEqual(len(list((root / "scope-history").iterdir())), 1)
