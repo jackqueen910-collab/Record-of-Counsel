@@ -2,7 +2,7 @@
 
 An on-demand, deterministic PACER workflow. No AI model, Codex session, chat connector, or web host is required to run the program.
 
-**Current release: 0.1 prototype.** A standalone live attorney search has been verified through the official authentication and PCL APIs. The court-web retrieval adapter is implemented but has not yet completed its live acceptance test. Do not mistake API indexing or offline parser tests for verified docket retrieval or nationwide coverage.
+**Current release: 0.1 prototype.** The standalone workflow has completed a live acceptance run: official API authentication and attorney search, automatic selection of two new cases, court-web docket retrieval, client/counsel matching, and local export. Live docket retrieval is verified for one SDNY case and one District of New Jersey case; this is not nationwide court coverage. Google Sheets publication still needs its own live acceptance test.
 
 ## What it does
 
@@ -125,6 +125,10 @@ This creates a new workbook and returns its URL. It does not overwrite the exist
 ## Validation and project layout
 
 `tests/` contains synthetic cases for defense, prosecution, civil sides, unrelated co-defendants, conflicting aliases, superseded counts, incomplete tables, safe export, request caching, budgets, failed login, and receipt recovery. The saved real two-docket pilot is tested locally and is intentionally excluded from Git.
+
+The September 29, 2026 live acceptance run began with a fresh API search, without saved index or docket inputs. It returned 433 attorney records grouped into 334 cases. After form-handling fixes, an explicit resume reused the paid search responses and the in-memory API session, retrieved exactly the two automatically selected reports, and exported the index. Receipts totaled $3.30: $0.90 for the search and $0.30/$2.10 for the reports. Both reports established the lawyer's defense role. One supplied four structured counts, including two dismissed counts; the other supplied no counts and was correctly flagged for review. Counts in the index describe the case's charges, including terminated counts, and do not assert that every charge remains pending. Dispositions remain in the evidence.
+
+All 42 automated tests passed locally with browser tests enabled. Real reports, receipts, credentials and generated case data remain outside version control. Additional court layouts and live prosecution/civil cases still require validation.
 
 The browser regression tests use fictional local forms and block network requests. They check the keyboard-driven case finder, main-case versus defendant-subcase selection, removal of default date/document limits, inclusion of parties/counsel, and exclusion of document purchases. Run them with `ROC_BROWSER_TESTS=1` after installing the optional Playwright runtime; GitHub Actions includes them. They validate form handling, not live court coverage.
 
