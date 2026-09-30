@@ -3,7 +3,7 @@ import os
 import unittest
 
 from roc.common import RocError
-from roc.retrieve import choose_case, configure_report
+from roc.retrieve import choose_case, configure_report, lookup_main_case, select_case_line
 
 
 FORM = """<html><body>
@@ -78,6 +78,37 @@ class CourtFormTests(unittest.TestCase):
         self.assertTrue(self.page.locator("#case_line_0 input").is_checked())
         self.assertFalse(self.page.locator("#case_line_1 input").is_checked())
 
+    def automatic_case_page(self, xml):
+        form = '''<html><body><input id="all_case_ids" type="hidden" value="0">
+        <input id="case_number_text_area_0" onblur="findCase()">
+        <script>function findCase(){fetch('/cgi-bin/possible_case_numbers.pl?fictional').then(r=>r.text()).then(t=>{
+          const c=new DOMParser().parseFromString(t,'text/xml').querySelector('case');
+          document.getElementById('case_number_text_area_0').value=c.getAttribute('number');
+          document.getElementById('all_case_ids').value=c.getAttribute('id');
+        })}</script>''' + FORM[FORM.index('<input name="date_from"'):]
+        def serve(route):
+            if '/cgi-bin/DktRpt.pl' in route.request.url:
+                route.fulfill(content_type='text/html', body=form)
+            elif '/cgi-bin/possible_case_numbers.pl' in route.request.url:
+                route.fulfill(content_type='application/xml', body=xml)
+            else:
+                route.abort()
+        self.page.route('https://ecf.njd.uscourts.gov/**', serve)
+        self.page.goto('https://ecf.njd.uscourts.gov/cgi-bin/DktRpt.pl')
+
+    def test_single_main_case_is_automatically_selected_without_a_list(self):
+        self.automatic_case_page('<request><case id="123" number="1:24-cr-1" defendant="0" title="Fictional case"/></request>')
+        choose_case(self.page, '1:24-cr-00001')
+        self.assertEqual(self.page.locator('#all_case_ids').input_value(), '123')
+        self.assertEqual(self.page.locator('[id^="case_line_"]').count(), 0)
+        self.assertIsNone(self.page.evaluate('window.submissions'))
+
+    def test_automatically_selected_defendant_subcase_is_rejected(self):
+        self.automatic_case_page('<request><case id="123" number="1:24-cr-1-2" defendant="2" title="Fictional defendant"/></request>')
+        with self.assertRaises(RocError):
+            choose_case(self.page, '1:24-cr-00001')
+        self.assertIsNone(self.page.evaluate('window.submissions'))
+
     def test_unfamiliar_date_control_and_pdf_stop_before_submission(self):
         self.page.locator('[name="date_from"]').evaluate("n=>n.remove()")
         with self.assertRaises(RocError):
@@ -87,3 +118,14 @@ class CourtFormTests(unittest.TestCase):
         with self.assertRaises(RocError):
             configure_report(self.page)
         self.assertIsNone(self.page.evaluate("window.submissions"))
+
+
+class CaseLookupTests(unittest.TestCase):
+    def test_serial_number_is_not_mistaken_for_defendant_suffix(self):
+        self.assertEqual(select_case_line(['1:24-cr-1-2', '1:24-cr-1'], '1:24-cr-00001'), 1)
+
+    def test_lookup_requires_exact_main_case(self):
+        xml = '<request><case id="123" number="1:24-cr-1" defendant="0"/><case id="124" number="1:24-cr-1-2" defendant="2"/></request>'
+        self.assertEqual(lookup_main_case(xml, '1:24-cr-00001')['id'], '123')
+        with self.assertRaises(RocError):
+            lookup_main_case(xml, '1:24-cr-99999')

@@ -5,6 +5,7 @@ The supported form contract is deliberately narrow; unknown forms stop before Ru
 """
 import re
 from urllib.parse import urlparse
+from xml.etree import ElementTree
 
 from .common import RocError, normalize_case_number, fingerprint, write_json
 from .docket import parse_report
@@ -30,6 +31,13 @@ def court_origin(url):
     return f"https://{parsed.hostname}"
 
 
+def has_defendant_suffix(value):
+    if "|" in value:
+        return True  # The court widget's defendant checkbox embeds extra metadata.
+    match = re.fullmatch(r"\d+:\d{2,4}-?[a-z]+-?\d+(?P<suffix>(?:-.*)?)", value, re.I)
+    return bool(match and re.search(r"-\d+$", match["suffix"]))
+
+
 def select_case_line(lines, number):
     matches = []
     for i, text in enumerate(lines):
@@ -39,14 +47,51 @@ def select_case_line(lines, number):
         except RocError:
             continue
         # Main case only; a trailing numeric suffix denotes a defendant subcase.
-        if normalized == number and not re.search(r"-\d+$", token):
+        if normalized == number and not has_defendant_suffix(token):
             matches.append(i)
     if len(matches) != 1:
         raise RocError("The court did not return exactly one main-case selection.")
     return matches[0]
 
 
+def lookup_main_case(raw, number):
+    """Verify the court widget's already-fetched XML, not a separate API request."""
+    try:
+        root = ElementTree.fromstring(raw)
+    except ElementTree.ParseError:
+        raise RocError("Court case lookup returned unreadable XML; no report submitted.") from None
+    matches = []
+    for node in root.iter("case"):
+        raw_number = node.get("number", "")
+        try:
+            match = normalize_case_number(raw_number) == number
+        except RocError:
+            continue
+        if match and node.get("defendant") in (None, "0") and not has_defendant_suffix(raw_number):
+            ident = node.get("id", "")
+            if ident.isdigit():
+                matches.append({"id": ident, "number": raw_number, "title": node.get("title", "")})
+    if len(matches) != 1:
+        raise RocError("Court lookup did not identify exactly one requested main case; no report submitted.")
+    return matches[0]
+
+
 def choose_case(page, number):
+    lookups = []
+    def capture(response):
+        if urlparse(response.url).path == "/cgi-bin/possible_case_numbers.pl":
+            try:
+                lookups.append(response.text())
+            except Exception:
+                pass
+    page.on("response", capture)
+    try:
+        return _choose_case(page, number, lookups)
+    finally:
+        page.remove_listener("response", capture)
+
+
+def _choose_case(page, number, lookups):
     field = page.locator("#case_number_text_area_0")
     if field.count() != 1:
         raise RocError("Unsupported court case selector; no report submitted.")
@@ -55,18 +100,41 @@ def choose_case(page, number):
     field.press_sequentially(number, delay=30)
     field.press("Tab")  # Some versions validate on change/blur rather than keyup.
     pick = page.locator("[id^=case_line_]")
-    available = '#case_number_find_button_0:visible, #case_number_show_button_0:visible, [id^="case_line_"]:visible'
-    page.locator(available).first.wait_for(state="visible")
+    ready_script = """() => {
+        const ids = document.getElementById('all_case_ids');
+        if(ids && /^[1-9][0-9]*$/.test(ids.value)) return true;
+        return [...document.querySelectorAll('#case_number_find_button_0, #case_number_show_button_0, [id^="case_line_"]')]
+          .some(n => !!(n.offsetWidth || n.offsetHeight || n.getClientRects().length));
+    }"""
+    page.wait_for_function(ready_script)
+    selected_ids = page.locator("#all_case_ids")
+    if selected_ids.count() and re.fullmatch(r"[1-9][0-9]*", selected_ids.input_value()) and not pick.count():
+        if not lookups:
+            raise RocError("Automatic court selection lacked a verifiable lookup response; no report submitted.")
+        chosen = lookup_main_case(lookups[-1], number)
+        if selected_ids.input_value() != chosen["id"] or normalize_case_number(field.input_value()) != number:
+            raise RocError("Automatic court selection differs from the requested main case; no report submitted.")
+        return
     if not pick.first.is_visible():
         show = page.get_by_role("button", name="Show Case List", exact=True)
         if not show.is_visible():
             page.get_by_role("button", name="Find This Case", exact=True).click()
-            page.locator('#case_number_show_button_0:visible, [id^="case_line_"]:visible').first.wait_for(state="visible")
+            page.wait_for_function(ready_script)
+            if selected_ids.count() and re.fullmatch(r"[1-9][0-9]*", selected_ids.input_value()) and not pick.count():
+                if not lookups:
+                    raise RocError("Automatic court selection lacked a verifiable lookup response; no report submitted.")
+                chosen = lookup_main_case(lookups[-1], number)
+                if selected_ids.input_value() != chosen["id"] or normalize_case_number(field.input_value()) != number:
+                    raise RocError("Automatic court selection differs from the requested main case; no report submitted.")
+                return
         if not pick.first.is_visible() and show.is_visible():
             show.click()
     pick.first.wait_for(state="visible")
-    index = select_case_line(pick.all_text_contents(), number)
-    pick.nth(index).get_by_role("checkbox").check()
+    numbers = [pick.nth(i).get_by_role("checkbox").get_attribute("value") or pick.nth(i).inner_text()
+               for i in range(pick.count()) if pick.nth(i).get_by_role("checkbox").count()]
+    rows = [pick.nth(i) for i in range(pick.count()) if pick.nth(i).get_by_role("checkbox").count()]
+    index = select_case_line(numbers, number)
+    rows[index].get_by_role("checkbox").check()
 
 
 def configure_report(page):
