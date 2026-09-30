@@ -25,7 +25,25 @@
       "adapter": "district-cmecf",
       "headingAliases": [],
       "validation": {
-        "status": "unverified"
+        "status": "sample-verified",
+        "date": "2026-09-30",
+        "caseType": "Civil and Criminal",
+        "sampleCount": 2,
+        "rolesExercised": [
+          "Civil Plaintiff",
+          "Criminal Defense",
+          "Prosecution"
+        ],
+        "notes": [
+          "One civil and one criminal full report retrieved; saved source headings, party/counsel blocks and counts/NOS reviewed. Sampled compatibility, not all-case coverage.",
+          "Civil sample does not exercise Civil Defense.",
+          "Source roles Claimant are preserved without assigning a standard Team."
+        ],
+        "evidence": "docs/district-validation-remaining-2026-09-30.md",
+        "sampleHashes": [
+          "83eee9d575470e3e85ef3bc56a638b3308333a090577766832113a39069e6f3a",
+          "c78737a603fbd5b4500dc538926997a2d2dac4992cd7ac4c2fe9dc03f0b82ca9"
+        ]
       }
     },
     {
@@ -37,7 +55,24 @@
       "adapter": "district-cmecf",
       "headingAliases": [],
       "validation": {
-        "status": "unverified"
+        "status": "sample-verified",
+        "date": "2026-09-30",
+        "caseType": "Civil and Criminal",
+        "sampleCount": 2,
+        "rolesExercised": [
+          "Civil Defense",
+          "Civil Plaintiff",
+          "Criminal Defense",
+          "Prosecution"
+        ],
+        "notes": [
+          "One civil and one criminal full report retrieved; saved source headings, party/counsel blocks and counts/NOS reviewed. Sampled compatibility, not all-case coverage."
+        ],
+        "evidence": "docs/district-validation-remaining-2026-09-30.md",
+        "sampleHashes": [
+          "7f3860e7fbf080a4494213adf7cd712a7239f38787027996c260c71bee2710ac",
+          "d14ad07106bc0f7435640770305dd9688a3bfee35b6c7914d3a1a264d4e6162e"
+        ]
       }
     },
     {
@@ -49,7 +84,24 @@
       "adapter": "district-cmecf",
       "headingAliases": [],
       "validation": {
-        "status": "unverified"
+        "status": "sample-verified",
+        "date": "2026-09-30",
+        "caseType": "Civil and Criminal",
+        "sampleCount": 2,
+        "rolesExercised": [
+          "Civil Defense",
+          "Civil Plaintiff",
+          "Criminal Defense",
+          "Prosecution"
+        ],
+        "notes": [
+          "One civil and one criminal full report retrieved; saved source headings, party/counsel blocks and counts/NOS reviewed. Sampled compatibility, not all-case coverage."
+        ],
+        "evidence": "docs/district-validation-remaining-2026-09-30.md",
+        "sampleHashes": [
+          "99bc6bcedf1881c27c3713c662cb577143e09033089e3392c72ef03f323c3906",
+          "b73ce1f25fdfcc433ef46e2e1c90682ca04fe5bef2a587e3c6c286352e3bfbd6"
+        ]
       }
     },
     {
@@ -61,7 +113,24 @@
       "adapter": "district-cmecf",
       "headingAliases": [],
       "validation": {
-        "status": "unverified"
+        "status": "sample-verified",
+        "date": "2026-09-30",
+        "caseType": "Civil and Criminal",
+        "sampleCount": 2,
+        "rolesExercised": [
+          "Civil Plaintiff"
+        ],
+        "notes": [
+          "One civil and one criminal full report retrieved; saved source headings, party/counsel blocks and counts/NOS reviewed. Sampled compatibility, not all-case coverage.",
+          "Civil sample does not exercise Civil Defense.",
+          "Criminal sample does not exercise Criminal Defense, Prosecution.",
+          "This sample does not establish a resolved client-specific criminal count summary."
+        ],
+        "evidence": "docs/district-validation-remaining-2026-09-30.md",
+        "sampleHashes": [
+          "bd98c6204d194804075a72ffeaac914e2f8c0943874a0574cc99425eca33f9a0",
+          "3542127c644657ddad901100270ed30132d9392371ebf1700f4175d1340230a5"
+        ]
       }
     },
     {
@@ -73,7 +142,24 @@
       "adapter": "district-cmecf",
       "headingAliases": [],
       "validation": {
-        "status": "unverified"
+        "status": "sample-verified",
+        "date": "2026-09-30",
+        "caseType": "Civil and Criminal",
+        "sampleCount": 2,
+        "rolesExercised": [
+          "Civil Defense",
+          "Civil Plaintiff",
+          "Criminal Defense",
+          "Prosecution"
+        ],
+        "notes": [
+          "One civil and one criminal full report retrieved; saved source headings, party/counsel blocks and counts/NOS reviewed. Sampled compatibility, not all-case coverage."
+        ],
+        "evidence": "docs/district-validation-remaining-2026-09-30.md",
+        "sampleHashes": [
+          "4a5911b596dc397452905a59310c0131d5851812f570c53e0b57a85805473bf1",
+          "a7b83b4f570e9e16d1c66e34f47e21609055250c024c3376f84275e5c50cde15"
+        ]
       }
     },
     {
@@ -85,7 +171,25 @@
       "adapter": "district-cmecf",
       "headingAliases": [],
       "validation": {
-        "status": "unverified"
+        "status": "sample-verified",
+        "date": "2026-09-30",
+        "caseType": "Civil and Criminal",
+        "sampleCount": 2,
+        "rolesExercised": [
+          "Civil Defense",
+          "Civil Plaintiff",
+          "Prosecution"
+        ],
+        "notes": [
+          "One civil and one criminal full report retrieved; saved source headings, party/counsel blocks and counts/NOS reviewed. Sampled compatibility, not all-case coverage.",
+          "Criminal sample does not exercise Criminal Defense.",
+          "This sample does not establish a resolved client-specific criminal count summary."
+        ],
+        "evidence": "docs/district-validation-remaining-2026-09-30.md",
+        "sampleHashes": [
+          "805408c273ba52e3004de7b22400ddb0c5703a8ff983d254102bcc366b58a2ea",
+          "7a3fb06aab0b39ffa81e07fca692b12aa8df72bf1715b0f2bb2820c6853299d4"
+        ]
       }
     },
     {
@@ -241,7 +345,24 @@
       "adapter": "district-cmecf",
       "headingAliases": [],
       "validation": {
-        "status": "unverified"
+        "status": "sample-verified",
+        "date": "2026-09-30",
+        "caseType": "Civil and Criminal",
+        "sampleCount": 2,
+        "rolesExercised": [
+          "Civil Defense",
+          "Civil Plaintiff",
+          "Criminal Defense",
+          "Prosecution"
+        ],
+        "notes": [
+          "One civil and one criminal full report retrieved; saved source headings, party/counsel blocks and counts/NOS reviewed. Sampled compatibility, not all-case coverage."
+        ],
+        "evidence": "docs/district-validation-remaining-2026-09-30.md",
+        "sampleHashes": [
+          "d6f673f462c790e715cc22267320c7dc1655595ac0d12b1f2bb7218cfde99e4b",
+          "39f394cc10c6f9648453e9ca9387ae977a7d50edf696d46da30bda62b6e78798"
+        ]
       }
     },
     {
@@ -253,7 +374,24 @@
       "adapter": "district-cmecf",
       "headingAliases": [],
       "validation": {
-        "status": "unverified"
+        "status": "sample-verified",
+        "date": "2026-09-30",
+        "caseType": "Civil and Criminal",
+        "sampleCount": 2,
+        "rolesExercised": [
+          "Civil Defense",
+          "Criminal Defense",
+          "Prosecution"
+        ],
+        "notes": [
+          "One civil and one criminal full report retrieved; saved source headings, party/counsel blocks and counts/NOS reviewed. Sampled compatibility, not all-case coverage.",
+          "Civil sample does not exercise Civil Plaintiff."
+        ],
+        "evidence": "docs/district-validation-remaining-2026-09-30.md",
+        "sampleHashes": [
+          "55828e6305c17a579854842b0a3668a553254a2dc693c0e98ef4d6bc06bd68cb",
+          "444a0495d1ab78cb7b8c9ab06c26770b54a188a53005a945246f4d551211d368"
+        ]
       }
     },
     {
@@ -294,7 +432,23 @@
       "adapter": "district-cmecf",
       "headingAliases": [],
       "validation": {
-        "status": "unverified"
+        "status": "sample-verified",
+        "date": "2026-09-30",
+        "caseType": "Civil and Criminal",
+        "sampleCount": 2,
+        "rolesExercised": [
+          "Criminal Defense",
+          "Prosecution"
+        ],
+        "notes": [
+          "One civil and one criminal full report retrieved; saved source headings, party/counsel blocks and counts/NOS reviewed. Sampled compatibility, not all-case coverage.",
+          "Civil sample does not exercise Civil Defense, Civil Plaintiff."
+        ],
+        "evidence": "docs/district-validation-remaining-2026-09-30.md",
+        "sampleHashes": [
+          "f0876c1517bc0d21a2bdfbe175a57d6ed95acec36180e523042bc681479dce74",
+          "dce612d937112126ac08e342d0e17443dda5e1173823751d377aabd4fa4f1a8c"
+        ]
       }
     },
     {
@@ -335,7 +489,23 @@
       "adapter": "district-cmecf",
       "headingAliases": [],
       "validation": {
-        "status": "unverified"
+        "status": "sample-verified",
+        "date": "2026-09-30",
+        "caseType": "Civil and Criminal",
+        "sampleCount": 2,
+        "rolesExercised": [
+          "Criminal Defense",
+          "Prosecution"
+        ],
+        "notes": [
+          "One civil and one criminal full report retrieved; saved source headings, party/counsel blocks and counts/NOS reviewed. Sampled compatibility, not all-case coverage.",
+          "Civil sample does not exercise Civil Defense, Civil Plaintiff."
+        ],
+        "evidence": "docs/district-validation-remaining-2026-09-30.md",
+        "sampleHashes": [
+          "8be8a29e5d38ab2906657a67936551bc2dc924aa5ad748bfd2e41f9b8df29056",
+          "d9879933bcab79cf03267bb522502f53a9b8510a6d445b5cbf899494efc47906"
+        ]
       }
     },
     {
@@ -375,7 +545,23 @@
       "adapter": "district-cmecf",
       "headingAliases": [],
       "validation": {
-        "status": "unverified"
+        "status": "sample-verified",
+        "date": "2026-09-30",
+        "caseType": "Civil and Criminal",
+        "sampleCount": 2,
+        "rolesExercised": [
+          "Criminal Defense",
+          "Prosecution"
+        ],
+        "notes": [
+          "One civil and one criminal full report retrieved; saved source headings, party/counsel blocks and counts/NOS reviewed. Sampled compatibility, not all-case coverage.",
+          "Civil sample does not exercise Civil Defense, Civil Plaintiff."
+        ],
+        "evidence": "docs/district-validation-remaining-2026-09-30.md",
+        "sampleHashes": [
+          "780ead8dce66a98f576dbd1926fff5c92b3618f0bd174eb4b99b06a3d208ccdd",
+          "63eee60b99a984be2a8bd397c185192fd3e23e40373a766cfb17930238196c8f"
+        ]
       }
     },
     {
@@ -387,7 +573,24 @@
       "adapter": "district-cmecf",
       "headingAliases": [],
       "validation": {
-        "status": "unverified"
+        "status": "sample-verified",
+        "date": "2026-09-30",
+        "caseType": "Civil and Criminal",
+        "sampleCount": 2,
+        "rolesExercised": [
+          "Civil Defense",
+          "Criminal Defense",
+          "Prosecution"
+        ],
+        "notes": [
+          "One civil and one criminal full report retrieved; saved source headings, party/counsel blocks and counts/NOS reviewed. Sampled compatibility, not all-case coverage.",
+          "Civil sample does not exercise Civil Plaintiff."
+        ],
+        "evidence": "docs/district-validation-remaining-2026-09-30.md",
+        "sampleHashes": [
+          "8bdcf1ed7b19bfb6ca08ef4cad618ed3600db1514c91534a6e63b3f9f9305eba",
+          "7950f0f01f45dbbbb067a81aed56535a7c0d5ca75884bfe8bf09964717f345e6"
+        ]
       }
     },
     {
@@ -399,7 +602,24 @@
       "adapter": "district-cmecf",
       "headingAliases": [],
       "validation": {
-        "status": "unverified"
+        "status": "sample-verified",
+        "date": "2026-09-30",
+        "caseType": "Civil and Criminal",
+        "sampleCount": 2,
+        "rolesExercised": [
+          "Civil Defense",
+          "Civil Plaintiff",
+          "Criminal Defense",
+          "Prosecution"
+        ],
+        "notes": [
+          "One civil and one criminal full report retrieved; saved source headings, party/counsel blocks and counts/NOS reviewed. Sampled compatibility, not all-case coverage."
+        ],
+        "evidence": "docs/district-validation-remaining-2026-09-30.md",
+        "sampleHashes": [
+          "4b1ddda1a4a4aefb248d4094c1c8fea7ab519318b24ac6e83a4bc276908c02fc",
+          "2144b4fc0e7e998c78b501ba2652131fd3305b6fde492be07c09812539995597"
+        ]
       }
     },
     {
@@ -425,7 +645,24 @@
       "adapter": "district-cmecf",
       "headingAliases": [],
       "validation": {
-        "status": "unverified"
+        "status": "sample-verified",
+        "date": "2026-09-30",
+        "caseType": "Civil and Criminal",
+        "sampleCount": 2,
+        "rolesExercised": [
+          "Civil Defense",
+          "Criminal Defense",
+          "Prosecution"
+        ],
+        "notes": [
+          "One civil and one criminal full report retrieved; saved source headings, party/counsel blocks and counts/NOS reviewed. Sampled compatibility, not all-case coverage.",
+          "Civil sample does not exercise Civil Plaintiff."
+        ],
+        "evidence": "docs/district-validation-remaining-2026-09-30.md",
+        "sampleHashes": [
+          "57ced2c66dd6a5e8faa5b5ecc56aaa45173b9c67ead4e0e91fd80b1628680c03",
+          "d9381ef08f563251fd68d80f0739efe2af4a9d6ea5eb40f3c91156cfc1530312"
+        ]
       }
     },
     {
@@ -437,7 +674,24 @@
       "adapter": "district-cmecf",
       "headingAliases": [],
       "validation": {
-        "status": "unverified"
+        "status": "sample-verified",
+        "date": "2026-09-30",
+        "caseType": "Civil and Criminal",
+        "sampleCount": 2,
+        "rolesExercised": [
+          "Criminal Defense",
+          "Prosecution"
+        ],
+        "notes": [
+          "One civil and one criminal full report retrieved; saved source headings, party/counsel blocks and counts/NOS reviewed. Sampled compatibility, not all-case coverage.",
+          "Civil sample does not exercise Civil Defense, Civil Plaintiff.",
+          "Source roles Respondent are preserved without assigning a standard Team."
+        ],
+        "evidence": "docs/district-validation-remaining-2026-09-30.md",
+        "sampleHashes": [
+          "8664270ce50e27dd7a9c3fe1d6ddc3951ef45929455d89bec2c72b55cda81e94",
+          "f2c9b61161b4e73ac0f26ba1c98534184f281e266e41ec70d069373fa48369a6"
+        ]
       }
     },
     {
@@ -449,7 +703,24 @@
       "adapter": "district-cmecf",
       "headingAliases": [],
       "validation": {
-        "status": "unverified"
+        "status": "sample-verified",
+        "date": "2026-09-30",
+        "caseType": "Civil and Criminal",
+        "sampleCount": 2,
+        "rolesExercised": [
+          "Civil Defense",
+          "Civil Plaintiff",
+          "Criminal Defense",
+          "Prosecution"
+        ],
+        "notes": [
+          "One civil and one criminal full report retrieved; saved source headings, party/counsel blocks and counts/NOS reviewed. Sampled compatibility, not all-case coverage."
+        ],
+        "evidence": "docs/district-validation-remaining-2026-09-30.md",
+        "sampleHashes": [
+          "a003bda11f3a85ea1c16bc87828f03c20beb9747165df64342ef05d40551f587",
+          "3ab94e6272b92582ac2b65637672b8793a0c6a8f1ef13021b8df9384777bbb7b"
+        ]
       }
     },
     {
@@ -461,7 +732,24 @@
       "adapter": "district-cmecf",
       "headingAliases": [],
       "validation": {
-        "status": "unverified"
+        "status": "sample-verified",
+        "date": "2026-09-30",
+        "caseType": "Civil and Criminal",
+        "sampleCount": 2,
+        "rolesExercised": [
+          "Civil Defense",
+          "Civil Plaintiff",
+          "Criminal Defense",
+          "Prosecution"
+        ],
+        "notes": [
+          "One civil and one criminal full report retrieved; saved source headings, party/counsel blocks and counts/NOS reviewed. Sampled compatibility, not all-case coverage."
+        ],
+        "evidence": "docs/district-validation-remaining-2026-09-30.md",
+        "sampleHashes": [
+          "bf7896140cbb66ed1d1c9b5cbbbbdeb5065e420912beaa86a6dddf4ba65f4434",
+          "8943914f3d3ff4fc155755959a69d6c96c640f7e5f03f16b5c06e0768f5f6aee"
+        ]
       }
     },
     {
@@ -473,7 +761,24 @@
       "adapter": "district-cmecf",
       "headingAliases": [],
       "validation": {
-        "status": "unverified"
+        "status": "sample-verified",
+        "date": "2026-09-30",
+        "caseType": "Civil and Criminal",
+        "sampleCount": 2,
+        "rolesExercised": [
+          "Civil Defense",
+          "Civil Plaintiff",
+          "Criminal Defense",
+          "Prosecution"
+        ],
+        "notes": [
+          "One civil and one criminal full report retrieved; saved source headings, party/counsel blocks and counts/NOS reviewed. Sampled compatibility, not all-case coverage."
+        ],
+        "evidence": "docs/district-validation-remaining-2026-09-30.md",
+        "sampleHashes": [
+          "c631b8be3b4e465aec303282c6e27c18931ae1312e9cbc4e5df4a3633a8481e3",
+          "eacdf3e51dfdfd49f5aa5b80ac85b5ee3fbfac77a6d17500ccece258fc803187"
+        ]
       }
     },
     {
@@ -514,7 +819,25 @@
       "adapter": "district-cmecf",
       "headingAliases": [],
       "validation": {
-        "status": "unverified"
+        "status": "sample-verified",
+        "date": "2026-09-30",
+        "caseType": "Civil and Criminal",
+        "sampleCount": 2,
+        "rolesExercised": [
+          "Civil Defense",
+          "Civil Plaintiff",
+          "Criminal Defense",
+          "Prosecution"
+        ],
+        "notes": [
+          "One civil and one criminal full report retrieved; saved source headings, party/counsel blocks and counts/NOS reviewed. Sampled compatibility, not all-case coverage.",
+          "Source roles Amicus are preserved without assigning a standard Team."
+        ],
+        "evidence": "docs/district-validation-remaining-2026-09-30.md",
+        "sampleHashes": [
+          "1bcbcdd0896f3b8a21241ccdc9f68350245c189dffa12c0991964f0b3ae19f09",
+          "31f566de7a7e62ada317f097862fa1300fb23b8af9567e46c93af56c6a7c9613"
+        ]
       }
     },
     {
@@ -526,7 +849,24 @@
       "adapter": "district-cmecf",
       "headingAliases": [],
       "validation": {
-        "status": "unverified"
+        "status": "sample-verified",
+        "date": "2026-09-30",
+        "caseType": "Civil and Criminal",
+        "sampleCount": 2,
+        "rolesExercised": [
+          "Civil Defense",
+          "Criminal Defense",
+          "Prosecution"
+        ],
+        "notes": [
+          "One civil and one criminal full report retrieved; saved source headings, party/counsel blocks and counts/NOS reviewed. Sampled compatibility, not all-case coverage.",
+          "Civil sample does not exercise Civil Plaintiff."
+        ],
+        "evidence": "docs/district-validation-remaining-2026-09-30.md",
+        "sampleHashes": [
+          "d554fe2943a3a1f1140d16bc6bdde044cbafed7dd7591087ffc176a076aa8b24",
+          "36373d81c9ba7327519648afc2b4370e985c686f6d312f7db1149402a2440f36"
+        ]
       }
     },
     {
@@ -538,7 +878,26 @@
       "adapter": "district-cmecf",
       "headingAliases": [],
       "validation": {
-        "status": "unverified"
+        "status": "sample-verified",
+        "date": "2026-09-30",
+        "caseType": "Civil and Criminal",
+        "sampleCount": 2,
+        "rolesExercised": [
+          "Civil Defense",
+          "Civil Plaintiff",
+          "Prosecution"
+        ],
+        "notes": [
+          "One civil and one criminal full report retrieved; saved source headings, party/counsel blocks and counts/NOS reviewed. Sampled compatibility, not all-case coverage.",
+          "Criminal sample does not exercise Criminal Defense.",
+          "Source supplies no structured counts for at least one defendant; no charge summary inferred.",
+          "This sample does not establish a resolved client-specific criminal count summary."
+        ],
+        "evidence": "docs/district-validation-remaining-2026-09-30.md",
+        "sampleHashes": [
+          "f5edcf1aa19b63738e84a52a1cbe62de5089019613d5f9c981622c3b8fcd4a95",
+          "fd2dcd6a69724f33ee575a7bdf6caa3b7c86608b3b83bd91fce67d9f88aef2cc"
+        ]
       }
     },
     {
@@ -550,7 +909,24 @@
       "adapter": "district-cmecf",
       "headingAliases": [],
       "validation": {
-        "status": "unverified"
+        "status": "sample-verified",
+        "date": "2026-09-30",
+        "caseType": "Civil and Criminal",
+        "sampleCount": 2,
+        "rolesExercised": [
+          "Civil Defense",
+          "Civil Plaintiff",
+          "Criminal Defense",
+          "Prosecution"
+        ],
+        "notes": [
+          "One civil and one criminal full report retrieved; saved source headings, party/counsel blocks and counts/NOS reviewed. Sampled compatibility, not all-case coverage."
+        ],
+        "evidence": "docs/district-validation-remaining-2026-09-30.md",
+        "sampleHashes": [
+          "5a1120731c8cace5e77c2747d9aa292991fbd150338aaf93d79b611fdda6c6d3",
+          "d6dc9e1f2c6fdcd2e0e84763f02426e3d912f487bb35c87e92ba8025d1ef53f8"
+        ]
       }
     },
     {
@@ -562,7 +938,24 @@
       "adapter": "district-cmecf",
       "headingAliases": [],
       "validation": {
-        "status": "unverified"
+        "status": "sample-verified",
+        "date": "2026-09-30",
+        "caseType": "Civil and Criminal",
+        "sampleCount": 2,
+        "rolesExercised": [
+          "Civil Defense",
+          "Civil Plaintiff",
+          "Criminal Defense",
+          "Prosecution"
+        ],
+        "notes": [
+          "One civil and one criminal full report retrieved; saved source headings, party/counsel blocks and counts/NOS reviewed. Sampled compatibility, not all-case coverage."
+        ],
+        "evidence": "docs/district-validation-remaining-2026-09-30.md",
+        "sampleHashes": [
+          "ad7cacd5e8fbc04b7e0de87174600be4d0be7b24dabccda122506edbf958d005",
+          "61786c5e2ad0a17ff466ce3745da3283b0e9799de04a0df51000194432963da8"
+        ]
       }
     },
     {
@@ -574,7 +967,24 @@
       "adapter": "district-cmecf",
       "headingAliases": [],
       "validation": {
-        "status": "unverified"
+        "status": "sample-verified",
+        "date": "2026-09-30",
+        "caseType": "Civil and Criminal",
+        "sampleCount": 2,
+        "rolesExercised": [
+          "Civil Defense",
+          "Civil Plaintiff",
+          "Criminal Defense",
+          "Prosecution"
+        ],
+        "notes": [
+          "One civil and one criminal full report retrieved; saved source headings, party/counsel blocks and counts/NOS reviewed. Sampled compatibility, not all-case coverage."
+        ],
+        "evidence": "docs/district-validation-remaining-2026-09-30.md",
+        "sampleHashes": [
+          "843148dba1f07cbe7f2ae4d19923bad159cc52d867e582b28f3f88eec16aa89b",
+          "32ec2902a9fec877c8c5562ffa55b020668d54f9e5f52e31e05ba21a28a1eb64"
+        ]
       }
     },
     {
@@ -586,7 +996,24 @@
       "adapter": "district-cmecf",
       "headingAliases": [],
       "validation": {
-        "status": "unverified"
+        "status": "sample-verified",
+        "date": "2026-09-30",
+        "caseType": "Civil and Criminal",
+        "sampleCount": 2,
+        "rolesExercised": [
+          "Civil Defense",
+          "Criminal Defense",
+          "Prosecution"
+        ],
+        "notes": [
+          "One civil and one criminal full report retrieved; saved source headings, party/counsel blocks and counts/NOS reviewed. Sampled compatibility, not all-case coverage.",
+          "Civil sample does not exercise Civil Plaintiff."
+        ],
+        "evidence": "docs/district-validation-remaining-2026-09-30.md",
+        "sampleHashes": [
+          "ad262b6fedaf5b1f3d0efcc15fb575bfe0bae65dc68562279f87fa06607334bf",
+          "13fcd7e0d0febf7bdb607bf0f977947b1af8023aab591438ab0516bb402f24ac"
+        ]
       }
     },
     {
@@ -598,7 +1025,24 @@
       "adapter": "district-cmecf",
       "headingAliases": [],
       "validation": {
-        "status": "unverified"
+        "status": "sample-verified",
+        "date": "2026-09-30",
+        "caseType": "Civil and Criminal",
+        "sampleCount": 2,
+        "rolesExercised": [
+          "Civil Defense",
+          "Civil Plaintiff",
+          "Criminal Defense",
+          "Prosecution"
+        ],
+        "notes": [
+          "One civil and one criminal full report retrieved; saved source headings, party/counsel blocks and counts/NOS reviewed. Sampled compatibility, not all-case coverage."
+        ],
+        "evidence": "docs/district-validation-remaining-2026-09-30.md",
+        "sampleHashes": [
+          "fe9dc1da68c29177864826237b303b3f470bd457c5ae68d6b3236e6b75aa1fff",
+          "2623c88e684e6e93a0e5cdb6c9c69638daf0168f2e21461c04017159551ee421"
+        ]
       }
     },
     {
@@ -610,7 +1054,23 @@
       "adapter": "district-cmecf",
       "headingAliases": [],
       "validation": {
-        "status": "unverified"
+        "status": "sample-verified",
+        "date": "2026-09-30",
+        "caseType": "Civil and Criminal",
+        "sampleCount": 2,
+        "rolesExercised": [
+          "Criminal Defense",
+          "Prosecution"
+        ],
+        "notes": [
+          "One civil and one criminal full report retrieved; saved source headings, party/counsel blocks and counts/NOS reviewed. Sampled compatibility, not all-case coverage.",
+          "Civil sample does not exercise Civil Defense, Civil Plaintiff."
+        ],
+        "evidence": "docs/district-validation-remaining-2026-09-30.md",
+        "sampleHashes": [
+          "681cf28a540f7291ab19c09f19677324f93e9bb568e78c68fe56742aa5088088",
+          "1ba849b1afba376930e197268ce20fa18b78d7e36e85353d9507881f384e05ae"
+        ]
       }
     },
     {
@@ -651,7 +1111,22 @@
       "adapter": "district-cmecf",
       "headingAliases": [],
       "validation": {
-        "status": "unverified"
+        "status": "sample-verified",
+        "date": "2026-09-30",
+        "caseType": "Civil and Criminal",
+        "sampleCount": 2,
+        "rolesExercised": [],
+        "notes": [
+          "One civil and one criminal full report retrieved; saved source headings, party/counsel blocks and counts/NOS reviewed. Sampled compatibility, not all-case coverage.",
+          "Civil sample does not exercise Civil Defense, Civil Plaintiff.",
+          "Criminal sample does not exercise Criminal Defense, Prosecution.",
+          "This sample does not establish a resolved client-specific criminal count summary."
+        ],
+        "evidence": "docs/district-validation-remaining-2026-09-30.md",
+        "sampleHashes": [
+          "0b27c1424e8a4c2bfbbf69479308c5c91c8de707d3f7e651c830513c044f0636",
+          "a16b430c6631516118005bd70a45685c5406b7b5cff78a7344b60cfa17d0268f"
+        ]
       }
     },
     {
@@ -663,7 +1138,24 @@
       "adapter": "district-cmecf",
       "headingAliases": [],
       "validation": {
-        "status": "unverified"
+        "status": "sample-verified",
+        "date": "2026-09-30",
+        "caseType": "Civil and Criminal",
+        "sampleCount": 2,
+        "rolesExercised": [
+          "Civil Defense",
+          "Criminal Defense",
+          "Prosecution"
+        ],
+        "notes": [
+          "One civil and one criminal full report retrieved; saved source headings, party/counsel blocks and counts/NOS reviewed. Sampled compatibility, not all-case coverage.",
+          "Civil sample does not exercise Civil Plaintiff."
+        ],
+        "evidence": "docs/district-validation-remaining-2026-09-30.md",
+        "sampleHashes": [
+          "115ee8618cdd22bfbc7e24d553ad6e6b9270d238c0d0ac67d3aa972b84435b8e",
+          "199af76297caeedc700cc253838358df216f54354bd91158145f6eae6d794bb5"
+        ]
       }
     },
     {
@@ -675,7 +1167,23 @@
       "adapter": "district-cmecf",
       "headingAliases": [],
       "validation": {
-        "status": "unverified"
+        "status": "sample-verified",
+        "date": "2026-09-30",
+        "caseType": "Civil and Criminal",
+        "sampleCount": 2,
+        "rolesExercised": [
+          "Criminal Defense",
+          "Prosecution"
+        ],
+        "notes": [
+          "One civil and one criminal full report retrieved; saved source headings, party/counsel blocks and counts/NOS reviewed. Sampled compatibility, not all-case coverage.",
+          "Civil sample does not exercise Civil Defense, Civil Plaintiff."
+        ],
+        "evidence": "docs/district-validation-remaining-2026-09-30.md",
+        "sampleHashes": [
+          "abd94a6a5c9967d90c09d2481787c8ab8f7d8d926b2cb36f60f7b59e9e574045",
+          "4bf8cb41ca3600f8ef689196c0d8953f9083ba8b94d5851df1e7180845194448"
+        ]
       }
     },
     {
@@ -687,7 +1195,24 @@
       "adapter": "district-cmecf",
       "headingAliases": [],
       "validation": {
-        "status": "unverified"
+        "status": "sample-verified",
+        "date": "2026-09-30",
+        "caseType": "Civil and Criminal",
+        "sampleCount": 2,
+        "rolesExercised": [
+          "Civil Defense",
+          "Civil Plaintiff",
+          "Criminal Defense",
+          "Prosecution"
+        ],
+        "notes": [
+          "One civil and one criminal full report retrieved; saved source headings, party/counsel blocks and counts/NOS reviewed. Sampled compatibility, not all-case coverage."
+        ],
+        "evidence": "docs/district-validation-remaining-2026-09-30.md",
+        "sampleHashes": [
+          "8e0fb1a88c9ddaf40d8619084d7fbe49eedbdadee2e51bd4ac56731ce2365ef4",
+          "91c5bef1ca36809eace1e2fdbef0fb2234e24a363ff16a739ba81a6013ae5e09"
+        ]
       }
     },
     {
@@ -699,7 +1224,25 @@
       "adapter": "district-cmecf",
       "headingAliases": [],
       "validation": {
-        "status": "unverified"
+        "status": "sample-verified",
+        "date": "2026-09-30",
+        "caseType": "Civil and Criminal",
+        "sampleCount": 2,
+        "rolesExercised": [
+          "Civil Defense",
+          "Civil Plaintiff",
+          "Prosecution"
+        ],
+        "notes": [
+          "One civil and one criminal full report retrieved; saved source headings, party/counsel blocks and counts/NOS reviewed. Sampled compatibility, not all-case coverage.",
+          "Criminal sample does not exercise Criminal Defense.",
+          "This sample does not establish a resolved client-specific criminal count summary."
+        ],
+        "evidence": "docs/district-validation-remaining-2026-09-30.md",
+        "sampleHashes": [
+          "345a96d3542261b142b6fc15e2a5cea6ced996b309944b3f122af6ad303df0d0",
+          "f5996244f9402f1e2ebfc7914265da09d4caf80d657ded38d97528f724ac0505"
+        ]
       }
     },
     {
@@ -711,7 +1254,26 @@
       "adapter": "district-cmecf",
       "headingAliases": [],
       "validation": {
-        "status": "unverified"
+        "status": "sample-verified",
+        "date": "2026-09-30",
+        "caseType": "Civil and Criminal",
+        "sampleCount": 2,
+        "rolesExercised": [
+          "Civil Defense",
+          "Civil Plaintiff",
+          "Criminal Defense",
+          "Prosecution"
+        ],
+        "notes": [
+          "One civil and one criminal full report retrieved; saved source headings, party/counsel blocks and counts/NOS reviewed. Sampled compatibility, not all-case coverage.",
+          "Source count labels use an unsupported suffix (r); raw charges and dispositions retained, summary withheld.",
+          "This sample does not establish a resolved client-specific criminal count summary."
+        ],
+        "evidence": "docs/district-validation-remaining-2026-09-30.md",
+        "sampleHashes": [
+          "ec538322d41e2ee8298327b02399388575c7854f98053268292d667171a19176",
+          "ed631d6ce91a44e501f26c6c17eb019955844aca7cea0f970986c06dbdd0b7d6"
+        ]
       }
     },
     {
@@ -723,7 +1285,24 @@
       "adapter": "district-cmecf",
       "headingAliases": [],
       "validation": {
-        "status": "unverified"
+        "status": "sample-verified",
+        "date": "2026-09-30",
+        "caseType": "Civil and Criminal",
+        "sampleCount": 2,
+        "rolesExercised": [
+          "Civil Plaintiff",
+          "Criminal Defense",
+          "Prosecution"
+        ],
+        "notes": [
+          "One civil and one criminal full report retrieved; saved source headings, party/counsel blocks and counts/NOS reviewed. Sampled compatibility, not all-case coverage.",
+          "Civil sample does not exercise Civil Defense."
+        ],
+        "evidence": "docs/district-validation-remaining-2026-09-30.md",
+        "sampleHashes": [
+          "59f0cb070de29de9d3ea816dc0bb42083deedd7010cf5b589c48a92875a28440",
+          "bad2ebd17a443c0f178ebae03ca6e1bb8d9b1205c7042c0bd93aa1fbd1087d3a"
+        ]
       }
     },
     {
@@ -735,7 +1314,24 @@
       "adapter": "district-cmecf",
       "headingAliases": [],
       "validation": {
-        "status": "unverified"
+        "status": "sample-verified",
+        "date": "2026-09-30",
+        "caseType": "Civil and Criminal",
+        "sampleCount": 2,
+        "rolesExercised": [
+          "Civil Defense",
+          "Civil Plaintiff",
+          "Criminal Defense",
+          "Prosecution"
+        ],
+        "notes": [
+          "One civil and one criminal full report retrieved; saved source headings, party/counsel blocks and counts/NOS reviewed. Sampled compatibility, not all-case coverage."
+        ],
+        "evidence": "docs/district-validation-remaining-2026-09-30.md",
+        "sampleHashes": [
+          "a575d382a9407ff0ae4d5fcd30c6d4201acb13c116f5f3376288965e22f02bc2",
+          "6e27700b8366911817e7b7683360e6d690cdc053b542d2a4ba7b66cea980a7fa"
+        ]
       }
     },
     {
@@ -747,7 +1343,24 @@
       "adapter": "district-cmecf",
       "headingAliases": [],
       "validation": {
-        "status": "unverified"
+        "status": "sample-verified",
+        "date": "2026-09-30",
+        "caseType": "Civil and Criminal",
+        "sampleCount": 2,
+        "rolesExercised": [
+          "Civil Defense",
+          "Civil Plaintiff",
+          "Criminal Defense",
+          "Prosecution"
+        ],
+        "notes": [
+          "One civil and one criminal full report retrieved; saved source headings, party/counsel blocks and counts/NOS reviewed. Sampled compatibility, not all-case coverage."
+        ],
+        "evidence": "docs/district-validation-remaining-2026-09-30.md",
+        "sampleHashes": [
+          "0af05a60369c869cb4ebb05bce1df5a444d4af363852442eb51ed32405bdd15d",
+          "f7d64997d8cc6fbabc3934ef83c1ee063c8b368f16340b4825b34a22ead78779"
+        ]
       }
     },
     {
@@ -759,7 +1372,26 @@
       "adapter": "district-cmecf",
       "headingAliases": [],
       "validation": {
-        "status": "unverified"
+        "status": "sample-verified",
+        "date": "2026-09-30",
+        "caseType": "Civil and Criminal",
+        "sampleCount": 2,
+        "rolesExercised": [
+          "Civil Defense",
+          "Civil Plaintiff",
+          "Criminal Defense",
+          "Prosecution"
+        ],
+        "notes": [
+          "One civil and one criminal full report retrieved; saved source headings, party/counsel blocks and counts/NOS reviewed. Sampled compatibility, not all-case coverage.",
+          "Unresolved count versions retained for review; no combined summary inferred.",
+          "This sample does not establish a resolved client-specific criminal count summary."
+        ],
+        "evidence": "docs/district-validation-remaining-2026-09-30.md",
+        "sampleHashes": [
+          "2bb97d63223f5727abcfbeb1b6251930b588eb4db372787aad667aff294c190c",
+          "7cdfe2ff69b3d15acc0a9c03bcdd7090b08ac6be203bffa44d041a59a2727146"
+        ]
       }
     },
     {
@@ -771,7 +1403,24 @@
       "adapter": "district-cmecf",
       "headingAliases": [],
       "validation": {
-        "status": "unverified"
+        "status": "sample-verified",
+        "date": "2026-09-30",
+        "caseType": "Civil and Criminal",
+        "sampleCount": 2,
+        "rolesExercised": [
+          "Civil Defense",
+          "Civil Plaintiff",
+          "Criminal Defense",
+          "Prosecution"
+        ],
+        "notes": [
+          "One civil and one criminal full report retrieved; saved source headings, party/counsel blocks and counts/NOS reviewed. Sampled compatibility, not all-case coverage."
+        ],
+        "evidence": "docs/district-validation-remaining-2026-09-30.md",
+        "sampleHashes": [
+          "1594ae81278cb4ee393c6ecb2f00f34addaf2e474ca72ea19693590491440758",
+          "8c09e7e156444062af5f7e2a86c99be453f97f4d5fd1e628f845df564e709efc"
+        ]
       }
     },
     {
@@ -783,7 +1432,23 @@
       "adapter": "district-cmecf",
       "headingAliases": [],
       "validation": {
-        "status": "unverified"
+        "status": "sample-verified",
+        "date": "2026-09-30",
+        "caseType": "Civil and Criminal",
+        "sampleCount": 2,
+        "rolesExercised": [
+          "Criminal Defense",
+          "Prosecution"
+        ],
+        "notes": [
+          "One civil and one criminal full report retrieved; saved source headings, party/counsel blocks and counts/NOS reviewed. Sampled compatibility, not all-case coverage.",
+          "Civil sample does not exercise Civil Defense, Civil Plaintiff."
+        ],
+        "evidence": "docs/district-validation-remaining-2026-09-30.md",
+        "sampleHashes": [
+          "2c73aeae8da7ab3de1e3988222e57d15aa6c9f680ee3caeb69fbfc78e02dae79",
+          "13501fc522e963e0485eb8dff720c82e40d90c7ae7148f2e96f639c28047e0e0"
+        ]
       }
     },
     {
@@ -795,7 +1460,24 @@
       "adapter": "district-cmecf",
       "headingAliases": [],
       "validation": {
-        "status": "unverified"
+        "status": "sample-verified",
+        "date": "2026-09-30",
+        "caseType": "Civil and Criminal",
+        "sampleCount": 2,
+        "rolesExercised": [
+          "Civil Defense",
+          "Civil Plaintiff",
+          "Criminal Defense",
+          "Prosecution"
+        ],
+        "notes": [
+          "One civil and one criminal full report retrieved; saved source headings, party/counsel blocks and counts/NOS reviewed. Sampled compatibility, not all-case coverage."
+        ],
+        "evidence": "docs/district-validation-remaining-2026-09-30.md",
+        "sampleHashes": [
+          "2435e3d75e2d2c25bf471baa888080d38e20c019cd4aa317eedda372377acbd4",
+          "d4d79e59d7549d12efc83ad2b24da6db091167e8e134e9aed8626e943f7ad3ab"
+        ]
       }
     },
     {
@@ -807,7 +1489,24 @@
       "adapter": "district-cmecf",
       "headingAliases": [],
       "validation": {
-        "status": "unverified"
+        "status": "sample-verified",
+        "date": "2026-09-30",
+        "caseType": "Civil and Criminal",
+        "sampleCount": 2,
+        "rolesExercised": [
+          "Civil Defense",
+          "Civil Plaintiff",
+          "Criminal Defense",
+          "Prosecution"
+        ],
+        "notes": [
+          "One civil and one criminal full report retrieved; saved source headings, party/counsel blocks and counts/NOS reviewed. Sampled compatibility, not all-case coverage."
+        ],
+        "evidence": "docs/district-validation-remaining-2026-09-30.md",
+        "sampleHashes": [
+          "f6404e96d05738f6e12f6c39a76490c9b2361a1fca6f27eb5f32fbbc23d26e63",
+          "8e6c1a71cab0b2131faf08d20ab67a963165e2a8ac03e3a8aca95e6694b66769"
+        ]
       }
     },
     {
@@ -819,7 +1518,26 @@
       "adapter": "district-cmecf",
       "headingAliases": [],
       "validation": {
-        "status": "unverified"
+        "status": "sample-verified",
+        "date": "2026-09-30",
+        "caseType": "Civil and Criminal",
+        "sampleCount": 2,
+        "rolesExercised": [
+          "Civil Defense",
+          "Civil Plaintiff",
+          "Prosecution"
+        ],
+        "notes": [
+          "One civil and one criminal full report retrieved; saved source headings, party/counsel blocks and counts/NOS reviewed. Sampled compatibility, not all-case coverage.",
+          "Criminal sample does not exercise Criminal Defense.",
+          "Source supplies no structured counts for at least one defendant; no charge summary inferred.",
+          "This sample does not establish a resolved client-specific criminal count summary."
+        ],
+        "evidence": "docs/district-validation-remaining-2026-09-30.md",
+        "sampleHashes": [
+          "e69c49d9b21064f8889955afdc9ad647d85cef7e87ae6ba942c3da7f6c41136f",
+          "b34ce8e0d02fef17b0b5af83aca666d8339a8da5ff449295c2d387b162006cf5"
+        ]
       }
     },
     {
@@ -831,7 +1549,25 @@
       "adapter": "district-cmecf",
       "headingAliases": [],
       "validation": {
-        "status": "unverified"
+        "status": "sample-verified",
+        "date": "2026-09-30",
+        "caseType": "Civil and Criminal",
+        "sampleCount": 2,
+        "rolesExercised": [
+          "Civil Plaintiff"
+        ],
+        "notes": [
+          "One civil and one criminal full report retrieved; saved source headings, party/counsel blocks and counts/NOS reviewed. Sampled compatibility, not all-case coverage.",
+          "Civil sample does not exercise Civil Defense.",
+          "Source roles Respondent are preserved without assigning a standard Team.",
+          "Criminal sample does not exercise Criminal Defense, Prosecution.",
+          "This sample does not establish a resolved client-specific criminal count summary."
+        ],
+        "evidence": "docs/district-validation-remaining-2026-09-30.md",
+        "sampleHashes": [
+          "fffa22f6e2e2fb41e05cb811258fbaaa427c918bd28fd721dc1c89703e4fed94",
+          "9015a61d0fe4e048288a2ffc972e93cc2c5043ec54c04e953057785024d178c3"
+        ]
       }
     },
     {
@@ -859,7 +1595,24 @@
       "adapter": "district-cmecf",
       "headingAliases": [],
       "validation": {
-        "status": "unverified"
+        "status": "sample-verified",
+        "date": "2026-09-30",
+        "caseType": "Civil and Criminal",
+        "sampleCount": 2,
+        "rolesExercised": [
+          "Criminal Defense",
+          "Prosecution"
+        ],
+        "notes": [
+          "One civil and one criminal full report retrieved; saved source headings, party/counsel blocks and counts/NOS reviewed. Sampled compatibility, not all-case coverage.",
+          "Civil sample does not exercise Civil Defense, Civil Plaintiff.",
+          "Source roles Petitioner, Respondent are preserved without assigning a standard Team."
+        ],
+        "evidence": "docs/district-validation-remaining-2026-09-30.md",
+        "sampleHashes": [
+          "507b88cd5f579785d3e8ad40c50b0714113cf2993f6844140fb8a01e3473c1b6",
+          "e2f05a0ec205432d3c7ea35c71b34650c4e8b206d069aa42c40e384648416632"
+        ]
       }
     },
     {
@@ -886,7 +1639,25 @@
       "adapter": "district-cmecf",
       "headingAliases": [],
       "validation": {
-        "status": "unverified"
+        "status": "sample-verified",
+        "date": "2026-09-30",
+        "caseType": "Civil and Criminal",
+        "sampleCount": 2,
+        "rolesExercised": [
+          "Civil Defense",
+          "Criminal Defense",
+          "Prosecution"
+        ],
+        "notes": [
+          "One civil and one criminal full report retrieved; saved source headings, party/counsel blocks and counts/NOS reviewed. Sampled compatibility, not all-case coverage.",
+          "Civil sample does not exercise Civil Plaintiff.",
+          "Unresolved count versions retained for review; no combined summary inferred."
+        ],
+        "evidence": "docs/district-validation-remaining-2026-09-30.md",
+        "sampleHashes": [
+          "9d2650cd25cb3e3a88bf1c6c06932a3ee8da4dcfe280899545cebdc3bc65ba11",
+          "c7f8af38f3e23dd8d6ce9fe8887751567fd2a05fb14d296a6cd6f98c9cdbec8f"
+        ]
       }
     },
     {
@@ -927,7 +1698,24 @@
       "adapter": "district-cmecf",
       "headingAliases": [],
       "validation": {
-        "status": "unverified"
+        "status": "sample-verified",
+        "date": "2026-09-30",
+        "caseType": "Civil and Criminal",
+        "sampleCount": 2,
+        "rolesExercised": [
+          "Civil Defense",
+          "Civil Plaintiff",
+          "Criminal Defense",
+          "Prosecution"
+        ],
+        "notes": [
+          "One civil and one criminal full report retrieved; saved source headings, party/counsel blocks and counts/NOS reviewed. Sampled compatibility, not all-case coverage."
+        ],
+        "evidence": "docs/district-validation-remaining-2026-09-30.md",
+        "sampleHashes": [
+          "0c1961d961f4aa0e57fc4870c8e9f2fa0a34ef7002463624d59c6ffcb6fc4448",
+          "ebea4e315edef16c23bdd16bc6e5c84118877cf9bfebb94af17026fcbef3d30a"
+        ]
       }
     },
     {
@@ -955,7 +1743,24 @@
       "adapter": "district-cmecf",
       "headingAliases": [],
       "validation": {
-        "status": "unverified"
+        "status": "sample-verified",
+        "date": "2026-09-30",
+        "caseType": "Civil and Criminal",
+        "sampleCount": 2,
+        "rolesExercised": [
+          "Civil Defense",
+          "Civil Plaintiff",
+          "Criminal Defense",
+          "Prosecution"
+        ],
+        "notes": [
+          "One civil and one criminal full report retrieved; saved source headings, party/counsel blocks and counts/NOS reviewed. Sampled compatibility, not all-case coverage."
+        ],
+        "evidence": "docs/district-validation-remaining-2026-09-30.md",
+        "sampleHashes": [
+          "6f7832f57141e3b5590c67734f6f24ead802f19759b5415021aec7cf97ed99f5",
+          "a573b6775769f202ed44fce5ec3334b7e66d4bc2507afa7ca4b5f8d7822ff8f1"
+        ]
       }
     },
     {
@@ -967,7 +1772,23 @@
       "adapter": "district-cmecf",
       "headingAliases": [],
       "validation": {
-        "status": "unverified"
+        "status": "sample-verified",
+        "date": "2026-09-30",
+        "caseType": "Civil and Criminal",
+        "sampleCount": 2,
+        "rolesExercised": [
+          "Criminal Defense",
+          "Prosecution"
+        ],
+        "notes": [
+          "One civil and one criminal full report retrieved; saved source headings, party/counsel blocks and counts/NOS reviewed. Sampled compatibility, not all-case coverage.",
+          "Civil sample does not exercise Civil Defense, Civil Plaintiff."
+        ],
+        "evidence": "docs/district-validation-remaining-2026-09-30.md",
+        "sampleHashes": [
+          "9cda0639eb35afca0e686cafadac1471564541af6d8c56c00a0e7b85f377d819",
+          "3111868110a931f8c0d005a5519849876817088b2b65736b4778293a0400d0e8"
+        ]
       }
     },
     {
@@ -979,7 +1800,24 @@
       "adapter": "district-cmecf",
       "headingAliases": [],
       "validation": {
-        "status": "unverified"
+        "status": "sample-verified",
+        "date": "2026-09-30",
+        "caseType": "Civil and Criminal",
+        "sampleCount": 2,
+        "rolesExercised": [
+          "Civil Plaintiff",
+          "Criminal Defense",
+          "Prosecution"
+        ],
+        "notes": [
+          "One civil and one criminal full report retrieved; saved source headings, party/counsel blocks and counts/NOS reviewed. Sampled compatibility, not all-case coverage.",
+          "Civil sample does not exercise Civil Defense."
+        ],
+        "evidence": "docs/district-validation-remaining-2026-09-30.md",
+        "sampleHashes": [
+          "496abe996341a47f6ec6a21989c9fa0a64659582eac118159307c4f880771d34",
+          "d6bdb83709bcc15ea172122d0131607cc7fc173ba885a1f46b935218b1c6f458"
+        ]
       }
     },
     {
@@ -991,7 +1829,24 @@
       "adapter": "district-cmecf",
       "headingAliases": [],
       "validation": {
-        "status": "unverified"
+        "status": "sample-verified",
+        "date": "2026-09-30",
+        "caseType": "Civil and Criminal",
+        "sampleCount": 2,
+        "rolesExercised": [
+          "Civil Defense",
+          "Civil Plaintiff",
+          "Criminal Defense",
+          "Prosecution"
+        ],
+        "notes": [
+          "One civil and one criminal full report retrieved; saved source headings, party/counsel blocks and counts/NOS reviewed. Sampled compatibility, not all-case coverage."
+        ],
+        "evidence": "docs/district-validation-remaining-2026-09-30.md",
+        "sampleHashes": [
+          "22ab51df644305d43410af6a4ce384c71477777f9fa5c5a9f0dd3dab21501d15",
+          "51b99830ea3abca9447381e2f9db20e9160ad2d4fb0f4df8b680c9cbd773dcbe"
+        ]
       }
     },
     {
@@ -1003,7 +1858,24 @@
       "adapter": "district-cmecf",
       "headingAliases": [],
       "validation": {
-        "status": "unverified"
+        "status": "sample-verified",
+        "date": "2026-09-30",
+        "caseType": "Civil and Criminal",
+        "sampleCount": 2,
+        "rolesExercised": [
+          "Civil Defense",
+          "Civil Plaintiff",
+          "Criminal Defense",
+          "Prosecution"
+        ],
+        "notes": [
+          "One civil and one criminal full report retrieved; saved source headings, party/counsel blocks and counts/NOS reviewed. Sampled compatibility, not all-case coverage."
+        ],
+        "evidence": "docs/district-validation-remaining-2026-09-30.md",
+        "sampleHashes": [
+          "afad155cd462c91e5117f95c2b288652cfeb3a03692643f1727faedc18a4cc59",
+          "a3a0efd82a8f4c0e3a79c7e00067cb6e6b4336d7ad052b520b5fd436b139c1fa"
+        ]
       }
     },
     {
@@ -1015,7 +1887,24 @@
       "adapter": "district-cmecf",
       "headingAliases": [],
       "validation": {
-        "status": "unverified"
+        "status": "sample-verified",
+        "date": "2026-09-30",
+        "caseType": "Civil and Criminal",
+        "sampleCount": 2,
+        "rolesExercised": [
+          "Civil Defense",
+          "Civil Plaintiff",
+          "Criminal Defense",
+          "Prosecution"
+        ],
+        "notes": [
+          "One civil and one criminal full report retrieved; saved source headings, party/counsel blocks and counts/NOS reviewed. Sampled compatibility, not all-case coverage."
+        ],
+        "evidence": "docs/district-validation-remaining-2026-09-30.md",
+        "sampleHashes": [
+          "924a9299b54f3bd2f9c2a64373962b29012fac658fa60ff0ff42b49f523fe1fd",
+          "adbeaaf73e787d761f9b224ac7a393d8ac560f9ef70b3f861c0d17dc193b4494"
+        ]
       }
     },
     {
@@ -1027,7 +1916,24 @@
       "adapter": "district-cmecf",
       "headingAliases": [],
       "validation": {
-        "status": "unverified"
+        "status": "sample-verified",
+        "date": "2026-09-30",
+        "caseType": "Civil and Criminal",
+        "sampleCount": 2,
+        "rolesExercised": [
+          "Civil Defense",
+          "Criminal Defense",
+          "Prosecution"
+        ],
+        "notes": [
+          "One civil and one criminal full report retrieved; saved source headings, party/counsel blocks and counts/NOS reviewed. Sampled compatibility, not all-case coverage.",
+          "Civil sample does not exercise Civil Plaintiff."
+        ],
+        "evidence": "docs/district-validation-remaining-2026-09-30.md",
+        "sampleHashes": [
+          "ba345e1ea038fc144201ea555335ae4dc95a54ad470726d720fd1d735e1a701b",
+          "5b23cb28aadb677e2b295c6d4a840d61368cbb95b516dfd1a6b948451b08711e"
+        ]
       }
     },
     {
@@ -1068,7 +1974,24 @@
       "adapter": "district-cmecf",
       "headingAliases": [],
       "validation": {
-        "status": "unverified"
+        "status": "sample-verified",
+        "date": "2026-09-30",
+        "caseType": "Civil and Criminal",
+        "sampleCount": 2,
+        "rolesExercised": [
+          "Civil Defense",
+          "Civil Plaintiff",
+          "Criminal Defense",
+          "Prosecution"
+        ],
+        "notes": [
+          "One civil and one criminal full report retrieved; saved source headings, party/counsel blocks and counts/NOS reviewed. Sampled compatibility, not all-case coverage."
+        ],
+        "evidence": "docs/district-validation-remaining-2026-09-30.md",
+        "sampleHashes": [
+          "b01d77388cb3341011cb6f53a22a4c71aa03ed5d2dbce428e91ad399f472029e",
+          "23c4166679d85a314ed9d36b916f3b8bbd5015470677afd901016b769b2f1022"
+        ]
       }
     },
     {
@@ -1080,7 +2003,24 @@
       "adapter": "district-cmecf",
       "headingAliases": [],
       "validation": {
-        "status": "unverified"
+        "status": "sample-verified",
+        "date": "2026-09-30",
+        "caseType": "Civil and Criminal",
+        "sampleCount": 2,
+        "rolesExercised": [
+          "Civil Defense",
+          "Criminal Defense",
+          "Prosecution"
+        ],
+        "notes": [
+          "One civil and one criminal full report retrieved; saved source headings, party/counsel blocks and counts/NOS reviewed. Sampled compatibility, not all-case coverage.",
+          "Civil sample does not exercise Civil Plaintiff."
+        ],
+        "evidence": "docs/district-validation-remaining-2026-09-30.md",
+        "sampleHashes": [
+          "5351375fb1d359c2232093fd4ffef0d68a639ab3d1cc9358d4438630bd23ca54",
+          "930ceb0fcb82fa20975e256df460507fe774b321382d2d392020d4ec01876cd7"
+        ]
       }
     },
     {
@@ -1104,7 +2044,24 @@
       "adapter": "district-cmecf",
       "headingAliases": [],
       "validation": {
-        "status": "unverified"
+        "status": "sample-verified",
+        "date": "2026-09-30",
+        "caseType": "Civil and Criminal",
+        "sampleCount": 2,
+        "rolesExercised": [
+          "Civil Defense",
+          "Civil Plaintiff",
+          "Criminal Defense",
+          "Prosecution"
+        ],
+        "notes": [
+          "One civil and one criminal full report retrieved; saved source headings, party/counsel blocks and counts/NOS reviewed. Sampled compatibility, not all-case coverage."
+        ],
+        "evidence": "docs/district-validation-remaining-2026-09-30.md",
+        "sampleHashes": [
+          "f1c34f5fc040324e8b1a3bb18aed01ac98add0bb0d5c8b82d43404a4533e665a",
+          "886b4c46f5f35a6f6de837c4ece14688527b3b9d67c3d2d5d6bfc25ceb9c8af4"
+        ]
       }
     },
     {
@@ -1116,7 +2073,24 @@
       "adapter": "district-cmecf",
       "headingAliases": [],
       "validation": {
-        "status": "unverified"
+        "status": "sample-verified",
+        "date": "2026-09-30",
+        "caseType": "Civil and Criminal",
+        "sampleCount": 2,
+        "rolesExercised": [
+          "Civil Plaintiff",
+          "Criminal Defense",
+          "Prosecution"
+        ],
+        "notes": [
+          "One civil and one criminal full report retrieved; saved source headings, party/counsel blocks and counts/NOS reviewed. Sampled compatibility, not all-case coverage.",
+          "Civil sample does not exercise Civil Defense."
+        ],
+        "evidence": "docs/district-validation-remaining-2026-09-30.md",
+        "sampleHashes": [
+          "9f4b92a24696bbbe66d6dd806bdcbbb82f2b0a8c2c08307158557ff7481d629d",
+          "2d3aa093a55e23efc4e228c62a08eca432189bbf6f09d5bea9e067b876e38764"
+        ]
       }
     },
     {
@@ -1128,7 +2102,24 @@
       "adapter": "district-cmecf",
       "headingAliases": [],
       "validation": {
-        "status": "unverified"
+        "status": "sample-verified",
+        "date": "2026-09-30",
+        "caseType": "Civil and Criminal",
+        "sampleCount": 2,
+        "rolesExercised": [
+          "Civil Defense",
+          "Civil Plaintiff",
+          "Criminal Defense",
+          "Prosecution"
+        ],
+        "notes": [
+          "One civil and one criminal full report retrieved; saved source headings, party/counsel blocks and counts/NOS reviewed. Sampled compatibility, not all-case coverage."
+        ],
+        "evidence": "docs/district-validation-remaining-2026-09-30.md",
+        "sampleHashes": [
+          "75d3ab7b4d807a7cbadde30a9eb294f275440ffa53c9079a93ac60630ca73f53",
+          "9cc62d4eea7164ed6edfe0f2ca86caa664e318b87cc15b908897ca1022f2f995"
+        ]
       }
     },
     {
@@ -1140,7 +2131,25 @@
       "adapter": "district-cmecf",
       "headingAliases": [],
       "validation": {
-        "status": "unverified"
+        "status": "sample-verified",
+        "date": "2026-09-30",
+        "caseType": "Civil and Criminal",
+        "sampleCount": 2,
+        "rolesExercised": [
+          "Criminal Defense",
+          "Prosecution"
+        ],
+        "notes": [
+          "One civil and one criminal full report retrieved; saved source headings, party/counsel blocks and counts/NOS reviewed. Sampled compatibility, not all-case coverage.",
+          "Civil sample does not exercise Civil Defense, Civil Plaintiff.",
+          "Source supplies no structured counts for at least one defendant; no charge summary inferred.",
+          "This sample does not establish a resolved client-specific criminal count summary."
+        ],
+        "evidence": "docs/district-validation-remaining-2026-09-30.md",
+        "sampleHashes": [
+          "60fdae35981f43ee8b1688397bd8d337d83d4f43af2a2c3e8701844396ec8e57",
+          "6b04513bec4dc5892d8a7fae274da11e5334eac185b3687339c330addc8a5fc4"
+        ]
       }
     },
     {
@@ -1152,7 +2161,26 @@
       "adapter": "district-cmecf",
       "headingAliases": [],
       "validation": {
-        "status": "unverified"
+        "status": "sample-verified",
+        "date": "2026-09-30",
+        "caseType": "Civil and Criminal",
+        "sampleCount": 2,
+        "rolesExercised": [
+          "Civil Defense",
+          "Prosecution"
+        ],
+        "notes": [
+          "One civil and one criminal full report retrieved; saved source headings, party/counsel blocks and counts/NOS reviewed. Sampled compatibility, not all-case coverage.",
+          "Civil sample does not exercise Civil Plaintiff.",
+          "Criminal sample does not exercise Criminal Defense.",
+          "Source supplies no structured counts for at least one defendant; no charge summary inferred.",
+          "This sample does not establish a resolved client-specific criminal count summary."
+        ],
+        "evidence": "docs/district-validation-remaining-2026-09-30.md",
+        "sampleHashes": [
+          "f041d41ea0b0acddd8f4eb821694354723c75c588c37d07fbdb8c8432e2dac9d",
+          "3eeabeafb240c8d5317f32eed937618ef084ba225b6f963139bb6fa27d06f403"
+        ]
       }
     },
     {
@@ -1164,7 +2192,23 @@
       "adapter": "district-cmecf",
       "headingAliases": [],
       "validation": {
-        "status": "unverified"
+        "status": "sample-verified",
+        "date": "2026-09-30",
+        "caseType": "Civil and Criminal",
+        "sampleCount": 2,
+        "rolesExercised": [
+          "Criminal Defense",
+          "Prosecution"
+        ],
+        "notes": [
+          "One civil and one criminal full report retrieved; saved source headings, party/counsel blocks and counts/NOS reviewed. Sampled compatibility, not all-case coverage.",
+          "Civil sample does not exercise Civil Defense, Civil Plaintiff."
+        ],
+        "evidence": "docs/district-validation-remaining-2026-09-30.md",
+        "sampleHashes": [
+          "a6f0b6556a33f8355f3cb6799c97ce27f6214d748ab31fab35e735c6760e032f",
+          "e6ee4fa942f1009301ad8167e348936e69614992de86fdc9d6a703e0959cfc08"
+        ]
       }
     },
     {
@@ -1176,7 +2220,24 @@
       "adapter": "district-cmecf",
       "headingAliases": [],
       "validation": {
-        "status": "unverified"
+        "status": "sample-verified",
+        "date": "2026-09-30",
+        "caseType": "Civil and Criminal",
+        "sampleCount": 2,
+        "rolesExercised": [
+          "Civil Defense",
+          "Civil Plaintiff",
+          "Criminal Defense",
+          "Prosecution"
+        ],
+        "notes": [
+          "One civil and one criminal full report retrieved; saved source headings, party/counsel blocks and counts/NOS reviewed. Sampled compatibility, not all-case coverage."
+        ],
+        "evidence": "docs/district-validation-remaining-2026-09-30.md",
+        "sampleHashes": [
+          "36bddf449a10c090cf76d0435e796cff5378c8709977e5f79d09e98ae1ec301b",
+          "dda562e79c16c1f164a2d3ab7e1da0a4e17fc6f8b9af99ba01f36bd8c31ca029"
+        ]
       }
     },
     {
@@ -1188,7 +2249,26 @@
       "adapter": "district-cmecf",
       "headingAliases": [],
       "validation": {
-        "status": "unverified"
+        "status": "sample-verified",
+        "date": "2026-09-30",
+        "caseType": "Civil and Criminal",
+        "sampleCount": 2,
+        "rolesExercised": [
+          "Civil Defense",
+          "Criminal Defense",
+          "Prosecution"
+        ],
+        "notes": [
+          "One civil and one criminal full report retrieved; saved source headings, party/counsel blocks and counts/NOS reviewed. Sampled compatibility, not all-case coverage.",
+          "Civil sample does not exercise Civil Plaintiff.",
+          "Source supplies no structured counts for at least one defendant; no charge summary inferred.",
+          "This sample does not establish a resolved client-specific criminal count summary."
+        ],
+        "evidence": "docs/district-validation-remaining-2026-09-30.md",
+        "sampleHashes": [
+          "6d982d2e9c475f83cd577ae6ec6287132c13006fd40627b0154b6d0fbdbbc734",
+          "1c21c0ba5d700d0f97559cb763c5528d6eb6a764a2344d998e2faa271d0ed609"
+        ]
       }
     },
     {
@@ -1258,7 +2338,26 @@
       "adapter": "district-cmecf",
       "headingAliases": [],
       "validation": {
-        "status": "unverified"
+        "status": "sample-verified",
+        "date": "2026-09-30",
+        "caseType": "Civil and Criminal",
+        "sampleCount": 2,
+        "rolesExercised": [
+          "Civil Defense",
+          "Civil Plaintiff",
+          "Prosecution"
+        ],
+        "notes": [
+          "One civil and one criminal full report retrieved; saved source headings, party/counsel blocks and counts/NOS reviewed. Sampled compatibility, not all-case coverage.",
+          "Criminal sample does not exercise Criminal Defense.",
+          "Source supplies no structured counts for at least one defendant; no charge summary inferred.",
+          "This sample does not establish a resolved client-specific criminal count summary."
+        ],
+        "evidence": "docs/district-validation-remaining-2026-09-30.md",
+        "sampleHashes": [
+          "b50ebfbfa1f21381e4313b6a9079151312037466321847c69f1b4a499a2d5dd9",
+          "f50cb82d7fc208c18fd32a925a894c33498f368d6b83ccf7b27c273775e79e2d"
+        ]
       }
     },
     {
@@ -1270,7 +2369,24 @@
       "adapter": "district-cmecf",
       "headingAliases": [],
       "validation": {
-        "status": "unverified"
+        "status": "sample-verified",
+        "date": "2026-09-30",
+        "caseType": "Civil and Criminal",
+        "sampleCount": 2,
+        "rolesExercised": [
+          "Civil Defense",
+          "Civil Plaintiff",
+          "Criminal Defense",
+          "Prosecution"
+        ],
+        "notes": [
+          "One civil and one criminal full report retrieved; saved source headings, party/counsel blocks and counts/NOS reviewed. Sampled compatibility, not all-case coverage."
+        ],
+        "evidence": "docs/district-validation-remaining-2026-09-30.md",
+        "sampleHashes": [
+          "6c6352b2a9c6a48c1cf79f9dd0d8aada9de52342f3b3986226c4f7dfbf823dc6",
+          "fb40cc042726c017ca888eaaee9722eb27574b43e453fa7721aa3c574512c7f0"
+        ]
       }
     },
     {
@@ -1282,7 +2398,25 @@
       "adapter": "district-cmecf",
       "headingAliases": [],
       "validation": {
-        "status": "unverified"
+        "status": "sample-verified",
+        "date": "2026-09-30",
+        "caseType": "Civil and Criminal",
+        "sampleCount": 2,
+        "rolesExercised": [
+          "Civil Defense",
+          "Civil Plaintiff",
+          "Criminal Defense",
+          "Prosecution"
+        ],
+        "notes": [
+          "One civil and one criminal full report retrieved; saved source headings, party/counsel blocks and counts/NOS reviewed. Sampled compatibility, not all-case coverage.",
+          "Different defendant charge profiles remain separate; no single prosecution summary inferred."
+        ],
+        "evidence": "docs/district-validation-remaining-2026-09-30.md",
+        "sampleHashes": [
+          "54938871e753c2f6c3df72356c0125d39550cf95d8bce4c034de519fc51f837e",
+          "3682c3505a16c774ef24660ee0022fd7e151cd14195c1e2ea16abff26426eca6"
+        ]
       }
     },
     {
@@ -1308,7 +2442,23 @@
       "adapter": "district-cmecf",
       "headingAliases": [],
       "validation": {
-        "status": "unverified"
+        "status": "sample-verified",
+        "date": "2026-09-30",
+        "caseType": "Civil and Criminal",
+        "sampleCount": 2,
+        "rolesExercised": [
+          "Criminal Defense",
+          "Prosecution"
+        ],
+        "notes": [
+          "One civil and one criminal full report retrieved; saved source headings, party/counsel blocks and counts/NOS reviewed. Sampled compatibility, not all-case coverage.",
+          "Civil sample does not exercise Civil Defense, Civil Plaintiff."
+        ],
+        "evidence": "docs/district-validation-remaining-2026-09-30.md",
+        "sampleHashes": [
+          "d3d04c57e271fe9ba109467b5bf4df54761849d60b1862929d8f3a5a406ec5a5",
+          "76ab76dac42691cb10783f9b9ea44481ecc510f5d7dd87a89c66ad84882f0426"
+        ]
       }
     },
     {
@@ -1320,7 +2470,25 @@
       "adapter": "district-cmecf",
       "headingAliases": [],
       "validation": {
-        "status": "unverified"
+        "status": "sample-verified",
+        "date": "2026-09-30",
+        "caseType": "Civil and Criminal",
+        "sampleCount": 2,
+        "rolesExercised": [
+          "Civil Defense",
+          "Civil Plaintiff",
+          "Criminal Defense",
+          "Prosecution"
+        ],
+        "notes": [
+          "One civil and one criminal full report retrieved; saved source headings, party/counsel blocks and counts/NOS reviewed. Sampled compatibility, not all-case coverage.",
+          "Different defendant charge profiles remain separate; no single prosecution summary inferred."
+        ],
+        "evidence": "docs/district-validation-remaining-2026-09-30.md",
+        "sampleHashes": [
+          "18a5707efb5e7eaf42faf739fd022458d0691f2be86b4ad2cfd3917276ecbecf",
+          "e9e1031ec3a6bb320db2d39e673ba46708c867ed7225947c8f7856fc79eb75ff"
+        ]
       }
     },
     {
@@ -1332,7 +2500,24 @@
       "adapter": "district-cmecf",
       "headingAliases": [],
       "validation": {
-        "status": "unverified"
+        "status": "sample-verified",
+        "date": "2026-09-30",
+        "caseType": "Civil and Criminal",
+        "sampleCount": 2,
+        "rolesExercised": [
+          "Civil Plaintiff",
+          "Criminal Defense",
+          "Prosecution"
+        ],
+        "notes": [
+          "One civil and one criminal full report retrieved; saved source headings, party/counsel blocks and counts/NOS reviewed. Sampled compatibility, not all-case coverage.",
+          "Civil sample does not exercise Civil Defense."
+        ],
+        "evidence": "docs/district-validation-remaining-2026-09-30.md",
+        "sampleHashes": [
+          "c3cebffe74af41a569b182a2fa17691aaa0b0262176e84bb2bc0bb1da5330f87",
+          "dbfc36dbfa68ea4e98e1f91e6ddfbd09da94ccdd60d6ae816eb297823f735229"
+        ]
       }
     },
     {
@@ -1344,7 +2529,24 @@
       "adapter": "district-cmecf",
       "headingAliases": [],
       "validation": {
-        "status": "unverified"
+        "status": "sample-verified",
+        "date": "2026-09-30",
+        "caseType": "Civil and Criminal",
+        "sampleCount": 2,
+        "rolesExercised": [
+          "Civil Plaintiff",
+          "Criminal Defense",
+          "Prosecution"
+        ],
+        "notes": [
+          "One civil and one criminal full report retrieved; saved source headings, party/counsel blocks and counts/NOS reviewed. Sampled compatibility, not all-case coverage.",
+          "Civil sample does not exercise Civil Defense."
+        ],
+        "evidence": "docs/district-validation-remaining-2026-09-30.md",
+        "sampleHashes": [
+          "b7940df22e2a4ae7074fff0c840db6c572b1495a16d2bcae32b03d39005a29c4",
+          "d44bb04bd9bf2ab3a6827747bb3eb897190b10f6a0b65be7e38094482eccf22f"
+        ]
       }
     },
     {
@@ -1356,7 +2558,24 @@
       "adapter": "district-cmecf",
       "headingAliases": [],
       "validation": {
-        "status": "unverified"
+        "status": "sample-verified",
+        "date": "2026-09-30",
+        "caseType": "Civil and Criminal",
+        "sampleCount": 2,
+        "rolesExercised": [
+          "Civil Defense",
+          "Civil Plaintiff",
+          "Criminal Defense",
+          "Prosecution"
+        ],
+        "notes": [
+          "One civil and one criminal full report retrieved; saved source headings, party/counsel blocks and counts/NOS reviewed. Sampled compatibility, not all-case coverage."
+        ],
+        "evidence": "docs/district-validation-remaining-2026-09-30.md",
+        "sampleHashes": [
+          "63dabccd3ee8548729983a741b60cba29478972096c56fc20e29a25c43bba6a9",
+          "b1415fc95b43b4bcaf5a4261fb78f862fa97261edbe2bb4ca04f8f384ee3dc9f"
+        ]
       }
     },
     {
@@ -1368,7 +2587,24 @@
       "adapter": "district-cmecf",
       "headingAliases": [],
       "validation": {
-        "status": "unverified"
+        "status": "sample-verified",
+        "date": "2026-09-30",
+        "caseType": "Civil and Criminal",
+        "sampleCount": 2,
+        "rolesExercised": [
+          "Civil Plaintiff"
+        ],
+        "notes": [
+          "One civil and one criminal full report retrieved; saved source headings, party/counsel blocks and counts/NOS reviewed. Sampled compatibility, not all-case coverage.",
+          "Civil sample does not exercise Civil Defense.",
+          "Criminal sample does not exercise Criminal Defense, Prosecution.",
+          "This sample does not establish a resolved client-specific criminal count summary."
+        ],
+        "evidence": "docs/district-validation-remaining-2026-09-30.md",
+        "sampleHashes": [
+          "eca549fd4e31420b3e75bf1606a60b9ceb9bf6a0eab626f0a74b38c3049234c3",
+          "4b6a503a8013c027d5d7cda90ee6eef02fd04b74bac8885a6a460b39c2edf750"
+        ]
       }
     },
     {
@@ -1380,7 +2616,24 @@
       "adapter": "district-cmecf",
       "headingAliases": [],
       "validation": {
-        "status": "unverified"
+        "status": "sample-verified",
+        "date": "2026-09-30",
+        "caseType": "Civil and Criminal",
+        "sampleCount": 2,
+        "rolesExercised": [
+          "Prosecution"
+        ],
+        "notes": [
+          "One civil and one criminal full report retrieved; saved source headings, party/counsel blocks and counts/NOS reviewed. Sampled compatibility, not all-case coverage.",
+          "Civil sample does not exercise Civil Defense, Civil Plaintiff.",
+          "Criminal sample does not exercise Criminal Defense.",
+          "This sample does not establish a resolved client-specific criminal count summary."
+        ],
+        "evidence": "docs/district-validation-remaining-2026-09-30.md",
+        "sampleHashes": [
+          "ea7c5d5c228e4099558f813c506e536532096d7b78d4b4303f30ec62f58ee3f4",
+          "b8bd13c5095d761e0a581e7b252e6bf6d364d5562c1fb9589559e2c2d086adda"
+        ]
       }
     },
     {
@@ -1392,7 +2645,24 @@
       "adapter": "district-cmecf",
       "headingAliases": [],
       "validation": {
-        "status": "unverified"
+        "status": "sample-verified",
+        "date": "2026-09-30",
+        "caseType": "Civil and Criminal",
+        "sampleCount": 2,
+        "rolesExercised": [
+          "Civil Plaintiff",
+          "Criminal Defense",
+          "Prosecution"
+        ],
+        "notes": [
+          "One civil and one criminal full report retrieved; saved source headings, party/counsel blocks and counts/NOS reviewed. Sampled compatibility, not all-case coverage.",
+          "Civil sample does not exercise Civil Defense."
+        ],
+        "evidence": "docs/district-validation-remaining-2026-09-30.md",
+        "sampleHashes": [
+          "30e960f3928cd0d8b06cb2977bf761862d7f7ff2c46ca2b20b2f45f830d15a88",
+          "c26bee3fc4dd4dfd6090cdd3b27d47a3de8bbae50bc52eccd0b5402f0ab040fa"
+        ]
       }
     }
   ]

@@ -1,5 +1,7 @@
 # District validation — September 30, 2026
 
+This report records the first expansion batch. The later [completed expansion report](district-validation-remaining-2026-09-30.md) brings sampled coverage to all 90 state and D.C. districts.
+
 ROC retrieved one civil and one criminal docket in each of 14 additional districts: **28 of 28 reports, $16.10 in confirmed receipts against a $90 cap**, with no pending charges. Official PACER API authentication and PCL case discovery cost $2.80; the court-web docket reports cost $13.30. No underlying filings or replacement samples were purchased.
 
 The standalone program selected cases from one official API results page per court/type, using an explicit September 2025 filing window. This was a bounded compatibility sample, not a comprehensive case search. Court websites supplied full reports, including parties and counsel, using the API-authenticated session. This is not a document-retrieval API.

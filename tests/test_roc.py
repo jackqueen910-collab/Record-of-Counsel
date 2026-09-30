@@ -81,8 +81,8 @@ class ParserTests(unittest.TestCase):
         self.assertEqual(parsed["parties"][0]["courtContacts"], ["US Probation", "USM"])
         self.assertEqual(parse_report(report(party("Plaintiff", "USA", "USM")))["parties"][0]["counsel"], ["USM"])
 
-    def test_claimant_and_intervenor_counsel_are_retained_without_invented_team(self):
-        for role in ("Claimant", "Intervenor"):
+    def test_nonstandard_roles_are_retained_without_invented_team(self):
+        for role in ("Claimant", "Intervenor", "Amicus", "Notice Party"):
             parsed = parse_report(report(party("Defendant", "Property", "") +
                                          party(role, "Other Party", "Jordan Lawyer"), "CIVIL"))
             self.assertEqual(parsed["parties"][1]["role"], role)
@@ -90,6 +90,30 @@ class ParserTests(unittest.TestCase):
             self.assertEqual(evidence["representedParties"], ["Other Party"])
             self.assertEqual(evidence["team"], "")
             self.assertIn("Counsel side is ambiguous or unsupported.", evidence["warnings"])
+
+    def test_mediator_in_representation_column_is_a_court_contact(self):
+        parsed = parse_report(report(party("Defendant", "Client", "Jordan Lawyer") +
+                                     party("Mediator", "Mediator", "Alex Neutral"), "CIVIL"))
+        mediator = parsed["parties"][1]
+        self.assertEqual((mediator["role"], mediator["name"]), ("Mediator", "Mediator"))
+        self.assertEqual(mediator["counsel"], [])
+        self.assertEqual(mediator["courtContacts"], ["Alex Neutral"])
+        self.assertEqual(enrich(parsed, ["Alex Neutral"])["representedParties"], [])
+        self.assertEqual(enrich(parsed, ["Jordan Lawyer"])["representedParties"], ["Client"])
+
+    def test_unknown_count_suffix_keeps_source_without_invented_version_order(self):
+        parsed = parse_report(report(party("Defendant", "Client", "Jordan Lawyer",
+            count("18:1343.F FRAUD BY WIRE", "1r", "Source disposition") +
+            count("18:111.F ASSAULT", "2"))))
+        counts = parsed["parties"][0]["counts"]
+        self.assertEqual(counts[0]["rawCountLabel"], "1r")
+        self.assertEqual(counts[0]["rawCharge"], "18:1343.F FRAUD BY WIRE")
+        self.assertEqual(counts[0]["disposition"], "Source disposition")
+        self.assertEqual(counts[0]["countIds"], [])
+        self.assertEqual(counts[1]["countIds"][0]["number"], 2)
+        evidence = enrich(parsed, ["Jordan Lawyer"])
+        self.assertEqual(evidence["nature"], "")
+        self.assertIn("Unrecognized count label: 1r", "; ".join(evidence["warnings"]))
 
     def test_superseded_versions_not_double_counted(self):
         html = report(party("Defendant", "Client", "Jordan Lawyer",

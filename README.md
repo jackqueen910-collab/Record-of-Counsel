@@ -2,13 +2,13 @@
 
 An on-demand, deterministic PACER workflow. No AI model, Codex session, chat connector, or web host is required to run the program.
 
-**Current release: 0.1 prototype.** The standalone workflow has completed live API search, court-web docket retrieval, client/counsel matching and local export. All 94 primary U.S. district-court systems are registered; 16 have reviewed live samples. The latest batch retrieved 28 civil/criminal reports across 14 additional districts for $16.10, with sample limits documented in the [validation report](docs/district-validation-2026-09-30.md). Registration and sampled tests do not establish universal retrieval coverage. Google Sheets publication still needs its own live acceptance test.
+**Current release: 0.1 prototype.** The standalone workflow has completed live API search, court-web docket retrieval, client/counsel matching and local export. All **90 district courts in the states and D.C. have reviewed live samples** and are eligible for bounded retrieval. The latest batch completed 148 civil/criminal reports across the remaining 74 districts for $81.00, including earlier territory charges, under a $150 cap. The [coverage report](docs/district-validation-remaining-2026-09-30.md) records the sample limits. The four territorial districts remain registered but excluded from ordinary retrieval. Sampled tests do not establish universal layout or field coverage. Google Sheets publication still needs its own live acceptance test.
 
 ## What it does
 
 1. Reads saved official PCL responses, or authenticates and searches the official PCL API.
 2. Groups records by court and normalized case number, retaining prosecution and defense records.
-3. Selects a bounded docket sample from those results (latest/oldest, court, dates, case type, total limit and optional per-court limit), or uses explicit case selections. Retrieves those reports using court websites. This is **web retrieval**, not a document-retrieval API. The shared adapter uses the form contract observed in SDNY and New Jersey; unverified districts require explicit configuration for controlled testing.
+3. Selects a bounded docket sample from those results (latest/oldest, court, dates, case type, total limit and optional per-court limit), or uses explicit case selections. Retrieves those reports using court websites. This is **web retrieval**, not a document-retrieval API. The shared adapter has reviewed samples from all state and D.C. districts; unverified districts require explicit configuration for controlled testing.
 4. Matches explicit attorney-name aliases to the docket's party/counsel table.
 5. Extracts the matched client's counts, preserves indictment versions, and summarizes the latest supported version without duplicate historical counts.
 6. Writes a ten-column case index as XLSX, CSV and readable HTML, plus detailed evidence and review JSON.
@@ -101,8 +101,8 @@ The directory also contains the Case Locator under the District category and a s
 
 | Status | Meaning | Default live behavior |
 |---|---|---|
-| `sample-verified` | Reviewed live samples establish the listed case types and roles; 16 courts, with sample limits exposed in registry JSON and the validation report. | Eligible, subject to case filters and budget. |
-| `unverified` | Official address is registered and the shared adapter can be attempted; that court's actual forms and reports have not been validated. | Skipped automatically; explicit selection requires opt-in. |
+| `sample-verified` | Reviewed live samples establish the listed case types and roles; 90 courts, with sample limits exposed in registry JSON and the validation reports. | Eligible, subject to case filters and budget. |
+| `unverified` | Registered without a completed validation scope. The four territorial districts were excluded; one purchased Guam report remains in the private record. | Skipped automatically; explicit selection requires opt-in. |
 
 List coverage and preview a selection without a PACER login or any network requests:
 
@@ -196,7 +196,9 @@ This creates a new workbook and returns its URL. It does not overwrite the exist
 
 The September 29, 2026 live acceptance run began with a fresh API search, without saved index or docket inputs. It returned 433 attorney records grouped into 334 cases. After form-handling fixes, an explicit resume reused the paid search responses and the in-memory API session, retrieved exactly the two automatically selected reports, and exported the index. Receipts totaled $3.30: $0.90 for the search and $0.30/$2.10 for the reports. Both reports established the lawyer's defense role. One supplied four structured counts, including two dismissed counts; the other supplied no counts and was correctly flagged for review. Counts in the index describe the case's charges, including terminated counts, and do not assert that every charge remains pending. Dispositions remain in the evidence.
 
-The September 30 batch completed 28 reports across 14 additional courts for $16.10 under a $90 cap. Source review and free offline reprocessing left 22 reports passing automated checks and six with documented source/sample limits. The [validation report](docs/district-validation-2026-09-30.md) records coverage, receipt totals and the resulting parser fixes. Real reports, receipts, credentials and generated case data remain outside version control. Additional courts and layouts still require validation.
+The first September 30 expansion batch completed 28 reports across 14 additional courts for $16.10 under a $90 cap. Source review and free offline reprocessing left 22 reports passing automated checks and six with documented source/sample limits. The [first validation report](docs/district-validation-2026-09-30.md) records those results.
+
+The second expansion batch completed 148 reports across the remaining 74 state districts for $81.00 under a $150 cap. This includes 156 API discovery pages ($15.60) and 149 docket receipts ($65.40): eight discovery pages and one Guam report preceded the user's territory exclusion. Removing those courts preserved all charges and original scope history. Offline review left 94 reports passing automated checks and 54 with documented source or supported-feature limits. All 90 state/D.C. districts now have reviewed samples; 88 have civil and criminal samples, while SDNY and New Jersey retain their original criminal samples. See the [completed coverage report](docs/district-validation-remaining-2026-09-30.md). The two expansion rounds together cost $97.10. Real reports, receipts, credentials and generated case data remain outside version control; unfamiliar layouts and ambiguous count versions still produce review flags.
 
 The browser regression tests use fictional local forms and block network requests. They check the keyboard-driven case finder, main-case versus defendant-subcase selection, removal of default date/document limits, inclusion of parties/counsel, and exclusion of document purchases. A full retriever test routes registered court origins to local fictional forms and receipts, checks client-specific parsing and cache reuse, and never connects to those courts. Run them with `ROC_BROWSER_TESTS=1` after installing the optional Playwright runtime; GitHub Actions includes them. They validate form handling, not live court coverage.
 

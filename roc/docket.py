@@ -142,8 +142,8 @@ def parse_report(html):
         values = [clean(c.text()) for c in cells]
         if len(values) >= 3 and values[0] == "Date Filed" and "Docket Text" in values[-1]:
             break
-        role = re.fullmatch(r"(Defendant|Plaintiff|Interested Party|Petitioner|Respondent|Movant|Debtor|Creditor|Claimant|Intervenor)(?:\s*\((\d+)\))?", values[0], re.I)
-        if role:
+        role = re.fullmatch(r"(Defendant|Plaintiff|Interested Party|Petitioner|Respondent|Movant|Debtor|Creditor|Claimant|Intervenor|Amicus|Mediator|Notice Party)(?:\s*\((\d+)\))?", values[0], re.I)
+        if role and any(cells[0].walk("u")):
             party = {"role": role[1].title(), "defendantNumber": role[2], "name": "", "counsel": [], "counts": [], "warnings": []}
             result["parties"].append(party)
             section = None
@@ -156,6 +156,11 @@ def parse_report(html):
                 party["name"] = names[0]
                 if len(cells) >= 3 and "represented" in values[1].lower():
                     party["counsel"], party["selfRepresentedNames"], party["courtContacts"] = counsel_blocks(cells[-1])
+                    if party["role"] == "Mediator":
+                        # Some courts put the mediator in a "represented by" cell.
+                        # The explicit row role is not an attorney-client relation.
+                        party["courtContacts"].extend(party["counsel"])
+                        party["counsel"] = []
                 continue
         if values[0] in ("Pending Counts", "Terminated Counts", "Complaints"):
             section = values[0]
@@ -163,13 +168,15 @@ def parse_report(html):
         if values[0].startswith("Highest Offense Level"):
             section = None
         if section in ("Pending Counts", "Terminated Counts") and len(cells) >= 3:
-            m = re.fullmatch(r"(.+?)\s*\(([\ds,\-– ]+)\)", values[0], re.I)
+            m = re.fullmatch(r"(.+?)\s*\(([\da-z,\-– ]+)\)", values[0], re.I)
             if m:
                 try:
                     ids = expand_count_ids(m[2])
                 except RocError as exc:
                     party["warnings"].append(str(exc))
-                    continue
+                    # Keep the source charge and disposition, but do not assign
+                    # version ordering or summarize an unfamiliar count label.
+                    ids = []
                 party["counts"].append({"section": section, "rawCharge": m[1].strip(),
                     "rawCountLabel": m[2], "countIds": ids, "disposition": values[-1]})
             elif values[0] and values[0] != "None":
