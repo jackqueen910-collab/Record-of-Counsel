@@ -31,8 +31,15 @@ class CourtProfile:
 
     def matches_heading(self, heading):
         text = clean(heading).casefold()
+        # Some CM/ECF reports put the state first (observed in NDCA).
+        # Derive only the exact alternate order of the registered district;
+        # retain the direction, state, and word boundaries in every match.
+        aliases = [self.district, *self.heading_aliases]
+        directional = re.fullmatch(r"(Northern|Southern|Eastern|Western|Middle|Central) District of (.+)", self.district)
+        if directional:
+            aliases.append(f"{directional[2]} {directional[1]} District")
         return any(re.search(r"(?<!\w)" + re.escape(clean(alias).casefold()) + r"(?!\w)", text)
-                   for alias in (self.district, *self.heading_aliases))
+                   for alias in aliases)
 
     def summary(self):
         return {"courtId": self.court_id, "district": self.district, "origin": self.origin,

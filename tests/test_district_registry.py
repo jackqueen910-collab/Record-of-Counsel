@@ -185,6 +185,16 @@ class OfflinePlanAndAdapterTests(unittest.TestCase):
         self.assertTrue(profile.matches_heading("District Court for the Northern Mariana Islands CRIMINAL DOCKET"))
         self.assertFalse(profile.matches_heading("District of Guam CRIMINAL DOCKET"))
 
+    def test_state_first_heading_keeps_district_identity(self):
+        heading = "U.S. District Court California Northern District (San Francisco) CIVIL DOCKET FOR CASE #: 3:25-cv-00001"
+        self.assertTrue(court_profile("candc").matches_heading(heading))
+        for code, profile in DISTRICT_COURTS.items():
+            if code != "candc":
+                with self.subTest(court=code):
+                    self.assertFalse(profile.matches_heading(heading))
+        for wrong in ("California Southern District", "California Northern Districtish", "North California District"):
+            self.assertFalse(court_profile("candc").matches_heading(wrong))
+
 
 if __name__ == "__main__":
     unittest.main()
