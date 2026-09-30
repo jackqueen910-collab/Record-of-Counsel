@@ -7,8 +7,8 @@ from roc.retrieve import choose_case, configure_report
 
 
 FORM = """<html><body>
-<input id="case_number_text_area_0" onkeyup="document.getElementById('find').style.display='inline'">
-<input type="button" id="find" value="Find This Case" style="display:none"
+<input id="case_number_text_area_0" onkeyup="document.getElementById('case_number_find_button_0').style.display='inline'">
+<input type="button" id="case_number_find_button_0" value="Find This Case" style="display:none"
  onclick="document.getElementById('cases').style.display='block'">
 <div id="cases" style="display:none">
 <div id="case_line_1">1:24-cr-00001-ABC-1 Client <input type="checkbox"></div>
@@ -54,7 +54,7 @@ class CourtFormTests(unittest.TestCase):
     def test_keyboard_activated_finder_and_full_report_configuration(self):
         # fill() alone leaves this legacy keyboard-driven finder hidden.
         self.page.locator("#case_number_text_area_0").fill("1:24-cr-00001")
-        self.assertFalse(self.page.locator("#find").is_visible())
+        self.assertFalse(self.page.locator("#case_number_find_button_0").is_visible())
         choose_case(self.page, "1:24-cr-00001")
         self.assertTrue(self.page.locator("#case_line_0 input").is_checked())
         self.assertFalse(self.page.locator("#case_line_1 input").is_checked())
@@ -68,6 +68,15 @@ class CourtFormTests(unittest.TestCase):
         self.assertIsNone(self.page.evaluate("window.submissions"))
         run_button.click()
         self.assertEqual(self.page.evaluate("window.submissions"), 1)
+
+    def test_blur_validation_and_collapsed_case_list(self):
+        html = FORM.replace('onkeyup=', 'onchange=')
+        html = html.replace("document.getElementById('cases').style.display='block'", "document.getElementById('case_number_show_button_0').style.display='inline'")
+        html = html.replace('<div id="cases"', '<input id="case_number_show_button_0" type="button" value="Show Case List" style="display:none" onclick="document.getElementById(\'cases\').style.display=\'block\'"> <div id="cases"')
+        self.page.set_content(html)
+        choose_case(self.page, "1:24-cr-00001")
+        self.assertTrue(self.page.locator("#case_line_0 input").is_checked())
+        self.assertFalse(self.page.locator("#case_line_1 input").is_checked())
 
     def test_unfamiliar_date_control_and_pdf_stop_before_submission(self):
         self.page.locator('[name="date_from"]').evaluate("n=>n.remove()")

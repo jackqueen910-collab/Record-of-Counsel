@@ -53,8 +53,17 @@ def choose_case(page, number):
     field.fill("")
     # CM/ECF updates the finder on keyboard events; fill() alone does not fire keyup.
     field.press_sequentially(number, delay=30)
-    page.get_by_role("button", name="Find This Case", exact=True).click()
+    field.press("Tab")  # Some versions validate on change/blur rather than keyup.
     pick = page.locator("[id^=case_line_]")
+    available = '#case_number_find_button_0:visible, #case_number_show_button_0:visible, [id^="case_line_"]:visible'
+    page.locator(available).first.wait_for(state="visible")
+    if not pick.first.is_visible():
+        show = page.get_by_role("button", name="Show Case List", exact=True)
+        if not show.is_visible():
+            page.get_by_role("button", name="Find This Case", exact=True).click()
+            page.locator('#case_number_show_button_0:visible, [id^="case_line_"]:visible').first.wait_for(state="visible")
+        if not pick.first.is_visible() and show.is_visible():
+            show.click()
     pick.first.wait_for(state="visible")
     index = select_case_line(pick.all_text_contents(), number)
     pick.nth(index).get_by_role("checkbox").check()
@@ -122,7 +131,7 @@ class CourtRetriever:
             try:
                 self.progress("retrieving_docket", f"Court-web report: {case['key']}. Opening the report form.",
                               chargedCents=self.store.spent)
-                page.goto(origin + "/cgi-bin/DktRpt.pl", wait_until="domcontentloaded")
+                page.goto(origin + "/cgi-bin/DktRpt.pl", wait_until="load")
                 if urlparse(page.url).hostname != urlparse(origin).hostname:
                     raise RocError("Court redirected to sign-in. Stop; no browser-login fallback.")
                 phase = "finding the case"
@@ -170,6 +179,7 @@ class CourtRetriever:
             controls = page.locator("input, button, select, textarea").evaluate_all("""nodes => nodes.map(n => ({
                 tag:n.tagName, id:n.id, name:n.name, type:n.type,
                 visible: !!(n.offsetWidth || n.offsetHeight || n.getClientRects().length),
+                events: ['onchange','onblur','onkeyup','onkeydown','onclick'].reduce((r,k)=>{if(n.hasAttribute(k))r[k]=n.getAttribute(k);return r},{}),
                 checked: n.type === 'checkbox' || n.type === 'radio' ? n.checked : undefined,
                 value: n.type === 'radio' || n.type === 'submit' || n.type === 'button' ? n.value : undefined,
                 label: n.labels ? Array.from(n.labels).map(l=>l.innerText).join(' ') : undefined
@@ -177,6 +187,8 @@ class CourtRetriever:
             write_json(self.store.root / "diagnostics" / (fingerprint(case["key"]) + ".json"),
                        {"case": case["key"], "phase": phase, "controls": controls,
                         "caseListText": page.locator('[id^="case_line_"]').all_text_contents(),
+                        "caseNumberValue": page.locator('#case_number_text_area_0').input_value() if page.locator('#case_number_text_area_0').count() else None,
+                        "scripts": page.locator('script[src]').evaluate_all("nodes=>nodes.map(n=>new URL(n.src,location.href).pathname)"),
                         "formText": page.locator('body').inner_text()[:12000]})
         except Exception:
             pass  # Diagnostics must not hide the original stop or trigger another request.
