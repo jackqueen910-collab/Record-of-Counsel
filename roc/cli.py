@@ -4,6 +4,7 @@ from pathlib import Path
 import sys
 
 from .common import RocError, case_key, now, read_json, write_json
+from .courts import DISTRICT_COURTS, registry_summary
 from .docket import enrich, parse_report
 from .index import build_index, records_from
 from .output import export_local, publish_google
@@ -73,7 +74,8 @@ def run(config_path, live=False, publish=False, session_provider=None):
             if session is None:
                 progress("awaiting_sign_in", "Ready for official PACER API sign-in for court reports.")
                 session = (session_provider or Session.prompt)()
-            retriever = CourtRetriever(session, store, headless=config.get("headless", True), progress=progress)
+            retriever = CourtRetriever(session, store, headless=config.get("headless", True), progress=progress,
+                                       allow_unverified=config.get("allowUnverifiedCourts", False))
             for case in selected:
                 try:
                     path = retriever.retrieve(case)
@@ -97,10 +99,15 @@ def run(config_path, live=False, publish=False, session_provider=None):
                 parsed = parse_report(path.read_text(encoding="utf-8"))
                 if parsed["caseNumber"] != case["caseNumber"]:
                     raise RocError("Saved docket case number differs from the configured case.")
-                if case["district"].casefold() not in parsed["heading"].casefold():
+                profile = DISTRICT_COURTS.get(case["courtId"])
+                matches_district = (profile.matches_heading(parsed["heading"]) if profile else
+                                    case["district"].casefold() in parsed["heading"].casefold())
+                if not matches_district:
                     raise RocError("Docket court heading does not match the configured district; review the source.")
                 evidence = enrich(parsed, aliases)
                 evidence.update(sourceFile=str(path), sourceHeading=parsed["heading"], parsedDocket=parsed)
+                if profile:
+                    evidence["courtCoverage"] = profile.summary()
                 case["enrichment"] = evidence
                 case["team"] = evidence["team"]
                 case["nature"] = evidence["nature"] or ("Unresolved — see review" if parsed["caseType"] == "Criminal" else case["nature"])
@@ -124,6 +131,22 @@ def run(config_path, live=False, publish=False, session_provider=None):
         return 2 if stop_reason else 0
 
 
+def plan_run(config_path):
+    """Read a saved index and print a selection plan. No login, purchases or writes."""
+    config_path = Path(config_path).resolve()
+    config = read_json(config_path)
+    validate_options(config)
+    base = config_path.parent
+    source = (resolve(base, config["indexFile"]) if config.get("indexFile") else
+              resolve(base, config["runDirectory"]) / "pcl-records.json")
+    if not source.exists():
+        raise RocError("Offline plan needs indexFile or an existing run's pcl-records.json. No PACER request was made.")
+    cases = build_index(records_from(read_json(source)), config.get("courtLabels"))
+    selected, plan = select_dockets(cases, config)
+    return {"mode": "offline-plan", "networkRequests": 0, "caseCount": len(cases),
+            "selectedDockets": len(selected), "docketSelection": plan}
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Record of Counsel — deterministic, on-demand PACER workflow")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -134,8 +157,26 @@ def main(argv=None):
     task.add_argument("--keep-session", action="store_true", help="Pause after errors with the API token in memory; resume only on explicit terminal input.")
     reconcile = sub.add_parser("reconcile", help="Resolve pending receipts from saved responses only; no network.")
     reconcile.add_argument("run_directory", type=Path)
+    inventory = sub.add_parser("courts", help="List registered district courts and validation status; no network.")
+    inventory.add_argument("--json", action="store_true", help="Print the court registry as JSON.")
+    plan = sub.add_parser("plan", help="Preview docket selection from saved index data; no login, network or purchases.")
+    plan.add_argument("config", type=Path)
     args = parser.parse_args(argv)
     try:
+        if args.command == "courts":
+            summary = registry_summary()
+            if args.json:
+                print(json.dumps(summary, indent=2))
+            else:
+                print(f"{summary['registeredDistrictCourts']} registered district courts; "
+                      f"{summary['sampleVerifiedCourts']} have a live-verified sample. No network requests.")
+                for court in summary["courts"]:
+                    print(f"{court['courtId']:<7} {court['validationStatus']:<16} {court['district']}")
+                print("Unverified courts require allowUnverifiedCourts: true for controlled testing.")
+            return 0
+        if args.command == "plan":
+            print(json.dumps(plan_run(args.config), indent=2))
+            return 0
         if args.command == "reconcile":
             with RunStore(args.run_directory, 0) as store:
                 store.reconcile()

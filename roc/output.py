@@ -27,11 +27,14 @@ def source_note(case):
     evidence = case.get("enrichment")
     if not evidence:
         return "Source: official PCL index. " + "; ".join(case["warnings"])
+    coverage = evidence.get("courtCoverage")
+    validation = (" Court retrieval validation at run: " + coverage["validationStatus"] +
+                  "; live-verified samples: " + str(coverage["verifiedSamples"]) + "." if coverage else "")
     return ("Docket: " + evidence["sourceFile"] + "; SHA256: " + evidence["sourceSha256"] +
             ". Represented parties: " + ", ".join(evidence["representedParties"]) +
             ". Counts use the latest supported indictment version for the represented defendant(s). " +
             "Earlier versions and dispositions are retained in evidence.json. " +
-            "; ".join(evidence["warnings"]))
+            "; ".join(evidence["warnings"]) + validation)
 
 
 def export_local(cases, folder, title, metadata):

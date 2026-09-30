@@ -3,11 +3,11 @@ from collections import defaultdict
 from html import unescape
 
 from .common import RocError, case_key, clean, normalize_case_number
+from .courts import DISTRICT_COURTS
 
-COURTS = {"ctdc": "District of Connecticut", "dedc": "District of Delaware", "flsdc": "Southern District of Florida",
-          "nhdc": "District of New Hampshire", "njdc": "District of New Jersey", "nysbk": "Southern District of New York",
-          "pamdc": "Middle District of Pennsylvania", "cacdc": "Central District of California", "medc": "District of Maine",
-          "nyedc": "Eastern District of New York", "utdc": "District of Utah", "nysdc": "Southern District of New York"}
+COURTS = {code: profile.district for code, profile in DISTRICT_COURTS.items()}
+# Retain existing non-district index data; it does not enable docket retrieval.
+COURTS["nysbk"] = "Southern District of New York"
 NOS = {"530": "Habeas Corpus (General)", "850": "Securities/Commodities", "360": "Personal Injury: Other",
        "190": "Contract: Other", "160": "Stockholders Suits", "423": "Bankruptcy Withdrawal", "370": "Fraud or Truth-in-Lending"}
 
@@ -59,8 +59,11 @@ def build_index(records, court_labels=None):
             warnings.append("Unmapped Nature of Suit code retained for review.")
         if court not in courts:
             warnings.append("District label unavailable; court code retained for review.")
+        court_type = ("U.S. District Court" if court in DISTRICT_COURTS else
+                      "U.S. Bankruptcy Court" if court.endswith("bk") else
+                      "U.S. Court of Appeals" if court.startswith("ca") and court[2:].isdigit() else "Other federal court")
         result.append({"key": key, "courtId": court, "caseNumber": number, "caseTitle": sorted(captions)[0],
-                       "caseType": kind, "team": "", "court": "U.S. Bankruptcy Court" if court.endswith("bk") else "U.S. District Court",
+                       "caseType": kind, "team": "", "court": court_type,
                        "district": courts.get(court, court), "dateFiled": dates[0] if dates else "", "nature": nature,
                        "status": status, "pacerLink": links[0] if links else "", "allCaseLinks": links,
                        "warnings": warnings, "sourceRows": entries})

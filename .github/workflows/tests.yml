@@ -14,3 +14,8 @@ jobs:
         env:
           ROC_BROWSER_TESTS: '1'
       - run: python -m roc run examples/demo.json
+      - run: python -m roc plan examples/district-validation.json
+      - run: python -m pip wheel --no-deps . --wheel-dir dist
+      - name: Verify packaged court registry
+        run: |
+          python -I -c 'from pathlib import Path; import sys; sys.path.insert(0, str(next(Path("dist").glob("*.whl")).resolve())); from roc.courts import registry_summary; assert registry_summary()["registeredDistrictCourts"] == 94'

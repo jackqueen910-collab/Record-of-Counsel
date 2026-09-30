@@ -17,3 +17,6 @@ roc = "roc.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["roc*"]
+
+[tool.setuptools.package-data]
+roc = ["district_courts.json"]

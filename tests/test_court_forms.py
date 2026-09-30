@@ -1,9 +1,17 @@
 """Browser regression tests against fictional court forms. No PACER requests."""
 import os
+from contextlib import nullcontext
+import tempfile
 import unittest
+from unittest.mock import patch
 
 from roc.common import RocError
-from roc.retrieve import choose_case, configure_report, lookup_main_case, select_case_line
+from roc.retrieve import CourtRetriever, choose_case, configure_report, lookup_main_case, select_case_line
+from roc.courts import court_profile
+from roc.docket import enrich, parse_report
+from roc.pacer import Session
+from roc.store import RunStore
+from tests.test_roc import report, party, count
 
 
 FORM = """<html><body>
@@ -118,6 +126,52 @@ class CourtFormTests(unittest.TestCase):
         with self.assertRaises(RocError):
             configure_report(self.page)
         self.assertIsNone(self.page.evaluate("window.submissions"))
+
+    def test_shared_retriever_on_unverified_courts_uses_only_intercepted_fixtures(self):
+        from playwright.sync_api import Browser
+        original = Browser.new_context
+        received = []
+        contexts = []
+        def intercepted_context(browser, *args, **kwargs):
+            context = original(browser, *args, **kwargs)
+            contexts.append(context)
+            def respond(route):
+                url = route.request.url
+                received.append(url)
+                for code in ("nyedc", "gudc"):
+                    profile = court_profile(code)
+                    if url == profile.origin + "/cgi-bin/DktRpt.pl":
+                        form = FORM.replace("window.submissions=(window.submissions||0)+1", "location.href='/fictional-receipt'")
+                        route.fulfill(content_type="text/html", body=form)
+                        return
+                    if url == profile.origin + "/fictional-receipt":
+                        body = report(party("Defendant", "Client", "Jordan Lawyer", count("18:1343.F FRAUD BY WIRE", "1")) +
+                                      party("Defendant", "Unrelated Defendant", "Different Counsel", count("18:111.F ASSAULT", "2"), "2"))
+                        route.fulfill(content_type="text/html", body=body.replace("Example District", profile.district))
+                        return
+                route.abort()  # No request from this test may reach the network.
+            context.route("**/*", respond)
+            return context
+        with tempfile.TemporaryDirectory() as folder, RunStore(folder, 600) as store, \
+             patch.object(Browser, "new_context", intercepted_context), \
+             patch("playwright.sync_api.sync_playwright", return_value=nullcontext(self.pw)):
+            retriever = CourtRetriever(Session("fictional-token"), store, allow_unverified=True)
+            for code in ("nyedc", "gudc"):
+                profile = court_profile(code)
+                case = {"courtId": code, "caseNumber": "1:24-cr-00001", "key": code + "|1:24-cr-00001",
+                        "pacerLink": profile.origin + "/cgi-bin/iqquerymenu.pl?fictional"}
+                path = retriever.retrieve(case)
+                parsed = enrich(parse_report(path.read_text(encoding="utf-8")), ["Jordan Lawyer"])
+                self.assertEqual(parsed["nature"], "Wire fraud (count 1).")
+                self.assertEqual(parsed["representedParties"], ["Client"])
+                calls = len(received)
+                self.assertEqual(retriever.retrieve(case), path)
+                self.assertEqual(len(received), calls)
+                self.assertFalse(court_profile(code).sample_verified)
+            self.assertEqual(store.spent, 600)  # Fictional receipts only.
+            self.assertEqual(len(store.ledger["transactions"]), 2)
+        self.assertEqual(len(contexts), 2)
+        self.assertEqual(len(received), 4)
 
 
 class CaseLookupTests(unittest.TestCase):

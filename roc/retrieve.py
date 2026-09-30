@@ -9,8 +9,8 @@ from xml.etree import ElementTree
 
 from .common import RocError, normalize_case_number, fingerprint, write_json
 from .docket import parse_report
+from .courts import profile_for_url, profile_for_case, require_enabled
 
-SUPPORTED_HOSTS = {"ecf.nysd.uscourts.gov", "ecf.njd.uscourts.gov"}
 COURT_TOKEN_COOKIE = "NextGenCSO"  # Court cookie is case-sensitive; API JSON uses nextGenCSO.
 
 
@@ -25,10 +25,7 @@ def court_cookies(session, origin):
 
 
 def court_origin(url):
-    parsed = urlparse(url)
-    if parsed.scheme != "https" or parsed.hostname not in SUPPORTED_HOSTS or parsed.username or parsed.password or parsed.port:
-        raise RocError("Court retrieval adapter is not enabled for this host.")
-    return f"https://{parsed.hostname}"
+    return profile_for_url(url).origin
 
 
 def has_defendant_suffix(value):
@@ -164,19 +161,50 @@ def configure_report(page):
     return run
 
 
+class DistrictCMECFAdapter:
+    """Shared, tested form contract. New layouts require an explicit adapter change."""
+    report_path = "/cgi-bin/DktRpt.pl"
+
+    def select_case(self, page, number):
+        choose_case(page, number)
+
+    def prepare_report(self, page):
+        return configure_report(page)
+
+    def validate_report(self, raw, case, profile):
+        report = parse_report(raw)
+        if report["caseNumber"] != normalize_case_number(case["caseNumber"]):
+            raise RocError("Court returned a different case; saved response requires review.")
+        if not profile.matches_heading(report["heading"]):
+            raise RocError("Court report heading differs from the requested district; saved response requires review.")
+        return report
+
+
+ADAPTERS = {"district-cmecf": DistrictCMECFAdapter()}
+
+
 class CourtRetriever:
-    def __init__(self, session, store, headless=True, progress=None):
+    def __init__(self, session, store, headless=True, progress=None, allow_unverified=False):
         self.session, self.store, self.headless = session, store, headless
         self.progress = progress or (lambda *args, **kwargs: None)
+        self.allow_unverified = allow_unverified
 
     def retrieve(self, case):
         number = normalize_case_number(case["caseNumber"])
-        origin = court_origin(case["pacerLink"])
+        profile = profile_for_case(case)
+        require_enabled(profile, self.allow_unverified)
+        adapter = ADAPTERS.get(profile.adapter)
+        if adapter is None:
+            raise RocError("Court adapter is not implemented; no report submitted.")
+        origin = profile.origin
         parameters = {"court": case["courtId"], "caseNumber": number, "scope": "all-defendants", "partiesAndCounsel": True}
         cached = self.store.cached("docket", parameters)
         if cached:
             self.progress("reading_cached_docket", f"Using purchased report for {case['key']}; no new charge.")
             return cached
+        if not profile.sample_verified:
+            self.progress("unverified_court", f"Controlled test of {profile.district}: retrieval has not been live-verified.",
+                          courtId=profile.court_id, validationStatus=profile.validation_status)
         # Validate budget before opening the court form; reserve immediately before submission.
         self.store.check_pending()
         if self.store.spent + 300 > self.store.limit:
@@ -199,13 +227,13 @@ class CourtRetriever:
             try:
                 self.progress("retrieving_docket", f"Court-web report: {case['key']}. Opening the report form.",
                               chargedCents=self.store.spent)
-                page.goto(origin + "/cgi-bin/DktRpt.pl", wait_until="load")
+                page.goto(origin + adapter.report_path, wait_until="load")
                 if urlparse(page.url).hostname != urlparse(origin).hostname:
                     raise RocError("Court redirected to sign-in. Stop; no browser-login fallback.")
                 phase = "finding the case"
-                choose_case(page, number)
+                adapter.select_case(page, number)
                 phase = "configuring the docket report"
-                run = configure_report(page)
+                run = adapter.prepare_report(page)
                 transaction = self.store.reserve("docket", parameters, 300)
                 phase = "waiting for the purchased report and receipt"
                 self.progress("report_submitted", f"Submitting one docket report for {case['key']}; reserved up to $3.00.",
@@ -220,9 +248,7 @@ class CourtRetriever:
                 finally:
                     raw = page.content()
                     saved = self.store.finish(transaction, raw)
-                report = parse_report(raw)
-                if report["caseNumber"] != number:
-                    raise RocError("Court returned a different case; saved response requires review.")
+                adapter.validate_report(raw, case, profile)
                 for cookie in context.cookies(origin):
                     if cookie["name"] == COURT_TOKEN_COOKIE:
                         self.session.token = cookie["value"]
@@ -242,7 +268,7 @@ class CourtRetriever:
     def save_form_diagnostic(self, page, case, phase):
         """Record control structure only, never cookies, hidden values or login fields."""
         try:
-            if urlparse(page.url).hostname not in SUPPORTED_HOSTS:
+            if profile_for_url(page.url).court_id != str(case["courtId"]).lower():
                 return
             controls = page.locator("input, button, select, textarea").evaluate_all("""nodes => nodes.map(n => ({
                 tag:n.tagName, id:n.id, name:n.name, type:n.type,

@@ -1,0 +1,13 @@
+{
+  "lawyer": {"firstName": "Jordan", "lastName": "Lawyer", "aliases": ["Jordan A. Lawyer"]},
+  "indexFile": "district-validation-index.json",
+  "runDirectory": "../runs/district-validation-demo",
+  "budgetCents": 0,
+  "allowUnverifiedCourts": true,
+  "dockets": {
+    "order": "latest",
+    "limit": 2,
+    "maxPerCourt": 1,
+    "caseTypes": ["Criminal", "Civil"]
+  }
+}

@@ -2,13 +2,13 @@
 
 An on-demand, deterministic PACER workflow. No AI model, Codex session, chat connector, or web host is required to run the program.
 
-**Current release: 0.1 prototype.** The standalone workflow has completed a live acceptance run: official API authentication and attorney search, automatic selection of two new cases, court-web docket retrieval, client/counsel matching, and local export. Live docket retrieval is verified for one SDNY case and one District of New Jersey case; this is not nationwide court coverage. Google Sheets publication still needs its own live acceptance test.
+**Current release: 0.1 prototype.** The standalone workflow has completed a live acceptance run: official API authentication and attorney search, automatic selection of two new cases, court-web docket retrieval, client/counsel matching, and local export. All 94 primary U.S. district-court systems are registered for controlled testing through the shared retrieval adapter. Only one SDNY case and one District of New Jersey case have completed live validation. Registration and offline tests do not establish nationwide retrieval coverage. Google Sheets publication still needs its own live acceptance test.
 
 ## What it does
 
 1. Reads saved official PCL responses, or authenticates and searches the official PCL API.
 2. Groups records by court and normalized case number, retaining prosecution and defense records.
-3. Selects a bounded docket sample from those results (latest/oldest, court, dates, case type and limit), or uses explicit case selections. Retrieves those reports using court websites. This is **web retrieval**, not a document-retrieval API. Current adapters target SDNY and District of New Jersey forms.
+3. Selects a bounded docket sample from those results (latest/oldest, court, dates, case type, total limit and optional per-court limit), or uses explicit case selections. Retrieves those reports using court websites. This is **web retrieval**, not a document-retrieval API. The shared adapter uses the form contract observed in SDNY and New Jersey; unverified districts require explicit configuration for controlled testing.
 4. Matches explicit attorney-name aliases to the docket's party/counsel table.
 5. Extracts the matched client's counts, preserves indictment versions, and summarizes the latest supported version without duplicate historical counts.
 6. Writes a ten-column case index as XLSX, CSV and readable HTML, plus detailed evidence and review JSON.
@@ -85,11 +85,51 @@ Use `python -m roc run local-live.json --live`, or double-click `Run-ROC.cmd` on
 
 The Windows launcher adds `--keep-session`: after a retrieval error it pauses with the API token retained **only in process memory**. No requests happen while paused. After a code/configuration fix, type `R` to explicitly resume the job using that session and the purchased-response cache; `L` explicitly requests a new API sign-in, and `Q` quits and discards the token. Resume reloads the retrieval/parsing workflow code. It never automatically retries login or purchases, and an unresolved receipt still blocks every paid request. Closing the terminal or an expired PACER session requires another sign-in. Without `--keep-session`, the CLI remains a single attempt that exits when done or stopped.
 
-`search` limits the PCL search itself. The separate `dockets` filters only affect which index cases receive docket enrichment: `order` can be `latest` or `oldest`; `dateFiledFrom`/`dateFiledTo` are inclusive; `exclude` accepts court/case pairs. Cases outside supported court adapters remain in the index and are listed in the selection plan as skipped. Docket selection does not infer Team from a case's age.
+`search` limits the PCL search itself. The separate `dockets` filters only affect which index cases receive docket enrichment: `order` can be `latest` or `oldest`; `dateFiledFrom`/`dateFiledTo` are inclusive; `exclude` accepts court/case pairs. Optional `maxPerCourt` caps reports from any one court within the overall `limit`. Cases outside the district registry or the configured validation policy remain in the index and are listed in the selection plan as skipped. Docket selection does not infer Team from a case's age.
 
 A run folder is a durable job: restarting it reuses already purchased replies. Choose a **new runDirectory** when you want a new search of current PACER data; reusing a folder intentionally resumes the existing snapshot. Saved records are optional replay inputs and test fixtures, not part of the live architecture.
 
 Unexpected forms, court redirects to login, ambiguous case choices and missing receipts stop the process. The narrow court adapter intentionally does not guess through unfamiliar screens. New courts require adapter checks and tests.
+
+## District-court coverage and offline planning
+
+The checked-in `roc/district_courts.json` registry records official PACER court IDs, HTTPS origins, district labels, the shared adapter and validation evidence. It was sourced from the [official Court CM/ECF Lookup](https://pacer.uscourts.gov/file-case/court-cmecf-lookup) on September 30, 2026. It includes all 94 primary district-court systems, including D.C., Puerto Rico, Guam, the Northern Mariana Islands and the Virgin Islands. No bankruptcy, appellate, JPML or national specialty court is enabled for retrieval.
+
+The directory also contains the Case Locator under the District category and a separate Northern Ohio asbestos system. Neither is counted as a primary district court. Northern Ohio's main system is registered; its auxiliary asbestos endpoint remains excluded pending separate validation.
+
+| Status | Meaning | Default live behavior |
+|---|---|---|
+| `sample-verified` | A saved live test establishes the listed sample and case type; currently one criminal case each in SDNY and New Jersey. | Eligible, subject to case filters and budget. |
+| `unverified` | Official address is registered and the shared adapter can be attempted; that court's actual forms and reports have not been validated. | Skipped automatically; explicit selection requires opt-in. |
+
+List coverage and preview a selection without a PACER login or any network requests:
+
+```console
+python -m roc courts
+python -m roc courts --json
+python -m roc plan examples/district-validation.json
+python -m roc plan local-live.json
+```
+
+`plan` reads `indexFile`, or `pcl-records.json` already saved in the configured run folder. It prints the selected cases, court validation status and reasons for skipped cases. It does not search, buy reports, change the ledger or write files. The example uses fictional records and a zero budget.
+
+To deliberately test additional districts, set the **top-level** `allowUnverifiedCourts` to `true`, retain a small positive docket `limit`, and optionally set `maxPerCourt` to `1`. Omitting `dockets.courts` considers all registered districts; providing a list limits the test to those districts. The flag also applies to explicit `retrieveDockets` selections. Existing configurations default to `false`, so this release does not expand their purchased-report scope.
+
+```json
+{
+  "allowUnverifiedCourts": true,
+  "dockets": {
+    "courts": ["nyedc", "dcdc"],
+    "limit": 2,
+    "maxPerCourt": 1,
+    "caseTypes": ["Criminal", "Civil"]
+  }
+}
+```
+
+This fragment belongs in an otherwise complete run configuration. Actual retrieval still requires `--live`, API sign-in and a sufficient configured budget. Every case's court ID must agree with its registered website before the browser starts; a recognizable report must also match the requested district and case number. Court-specific exceptions belong in a tested adapter, not ad hoc redirects or host suffix guesses. Unknown forms stop before report submission when detected; an unexpected purchased report is saved and flagged without repurchase. A successful run does not silently promote an unverified court: promotion requires reviewing the report, receipt and parsed fields and updating the registry's evidence explicitly.
+
+Coverage is recorded in `docket-plan.json`, per-docket evidence and output cell notes, without adding columns to the ten-column index. PCL indexing remains separate: records from other court types can still be retained in the index, but this expansion never retrieves their dockets.
 
 ## Receipts, interrupted runs and duplicate charges
 
@@ -119,7 +159,7 @@ This creates a new workbook and returns its URL. It does not overwrite the exist
 - Different charge profiles for multiple clients/defendants are flagged for review rather than flattened into misleading count numbers.
 - Earlier indictment versions remain in evidence. Unresolved mixed versions, missing counts and unfamiliar layouts produce review items.
 - No AI fallback exists. Unsupported cases remain unresolved.
-- Court labels and civil Nature of Suit descriptions have a small initial reference map. Unknown codes are retained and flagged; `courtLabels` can extend the map without changing code.
+- Labels are included for all 94 registered district courts. Civil Nature of Suit descriptions still have a small initial reference map. Unknown codes are retained and flagged; `courtLabels` can extend display labels without enabling retrieval or changing court-identity checks.
 - The first release covers case indexing and docket enrichment. It does not yet reproduce the earlier Hochman plaintiff roster, cross-case person harmonization or defendant-frequency analysis.
 
 ## Validation and project layout
@@ -128,13 +168,14 @@ This creates a new workbook and returns its URL. It does not overwrite the exist
 
 The September 29, 2026 live acceptance run began with a fresh API search, without saved index or docket inputs. It returned 433 attorney records grouped into 334 cases. After form-handling fixes, an explicit resume reused the paid search responses and the in-memory API session, retrieved exactly the two automatically selected reports, and exported the index. Receipts totaled $3.30: $0.90 for the search and $0.30/$2.10 for the reports. Both reports established the lawyer's defense role. One supplied four structured counts, including two dismissed counts; the other supplied no counts and was correctly flagged for review. Counts in the index describe the case's charges, including terminated counts, and do not assert that every charge remains pending. Dispositions remain in the evidence.
 
-All 42 automated tests passed locally with browser tests enabled. Real reports, receipts, credentials and generated case data remain outside version control. Additional court layouts and live prosecution/civil cases still require validation.
+All 59 automated tests passed locally with browser tests enabled after district-registry expansion. The suite checks all 94 registry entries, district-only boundaries, cross-court identity mismatches, unverified-court opt-in, per-court limits and offline planning. The distributable wheel also includes the registry and was checked through an isolated import. Real reports, receipts, credentials and generated case data remain outside version control. Additional court layouts and live prosecution/civil cases still require validation.
 
-The browser regression tests use fictional local forms and block network requests. They check the keyboard-driven case finder, main-case versus defendant-subcase selection, removal of default date/document limits, inclusion of parties/counsel, and exclusion of document purchases. Run them with `ROC_BROWSER_TESTS=1` after installing the optional Playwright runtime; GitHub Actions includes them. They validate form handling, not live court coverage.
+The browser regression tests use fictional local forms and block network requests. They check the keyboard-driven case finder, main-case versus defendant-subcase selection, removal of default date/document limits, inclusion of parties/counsel, and exclusion of document purchases. A full retriever test routes two unverified court origins to local fictional forms and receipts, checks client-specific parsing and cache reuse, and never connects to those courts. Run them with `ROC_BROWSER_TESTS=1` after installing the optional Playwright runtime; GitHub Actions includes them. They validate form handling, not live court coverage.
 
 | Module | Purpose |
 |---|---|
 | `roc/pacer.py` | Official authentication and PCL pagination |
+| `roc/courts.py`, `roc/district_courts.json` | District registry, origin checks and explicit validation policy |
 | `roc/retrieve.py` | Independent court-web report retrieval |
 | `roc/select.py` | Bounded automatic docket selection from any index |
 | `roc/store.py` | Durable reservations, cache, receipts, run lock |

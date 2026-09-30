@@ -26,7 +26,7 @@ def reload_workflow():
     # Explicit Resume allows code fixes to take effect without re-authentication.
     # Do not reload common/store/pacer: keep exception identities and the session intact.
     importlib.invalidate_caches()
-    for name in ("docket", "index", "output", "retrieve", "select", "cli"):
+    for name in ("courts", "docket", "index", "output", "retrieve", "select", "cli"):
         importlib.reload(importlib.import_module("roc." + name))
 
 

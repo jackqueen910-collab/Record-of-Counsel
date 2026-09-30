@@ -1,0 +1,6 @@
+[
+  {"courtId":"nyedc","caseNumberFull":"1:2024cr00001","caseTitle":"USA v. Fictional Client A","jurisdictionType":"Criminal","dateFiled":"2024-04-01","caseLink":"https://ecf.nyed.uscourts.gov/cgi-bin/iqquerymenu.pl?0"},
+  {"courtId":"nyedc","caseNumberFull":"1:2024cr00002","caseTitle":"USA v. Fictional Client B","jurisdictionType":"Criminal","dateFiled":"2024-03-01","caseLink":"https://ecf.nyed.uscourts.gov/cgi-bin/iqquerymenu.pl?0"},
+  {"courtId":"gudc","caseNumberFull":"1:2024cr00003","caseTitle":"USA v. Fictional Client C","jurisdictionType":"Criminal","dateFiled":"2024-02-01","caseLink":"https://ecf.gud.uscourts.gov/cgi-bin/iqquerymenu.pl?0"},
+  {"courtId":"dcdc","caseNumberFull":"1:2024cv00004","caseTitle":"Fictional Company v. Fictional Business","jurisdictionType":"Civil","dateFiled":"2024-01-01","natureOfSuit":"190","caseLink":"https://ecf.dcd.uscourts.gov/cgi-bin/iqquerymenu.pl?0"}
+]

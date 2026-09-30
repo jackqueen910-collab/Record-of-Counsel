@@ -1,0 +1,1161 @@
+{
+  "schemaVersion": 1,
+  "source": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup",
+  "retrievedDate": "2026-09-30",
+  "sourceSha256": "0365f3bfdf14b27de02ecfda3d4d9142e081ab0e2a1f60036364f00c9847d563",
+  "scope": "94 primary U.S. district-court systems, including D.C. and territorial districts. No bankruptcy, appellate, JPML, or national specialty courts.",
+  "excludedDirectoryEntries": [
+    {
+      "courtId": "00pcl",
+      "reason": "Case Locator is a service, not a district court."
+    },
+    {
+      "courtId": "ohndad",
+      "origin": "https://ecf.ohndad.ohnd.uscourts.gov",
+      "reason": "Separate Northern Ohio asbestos system; main Northern Ohio system is registered as ohndc. Auxiliary system requires separate validation before enablement."
+    }
+  ],
+  "courts": [
+    {
+      "courtId": "akdc",
+      "directoryName": "Alaska District Court",
+      "district": "District of Alaska",
+      "origin": "https://ecf.akd.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/AKDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "almdc",
+      "directoryName": "Alabama Middle District Court",
+      "district": "Middle District of Alabama",
+      "origin": "https://ecf.almd.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/ALMDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "alndc",
+      "directoryName": "Alabama Northern District Court",
+      "district": "Northern District of Alabama",
+      "origin": "https://ecf.alnd.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/ALNDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "alsdc",
+      "directoryName": "Alabama Southern District Court",
+      "district": "Southern District of Alabama",
+      "origin": "https://ecf.alsd.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/ALSDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "aredc",
+      "directoryName": "Arkansas Eastern District Court",
+      "district": "Eastern District of Arkansas",
+      "origin": "https://ecf.ared.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/AREDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "arwdc",
+      "directoryName": "Arkansas Western District Court",
+      "district": "Western District of Arkansas",
+      "origin": "https://ecf.arwd.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/ARWDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "azdc",
+      "directoryName": "Arizona District Court",
+      "district": "District of Arizona",
+      "origin": "https://ecf.azd.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/AZDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "cacdc",
+      "directoryName": "California Central District Court",
+      "district": "Central District of California",
+      "origin": "https://ecf.cacd.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/CACDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "caedc",
+      "directoryName": "California Eastern District Court",
+      "district": "Eastern District of California",
+      "origin": "https://ecf.caed.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/CAEDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "candc",
+      "directoryName": "California Northern District Court",
+      "district": "Northern District of California",
+      "origin": "https://ecf.cand.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/CANDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "casdc",
+      "directoryName": "California Southern District Court",
+      "district": "Southern District of California",
+      "origin": "https://ecf.casd.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/CASDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "codc",
+      "directoryName": "Colorado District Court",
+      "district": "District of Colorado",
+      "origin": "https://ecf.cod.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/CODC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "ctdc",
+      "directoryName": "Connecticut District Court",
+      "district": "District of Connecticut",
+      "origin": "https://ecf.ctd.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/CTDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "dcdc",
+      "directoryName": "District of Columbia District Court",
+      "district": "District of Columbia",
+      "origin": "https://ecf.dcd.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/DCDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "dedc",
+      "directoryName": "Delaware District Court",
+      "district": "District of Delaware",
+      "origin": "https://ecf.ded.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/DEDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "flmdc",
+      "directoryName": "Florida Middle District Court",
+      "district": "Middle District of Florida",
+      "origin": "https://ecf.flmd.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/FLMDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "flndc",
+      "directoryName": "Florida Northern District Court",
+      "district": "Northern District of Florida",
+      "origin": "https://ecf.flnd.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/FLNDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "flsdc",
+      "directoryName": "Florida Southern District Court",
+      "district": "Southern District of Florida",
+      "origin": "https://ecf.flsd.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/FLSDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "gamdc",
+      "directoryName": "Georgia Middle District Court",
+      "district": "Middle District of Georgia",
+      "origin": "https://ecf.gamd.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/GAMDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "gandc",
+      "directoryName": "Georgia Northern District Court",
+      "district": "Northern District of Georgia",
+      "origin": "https://ecf.gand.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/GANDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "gasdc",
+      "directoryName": "Georgia Southern District Court",
+      "district": "Southern District of Georgia",
+      "origin": "https://ecf.gasd.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/GASDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "gudc",
+      "directoryName": "Guam District Court",
+      "district": "District of Guam",
+      "origin": "https://ecf.gud.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/GUDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "hidc",
+      "directoryName": "Hawaii District Court",
+      "district": "District of Hawaii",
+      "origin": "https://ecf.hid.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/HIDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "iandc",
+      "directoryName": "Iowa Northern District Court",
+      "district": "Northern District of Iowa",
+      "origin": "https://ecf.iand.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/IANDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "iasdc",
+      "directoryName": "Iowa Southern District Court",
+      "district": "Southern District of Iowa",
+      "origin": "https://ecf.iasd.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/IASDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "iddc",
+      "directoryName": "Idaho District Court",
+      "district": "District of Idaho",
+      "origin": "https://ecf.idd.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/IDDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "ilcdc",
+      "directoryName": "Illinois Central District Court",
+      "district": "Central District of Illinois",
+      "origin": "https://ecf.ilcd.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/ILCDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "ilndc",
+      "directoryName": "Illinois Northern District Court",
+      "district": "Northern District of Illinois",
+      "origin": "https://ecf.ilnd.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/ILNDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "ilsdc",
+      "directoryName": "Illinois Southern District Court",
+      "district": "Southern District of Illinois",
+      "origin": "https://ecf.ilsd.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/ILSDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "inndc",
+      "directoryName": "Indiana Northern District Court",
+      "district": "Northern District of Indiana",
+      "origin": "https://ecf.innd.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/INNDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "insdc",
+      "directoryName": "Indiana Southern District Court",
+      "district": "Southern District of Indiana",
+      "origin": "https://ecf.insd.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/INSDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "ksdc",
+      "directoryName": "Kansas District Court",
+      "district": "District of Kansas",
+      "origin": "https://ecf.ksd.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/KSDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "kyedc",
+      "directoryName": "Kentucky Eastern District Court",
+      "district": "Eastern District of Kentucky",
+      "origin": "https://ecf.kyed.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/KYEDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "kywdc",
+      "directoryName": "Kentucky Western District Court",
+      "district": "Western District of Kentucky",
+      "origin": "https://ecf.kywd.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/KYWDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "laedc",
+      "directoryName": "Louisiana Eastern District Court",
+      "district": "Eastern District of Louisiana",
+      "origin": "https://ecf.laed.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/LAEDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "lamdc",
+      "directoryName": "Louisiana Middle District Court",
+      "district": "Middle District of Louisiana",
+      "origin": "https://ecf.lamd.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/LAMDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "lawdc",
+      "directoryName": "Louisiana Western District Court",
+      "district": "Western District of Louisiana",
+      "origin": "https://ecf.lawd.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/LAWDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "madc",
+      "directoryName": "Massachusetts District Court",
+      "district": "District of Massachusetts",
+      "origin": "https://ecf.mad.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/MADC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "mddc",
+      "directoryName": "Maryland District Court",
+      "district": "District of Maryland",
+      "origin": "https://ecf.mdd.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/MDDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "medc",
+      "directoryName": "Maine District Court",
+      "district": "District of Maine",
+      "origin": "https://ecf.med.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/MEDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "miedc",
+      "directoryName": "Michigan Eastern District Court",
+      "district": "Eastern District of Michigan",
+      "origin": "https://ecf.mied.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/MIEDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "miwdc",
+      "directoryName": "Michigan Western District Court",
+      "district": "Western District of Michigan",
+      "origin": "https://ecf.miwd.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/MIWDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "mndc",
+      "directoryName": "Minnesota District Court",
+      "district": "District of Minnesota",
+      "origin": "https://ecf.mnd.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/MNDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "moedc",
+      "directoryName": "Missouri Eastern District Court",
+      "district": "Eastern District of Missouri",
+      "origin": "https://ecf.moed.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/MOEDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "mowdc",
+      "directoryName": "Missouri Western District Court",
+      "district": "Western District of Missouri",
+      "origin": "https://ecf.mowd.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/MOWDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "msndc",
+      "directoryName": "Mississippi Northern District Court",
+      "district": "Northern District of Mississippi",
+      "origin": "https://ecf.msnd.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/MSNDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "mssdc",
+      "directoryName": "Mississippi Southern District Court",
+      "district": "Southern District of Mississippi",
+      "origin": "https://ecf.mssd.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/MSSDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "mtdc",
+      "directoryName": "Montana District Court",
+      "district": "District of Montana",
+      "origin": "https://ecf.mtd.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/MTDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "ncedc",
+      "directoryName": "North Carolina Eastern District Court",
+      "district": "Eastern District of North Carolina",
+      "origin": "https://ecf.nced.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/NCEDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "ncmdc",
+      "directoryName": "North Carolina Middle District Court",
+      "district": "Middle District of North Carolina",
+      "origin": "https://ecf.ncmd.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/NCMDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "ncwdc",
+      "directoryName": "North Carolina Western District Court",
+      "district": "Western District of North Carolina",
+      "origin": "https://ecf.ncwd.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/NCWDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "nddc",
+      "directoryName": "North Dakota District Court",
+      "district": "District of North Dakota",
+      "origin": "https://ecf.ndd.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/NDDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "nedc",
+      "directoryName": "Nebraska District Court",
+      "district": "District of Nebraska",
+      "origin": "https://ecf.ned.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/NEDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "nhdc",
+      "directoryName": "New Hampshire District Court",
+      "district": "District of New Hampshire",
+      "origin": "https://ecf.nhd.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/NHDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "njdc",
+      "directoryName": "New Jersey District Court",
+      "district": "District of New Jersey",
+      "origin": "https://ecf.njd.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/NJDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "sample-verified",
+        "date": "2026-09-29",
+        "caseType": "Criminal",
+        "sampleCount": 1,
+        "scope": "API session handoff, case selection, report and receipt retrieval, counsel parsing; not all case types or layouts."
+      }
+    },
+    {
+      "courtId": "nmdc",
+      "directoryName": "New Mexico District Court",
+      "district": "District of New Mexico",
+      "origin": "https://ecf.nmd.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/NMDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "nmidc",
+      "directoryName": "Northern Mariana Islands District Court",
+      "district": "District of the Northern Mariana Islands",
+      "origin": "https://ecf.nmid.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/NMIDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [
+        "District Court for the Northern Mariana Islands",
+        "District Court of the Northern Mariana Islands"
+      ],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "nvdc",
+      "directoryName": "Nevada District Court",
+      "district": "District of Nevada",
+      "origin": "https://ecf.nvd.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/NVDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "nyedc",
+      "directoryName": "New York Eastern District Court",
+      "district": "Eastern District of New York",
+      "origin": "https://ecf.nyed.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/NYEDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "nyndc",
+      "directoryName": "New York Northern District Court",
+      "district": "Northern District of New York",
+      "origin": "https://ecf.nynd.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/NYNDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "nysdc",
+      "directoryName": "New York Southern District Court",
+      "district": "Southern District of New York",
+      "origin": "https://ecf.nysd.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/NYSDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "sample-verified",
+        "date": "2026-09-29",
+        "caseType": "Criminal",
+        "sampleCount": 1,
+        "scope": "API session handoff, case selection, report and receipt retrieval, counsel parsing; not all case types or layouts."
+      }
+    },
+    {
+      "courtId": "nywdc",
+      "directoryName": "New York Western District Court",
+      "district": "Western District of New York",
+      "origin": "https://ecf.nywd.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/NYWDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "ohndc",
+      "directoryName": "Ohio Northern District Court",
+      "district": "Northern District of Ohio",
+      "origin": "https://ecf.ohnd.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/OHNDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "ohsdc",
+      "directoryName": "Ohio Southern District Court",
+      "district": "Southern District of Ohio",
+      "origin": "https://ecf.ohsd.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/OHSDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "okedc",
+      "directoryName": "Oklahoma Eastern District Court",
+      "district": "Eastern District of Oklahoma",
+      "origin": "https://ecf.oked.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/OKEDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "okndc",
+      "directoryName": "Oklahoma Northern District Court",
+      "district": "Northern District of Oklahoma",
+      "origin": "https://ecf.oknd.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/OKNDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "okwdc",
+      "directoryName": "Oklahoma Western District Court",
+      "district": "Western District of Oklahoma",
+      "origin": "https://ecf.okwd.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/OKWDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "ordc",
+      "directoryName": "Oregon District Court",
+      "district": "District of Oregon",
+      "origin": "https://ecf.ord.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/ORDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "paedc",
+      "directoryName": "Pennsylvania Eastern District Court",
+      "district": "Eastern District of Pennsylvania",
+      "origin": "https://ecf.paed.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/PAEDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "pamdc",
+      "directoryName": "Pennsylvania Middle District Court",
+      "district": "Middle District of Pennsylvania",
+      "origin": "https://ecf.pamd.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/PAMDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "pawdc",
+      "directoryName": "Pennsylvania Western District Court",
+      "district": "Western District of Pennsylvania",
+      "origin": "https://ecf.pawd.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/PAWDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "prdc",
+      "directoryName": "Puerto Rico District Court",
+      "district": "District of Puerto Rico",
+      "origin": "https://ecf.prd.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/PRDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "ridc",
+      "directoryName": "Rhode Island District Court",
+      "district": "District of Rhode Island",
+      "origin": "https://ecf.rid.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/RIDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "scdc",
+      "directoryName": "South Carolina District Court",
+      "district": "District of South Carolina",
+      "origin": "https://ecf.scd.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/SCDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "sddc",
+      "directoryName": "South Dakota District Court",
+      "district": "District of South Dakota",
+      "origin": "https://ecf.sdd.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/SDDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "tnedc",
+      "directoryName": "Tennessee Eastern District Court",
+      "district": "Eastern District of Tennessee",
+      "origin": "https://ecf.tned.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/TNEDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "tnmdc",
+      "directoryName": "Tennessee Middle District Court",
+      "district": "Middle District of Tennessee",
+      "origin": "https://ecf.tnmd.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/TNMDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "tnwdc",
+      "directoryName": "Tennessee Western District Court",
+      "district": "Western District of Tennessee",
+      "origin": "https://ecf.tnwd.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/TNWDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "txedc",
+      "directoryName": "Texas Eastern District Court",
+      "district": "Eastern District of Texas",
+      "origin": "https://ecf.txed.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/TXEDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "txndc",
+      "directoryName": "Texas Northern District Court",
+      "district": "Northern District of Texas",
+      "origin": "https://ecf.txnd.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/TXNDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "txsdc",
+      "directoryName": "Texas Southern District Court",
+      "district": "Southern District of Texas",
+      "origin": "https://ecf.txsd.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/TXSDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "txwdc",
+      "directoryName": "Texas Western District Court",
+      "district": "Western District of Texas",
+      "origin": "https://ecf.txwd.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/TXWDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "utdc",
+      "directoryName": "Utah District Court",
+      "district": "District of Utah",
+      "origin": "https://ecf.utd.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/UTDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "vaedc",
+      "directoryName": "Virginia Eastern District Court",
+      "district": "Eastern District of Virginia",
+      "origin": "https://ecf.vaed.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/VAEDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "vawdc",
+      "directoryName": "Virginia Western District Court",
+      "district": "Western District of Virginia",
+      "origin": "https://ecf.vawd.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/VAWDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "vidc",
+      "directoryName": "Virgin Islands District Court",
+      "district": "District of the Virgin Islands",
+      "origin": "https://ecf.vid.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/VIDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [
+        "District Court of the Virgin Islands"
+      ],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "vtdc",
+      "directoryName": "Vermont District Court",
+      "district": "District of Vermont",
+      "origin": "https://ecf.vtd.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/VTDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "waedc",
+      "directoryName": "Washington Eastern District Court",
+      "district": "Eastern District of Washington",
+      "origin": "https://ecf.waed.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/WAEDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "wawdc",
+      "directoryName": "Washington Western District Court",
+      "district": "Western District of Washington",
+      "origin": "https://ecf.wawd.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/WAWDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "wiedc",
+      "directoryName": "Wisconsin Eastern District Court",
+      "district": "Eastern District of Wisconsin",
+      "origin": "https://ecf.wied.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/WIEDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "wiwdc",
+      "directoryName": "Wisconsin Western District Court",
+      "district": "Western District of Wisconsin",
+      "origin": "https://ecf.wiwd.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/WIWDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "wvndc",
+      "directoryName": "West Virginia Northern District Court",
+      "district": "Northern District of West Virginia",
+      "origin": "https://ecf.wvnd.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/WVNDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "wvsdc",
+      "directoryName": "West Virginia Southern District Court",
+      "district": "Southern District of West Virginia",
+      "origin": "https://ecf.wvsd.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/WVSDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    },
+    {
+      "courtId": "wydc",
+      "directoryName": "Wyoming District Court",
+      "district": "District of Wyoming",
+      "origin": "https://ecf.wyd.uscourts.gov",
+      "directoryUrl": "https://pacer.uscourts.gov/file-case/court-cmecf-lookup/court/WYDC",
+      "adapter": "district-cmecf",
+      "headingAliases": [],
+      "validation": {
+        "status": "unverified"
+      }
+    }
+  ]
+}
