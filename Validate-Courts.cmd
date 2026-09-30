@@ -18,6 +18,11 @@ if not exist "%ROC_VALIDATION_CONFIG%" (
 ".venv\Scripts\python.exe" -m roc validate-courts "%ROC_VALIDATION_CONFIG%" --live --keep-session
 set "ROC_VALIDATION_RESULT=%ERRORLEVEL%"
 echo.
+if "%ROC_VALIDATION_RESULT%"=="0" (
+  echo Court validation completed successfully. No resume or further sign-in is needed.
+) else (
+  echo ROC stopped before successful completion. Check the saved status and receipts before restarting.
+)
 echo Results and receipts are saved in the configured run folder.
 pause
 exit /b %ROC_VALIDATION_RESULT%

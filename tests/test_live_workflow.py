@@ -17,7 +17,7 @@ from tests.test_roc import report, party, count
 
 
 def record(court="nysdc", seq=1, filed="2024-01-01", kind="Criminal"):
-    host = {"nysdc": "nysd", "njdc": "njd", "cacdc": "cacd"}[court]
+    host = {"nysdc": "nysd", "njdc": "njd", "hidc": "hid"}[court]
     return {"courtId": court, "caseNumberFull": f"1:2024cr{seq:05d}", "caseTitle": "USA v. Client",
             "jurisdictionType": kind, "dateFiled": filed,
             "caseLink": f"https://ecf.{host}.uscourts.gov/cgi-bin/iqquerymenu.pl?{seq}"}
@@ -26,7 +26,7 @@ def record(court="nysdc", seq=1, filed="2024-01-01", kind="Criminal"):
 class SelectionTests(unittest.TestCase):
     def test_latest_limits_and_exclusions_with_unknown_court(self):
         cases = build_index([record(seq=1), record(seq=2, filed="2024-02-01"),
-                             record(seq=3, filed="2024-03-01"), record("cacdc", 4, "2024-04-01")])
+                             record(seq=3, filed="2024-03-01"), record("hidc", 4, "2024-04-01")])
         selected, plan = select_dockets(cases, {"dockets": {"order": "latest", "limit": 1,
             "exclude": [{"courtId": "nysdc", "caseNumber": "1:24-cr-3"}]}})
         self.assertEqual(selected[0]["caseNumber"], "1:24-cr-00002")

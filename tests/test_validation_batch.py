@@ -71,7 +71,7 @@ class BatchValidationTests(unittest.TestCase):
         self.assertEqual(result["slots"][0]["criteria"]["courtId"], ["nyedc"])
         self.assertEqual(result["slots"][0]["criteria"]["caseType"], ["cv"])
         for changes in ({"courts": ["nyedc", "nyedc"]}, {"courts": ["ca2"]},
-                        {"caseTypes": ["Criminal", "Criminal"]}, {"allowUnverifiedCourts": False},
+                        {"caseTypes": ["Criminal", "Criminal"]}, {"allowUnverifiedCourts": False, "courts": ["gudc"]},
                         {"requestDelaySeconds": 0}, {"budgetCents": True}, {"oops": True}):
             with self.subTest(changes=changes), self.assertRaises(RocError):
                 validation_plan(config(**changes))

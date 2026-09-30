@@ -56,6 +56,20 @@ class ParserTests(unittest.TestCase):
         self.assertEqual(result["representedParties"], ["Client"])
         self.assertEqual(result["team"], "Criminal Defense")
 
+    def test_court_notification_contacts_are_not_counsel(self):
+        html = report(party("Defendant", "Client", "Jordan Lawyer", count("18:111.F ASSAULT", "1")))
+        html = html.replace("<b>Jordan Lawyer</b>",
+            "<b>Jordan Lawyer</b><br>Office near Pretrial Services<br>Designation: Retained"
+            "<b>Sample City Interpreter</b><br>Designation: Retained"
+            "<b>Pretrial Office</b><br>ATTORNEY TO BE NOTICED<br>Designation: Pretrial Services"
+            "<b>Probation Office</b><br>ATTORNEY TO BE NOTICED<br>Designation: Probation Department")
+        parsed = parse_report(html)
+        self.assertEqual(parsed["parties"][0]["counsel"], ["Jordan Lawyer"])
+        self.assertEqual(parsed["parties"][0]["courtContacts"],
+                         ["Sample City Interpreter", "Pretrial Office", "Probation Office"])
+        self.assertEqual(enrich(parsed, ["Sample City Interpreter"])["team"], "")
+        self.assertEqual(enrich(parsed, ["Jordan Lawyer"])["team"], "Criminal Defense")
+
     def test_superseded_versions_not_double_counted(self):
         html = report(party("Defendant", "Client", "Jordan Lawyer",
             count("18:1343.F FRAUD BY WIRE", "1", "Superseded") + count("18:1343.F FRAUD BY WIRE", "1s-3s", "Guilty")))
@@ -74,6 +88,22 @@ class ParserTests(unittest.TestCase):
         result = enrich(parse_report(html), ["Jordan Lawyer"])
         self.assertEqual(result["nature"], "")
         self.assertTrue(result["warnings"])
+
+    def test_granted_dismissal_motion_resolves_old_count_only_when_explicit(self):
+        for disposition in ("govt's oral motion to dismiss granted", "Motion to dismiss was granted"):
+            html = report(party("Defendant", "Client", "Jordan Lawyer",
+                count("18:1343.F FRAUD BY WIRE", "1s") +
+                count("18:111.F ASSAULT", "2", disposition)))
+            result = enrich(parse_report(html), ["Jordan Lawyer"])
+            self.assertEqual(result["nature"], "Wire fraud (count 1).")
+            self.assertFalse(result["warnings"])
+        for disposition in ("motion to dismiss denied", "motion to dismiss pending", "motion to dismiss not granted"):
+            html = report(party("Defendant", "Client", "Jordan Lawyer",
+                count("18:1343.F FRAUD BY WIRE", "1s") +
+                count("18:111.F ASSAULT", "2", disposition)))
+            result = enrich(parse_report(html), ["Jordan Lawyer"])
+            self.assertEqual(result["nature"], "")
+            self.assertTrue(result["warnings"])
 
     def test_multiple_clients_different_counts_require_review(self):
         html = report(party("Defendant", "A", "Jordan Lawyer", count("18:111.F ASSAULT", "1")) +

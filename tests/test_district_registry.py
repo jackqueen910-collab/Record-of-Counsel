@@ -26,7 +26,7 @@ def record(code, sequence=1, date="2024-01-01"):
 
 
 class RegistryTests(unittest.TestCase):
-    def test_all_primary_districts_and_only_two_verified_samples(self):
+    def test_all_primary_districts_and_reviewed_live_samples(self):
         expected = set("""akdc almdc alndc alsdc aredc arwdc azdc cacdc caedc candc casdc
             codc ctdc dcdc dedc flmdc flndc flsdc gamdc gandc gasdc gudc hidc iandc iasdc
             iddc ilcdc ilndc ilsdc inndc insdc ksdc kyedc kywdc laedc lamdc lawdc madc mddc
@@ -36,7 +36,10 @@ class RegistryTests(unittest.TestCase):
             txsdc txwdc utdc vaedc vawdc vidc vtdc waedc wawdc wiedc wiwdc wvndc wvsdc wydc""".split())
         self.assertEqual(set(DISTRICT_COURTS), expected)
         self.assertEqual(len(expected), 94)
-        self.assertEqual({c.court_id for c in DISTRICT_COURTS.values() if c.sample_verified}, {"nysdc", "njdc"})
+        verified = set('nysdc njdc nyedc dcdc candc flsdc cacdc ilndc txsdc txwdc flmdc paedc azdc casdc caedc madc'.split())
+        self.assertEqual({c.court_id for c in DISTRICT_COURTS.values() if c.sample_verified}, verified)
+        self.assertEqual(court_profile('flsdc').verified_roles, ('Criminal Defense', 'Prosecution'))
+        self.assertTrue(court_profile('flsdc').validation_notes)
         for profile in DISTRICT_COURTS.values():
             self.assertEqual(profile_for_url(profile.origin), profile)
             cookies = court_cookies(Session("fictional-token"), profile.origin)
@@ -76,12 +79,12 @@ class RegistryTests(unittest.TestCase):
                 self.assertEqual(main(["courts", "--json"]), 0)
             value = json.loads(stream.getvalue())
             self.assertEqual(value["registeredDistrictCourts"], 94)
-            self.assertEqual(value["sampleVerifiedCourts"], 2)
+            self.assertEqual(value["sampleVerifiedCourts"], 16)
 
 
 class DistrictSelectionTests(unittest.TestCase):
     def test_default_preserves_verified_courts_and_explains_skips(self):
-        cases = build_index([record("nysdc"), record("nyedc"), record("gudc"), record("nysbk")])
+        cases = build_index([record("nysdc"), record("hidc"), record("gudc"), record("nysbk")])
         selected, plan = select_dockets(cases, {"dockets": {"limit": 10}})
         self.assertEqual([c["courtId"] for c in selected], ["nysdc"])
         self.assertEqual(plan["validationPolicy"], "sample-verified-only")
@@ -94,7 +97,7 @@ class DistrictSelectionTests(unittest.TestCase):
         self.assertEqual(len(selected), 94)
         self.assertEqual(len(plan["courtCoverage"]), 94)
         self.assertEqual(len(plan["skipped"]), 1)
-        self.assertEqual(plan["courtCoverage"]["nyedc"]["validationStatus"], "unverified")
+        self.assertEqual(plan["courtCoverage"]["hidc"]["validationStatus"], "unverified")
 
     def test_per_court_cap_and_total_limit(self):
         cases = build_index([record("nyedc", 1, "2024-04-01"), record("nyedc", 2, "2024-03-01"),
@@ -103,13 +106,13 @@ class DistrictSelectionTests(unittest.TestCase):
         self.assertEqual([c["courtId"] for c in selected], ["nyedc", "gudc"])
 
     def test_explicit_unverified_selection_requires_opt_in(self):
-        cases = build_index([record("nyedc")])
-        config = {"retrieveDockets": [{"courtId": "nyedc", "caseNumber": "1:24-cr-1"}]}
+        cases = build_index([record("hidc")])
+        config = {"retrieveDockets": [{"courtId": "hidc", "caseNumber": "1:24-cr-1"}]}
         with self.assertRaisesRegex(RocError, "not live-verified"):
             select_dockets(cases, config)
         selected, plan = select_dockets(cases, config | {"allowUnverifiedCourts": True})
         self.assertEqual(len(selected), 1)
-        self.assertEqual(plan["courtCoverage"]["nyedc"]["verifiedSamples"], 0)
+        self.assertEqual(plan["courtCoverage"]["hidc"]["verifiedSamples"], 0)
 
     def test_invalid_options_fail_before_authentication(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -159,7 +162,7 @@ class OfflinePlanAndAdapterTests(unittest.TestCase):
 
     def test_retriever_policy_and_court_identity_enforced_before_browser(self):
         with tempfile.TemporaryDirectory() as folder, RunStore(folder, 300) as store:
-            case = build_index([record("nyedc")])[0]
+            case = build_index([record("hidc")])[0]
             with patch("roc.retrieve.court_cookies") as cookies:
                 with self.assertRaisesRegex(RocError, "not live-verified"):
                     CourtRetriever(Session("fake"), store).retrieve(case)

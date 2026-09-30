@@ -127,7 +127,7 @@ class CourtFormTests(unittest.TestCase):
             configure_report(self.page)
         self.assertIsNone(self.page.evaluate("window.submissions"))
 
-    def test_shared_retriever_on_unverified_courts_uses_only_intercepted_fixtures(self):
+    def test_shared_retriever_on_registered_courts_uses_only_intercepted_fixtures(self):
         from playwright.sync_api import Browser
         original = Browser.new_context
         received = []
@@ -158,6 +158,7 @@ class CourtFormTests(unittest.TestCase):
             retriever = CourtRetriever(Session("fictional-token"), store, allow_unverified=True)
             for code in ("nyedc", "gudc"):
                 profile = court_profile(code)
+                verified_before = profile.sample_verified
                 case = {"courtId": code, "caseNumber": "1:24-cr-00001", "key": code + "|1:24-cr-00001",
                         "pacerLink": profile.origin + "/cgi-bin/iqquerymenu.pl?fictional"}
                 path = retriever.retrieve(case)
@@ -167,7 +168,7 @@ class CourtFormTests(unittest.TestCase):
                 calls = len(received)
                 self.assertEqual(retriever.retrieve(case), path)
                 self.assertEqual(len(received), calls)
-                self.assertFalse(court_profile(code).sample_verified)
+                self.assertEqual(court_profile(code).sample_verified, verified_before)
             self.assertEqual(store.spent, 600)  # Fictional receipts only.
             self.assertEqual(len(store.ledger["transactions"]), 2)
         self.assertEqual(len(contexts), 2)

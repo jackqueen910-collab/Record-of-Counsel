@@ -24,6 +24,9 @@ class CourtProfile:
     validation_date: str = ""
     verified_case_type: str = ""
     verified_samples: int = 0
+    verified_roles: tuple[str, ...] = ()
+    validation_notes: tuple[str, ...] = ()
+    evidence_reference: str = ""
 
     @property
     def sample_verified(self):
@@ -45,7 +48,8 @@ class CourtProfile:
         return {"courtId": self.court_id, "district": self.district, "origin": self.origin,
                 "adapter": self.adapter, "validationStatus": self.validation_status,
                 "validationDate": self.validation_date, "verifiedCaseType": self.verified_case_type,
-                "verifiedSamples": self.verified_samples}
+                "verifiedSamples": self.verified_samples, "verifiedRoles": list(self.verified_roles),
+                "validationNotes": list(self.validation_notes), "evidenceReference": self.evidence_reference}
 
 
 def _load_registry():
@@ -64,7 +68,9 @@ def _load_registry():
             raise RocError("Invalid district-court registry entry.")
         profile = CourtProfile(row["courtId"], row["directoryName"], row["district"], origin,
                                row["adapter"], tuple(row.get("headingAliases", [])), status["status"],
-                               status.get("date", ""), status.get("caseType", ""), status.get("sampleCount", 0))
+                               status.get("date", ""), status.get("caseType", ""), status.get("sampleCount", 0),
+                               tuple(status.get("rolesExercised", [])), tuple(status.get("notes", [])),
+                               status.get("evidence", ""))
         profiles[profile.court_id] = profile
         origins.add(origin)
     if len(profiles) != 94:

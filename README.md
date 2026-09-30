@@ -2,7 +2,7 @@
 
 An on-demand, deterministic PACER workflow. No AI model, Codex session, chat connector, or web host is required to run the program.
 
-**Current release: 0.1 prototype.** The standalone workflow has completed a live acceptance run: official API authentication and attorney search, automatic selection of two new cases, court-web docket retrieval, client/counsel matching, and local export. All 94 primary U.S. district-court systems are registered for controlled testing through the shared retrieval adapter. Only one SDNY case and one District of New Jersey case have completed live validation. Registration and offline tests do not establish nationwide retrieval coverage. Google Sheets publication still needs its own live acceptance test.
+**Current release: 0.1 prototype.** The standalone workflow has completed live API search, court-web docket retrieval, client/counsel matching and local export. All 94 primary U.S. district-court systems are registered; 16 have reviewed live samples. The latest batch retrieved 28 civil/criminal reports across 14 additional districts for $16.10, with sample limits documented in the [validation report](docs/district-validation-2026-09-30.md). Registration and sampled tests do not establish universal retrieval coverage. Google Sheets publication still needs its own live acceptance test.
 
 ## What it does
 
@@ -99,7 +99,7 @@ The directory also contains the Case Locator under the District category and a s
 
 | Status | Meaning | Default live behavior |
 |---|---|---|
-| `sample-verified` | A saved live test establishes the listed sample and case type; currently one criminal case each in SDNY and New Jersey. | Eligible, subject to case filters and budget. |
+| `sample-verified` | Reviewed live samples establish the listed case types and roles; 16 courts, with sample limits exposed in registry JSON and the validation report. | Eligible, subject to case filters and budget. |
 | `unverified` | Official address is registered and the shared adapter can be attempted; that court's actual forms and reports have not been validated. | Skipped automatically; explicit selection requires opt-in. |
 
 List coverage and preview a selection without a PACER login or any network requests:
@@ -113,7 +113,7 @@ python -m roc plan local-live.json
 
 `plan` reads `indexFile`, or `pcl-records.json` already saved in the configured run folder. It prints the selected cases, court validation status and reasons for skipped cases. It does not search, buy reports, change the ledger or write files. The example uses fictional records and a zero budget.
 
-To deliberately test additional districts, set the **top-level** `allowUnverifiedCourts` to `true`, retain a small positive docket `limit`, and optionally set `maxPerCourt` to `1`. Omitting `dockets.courts` considers all registered districts; providing a list limits the test to those districts. The flag also applies to explicit `retrieveDockets` selections. Existing configurations default to `false`, so this release does not expand their purchased-report scope.
+To deliberately test additional districts, set the **top-level** `allowUnverifiedCourts` to `true`, retain a small positive docket `limit`, and optionally set `maxPerCourt` to `1`. Omitting `dockets.courts` considers all registered districts; providing a list limits the test to those districts. The flag also applies to explicit `retrieveDockets` selections. It defaults to `false`; reviewed courts are eligible without it. As registry coverage grows, an unrestricted selection can include newly verified districts within its existing count and spending caps. Use `dockets.courts` to pin the desired scope.
 
 ```json
 {
@@ -179,6 +179,7 @@ This creates a new workbook and returns its URL. It does not overwrite the exist
 
 - Attorney matching is exact after punctuation/case normalization, using configured aliases. Similar surnames or incompatible middle initials do not automatically match.
 - A party marked PRO SE in the court's representation column is retained as self-represented, not classified as an attorney. Mixed representation cells retain actual lawyers separately.
+- Explicitly labeled probation, pretrial services and interpreter contacts are retained separately from counsel, even if the court marks them as notification recipients.
 - Team comes from the represented party's role, never the case filing date or case title.
 - Prosecution is recognized when the matched attorney represents the United States. Prosecution charge summaries describe defendants' charges, not charges against the government.
 - Different charge profiles for multiple clients/defendants are flagged for review rather than flattened into misleading count numbers.
@@ -193,9 +194,9 @@ This creates a new workbook and returns its URL. It does not overwrite the exist
 
 The September 29, 2026 live acceptance run began with a fresh API search, without saved index or docket inputs. It returned 433 attorney records grouped into 334 cases. After form-handling fixes, an explicit resume reused the paid search responses and the in-memory API session, retrieved exactly the two automatically selected reports, and exported the index. Receipts totaled $3.30: $0.90 for the search and $0.30/$2.10 for the reports. Both reports established the lawyer's defense role. One supplied four structured counts, including two dismissed counts; the other supplied no counts and was correctly flagged for review. Counts in the index describe the case's charges, including terminated counts, and do not assert that every charge remains pending. Dispositions remain in the evidence.
 
-All 59 automated tests passed locally with browser tests enabled after district-registry expansion. The suite checks all 94 registry entries, district-only boundaries, cross-court identity mismatches, unverified-court opt-in, per-court limits and offline planning. The distributable wheel also includes the registry and was checked through an isolated import. Real reports, receipts, credentials and generated case data remain outside version control. Additional court layouts and live prosecution/civil cases still require validation.
+The September 30 batch completed 28 reports across 14 additional courts for $16.10 under a $90 cap. Source review and free offline reprocessing left 22 reports passing automated checks and six with documented source/sample limits. The [validation report](docs/district-validation-2026-09-30.md) records coverage, receipt totals and the resulting parser fixes. Real reports, receipts, credentials and generated case data remain outside version control. Additional courts and layouts still require validation.
 
-The browser regression tests use fictional local forms and block network requests. They check the keyboard-driven case finder, main-case versus defendant-subcase selection, removal of default date/document limits, inclusion of parties/counsel, and exclusion of document purchases. A full retriever test routes two unverified court origins to local fictional forms and receipts, checks client-specific parsing and cache reuse, and never connects to those courts. Run them with `ROC_BROWSER_TESTS=1` after installing the optional Playwright runtime; GitHub Actions includes them. They validate form handling, not live court coverage.
+The browser regression tests use fictional local forms and block network requests. They check the keyboard-driven case finder, main-case versus defendant-subcase selection, removal of default date/document limits, inclusion of parties/counsel, and exclusion of document purchases. A full retriever test routes registered court origins to local fictional forms and receipts, checks client-specific parsing and cache reuse, and never connects to those courts. Run them with `ROC_BROWSER_TESTS=1` after installing the optional Playwright runtime; GitHub Actions includes them. They validate form handling, not live court coverage.
 
 | Module | Purpose |
 |---|---|

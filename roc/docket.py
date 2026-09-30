@@ -103,13 +103,21 @@ def counsel_blocks(cell):
             elif blocks:
                 blocks[-1]["text"] += child
     visit(cell)
-    attorneys, self_represented = [], []
+    attorneys, self_represented, court_contacts = [], [], []
     for block in blocks:
         if not block["name"]:
             continue
-        target = self_represented if re.search(r"\bPRO[\s-]*SE\b", block["text"], re.I) else attorneys
+        if re.search(r"\bPRO[\s-]*SE\b", block["text"], re.I):
+            target = self_represented
+        elif (re.search(r"\bDesignation:\s*(?:Pretrial Services|Probation Department|Interpreter)\b", block["text"], re.I)
+              or re.fullmatch(r"[A-Za-z .-]*\bInterpreter", block["name"], re.I)):
+            # Court notification entries can appear in the representation cell.
+            # Use explicit staff labels, never an attorney's office/address text.
+            target = court_contacts
+        else:
+            target = attorneys
         target.append(block["name"])
-    return attorneys, self_represented
+    return attorneys, self_represented, court_contacts
 
 
 def parse_report(html):
@@ -143,7 +151,7 @@ def parse_report(html):
             if names:
                 party["name"] = names[0]
                 if len(cells) >= 3 and "represented" in values[1].lower():
-                    party["counsel"], party["selfRepresentedNames"] = counsel_blocks(cells[-1])
+                    party["counsel"], party["selfRepresentedNames"], party["courtContacts"] = counsel_blocks(cells[-1])
                 continue
         if values[0] in ("Pending Counts", "Terminated Counts", "Complaints"):
             section = values[0]
@@ -220,7 +228,9 @@ def selected_counts(party):
             chosen[n] = value
     for count in party["counts"]:
         for item in count["countIds"]:
-            if item["revision"] < latest and item["number"] not in chosen and not re.search(r"superseded|dismissed", count["disposition"], re.I):
+            if item["revision"] < latest and item["number"] not in chosen and not re.search(
+                    r"\b(?:superseded|dismissed)\b|\bmotion to dismiss (?:is |was )?granted\b",
+                    count["disposition"], re.I):
                 raise RocError("Different indictment versions have unresolved unmatched counts.")
     return [chosen[n] for n in sorted(chosen)]
 
