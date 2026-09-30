@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 from roc.cli import main, plan_run, run
 from roc.common import RocError, write_json
-from roc.courts import DISTRICT_COURTS, court_profile, profile_for_case, profile_for_url, registry_summary
+from roc.courts import DISTRICT_COURTS, canonical_case_link, court_profile, profile_for_case, profile_for_url, registry_summary
 from roc.index import build_index
 from roc.pacer import Session
 from roc.retrieve import CourtRetriever, DistrictCMECFAdapter, court_cookies
@@ -71,6 +71,28 @@ class RegistryTests(unittest.TestCase):
         for url in urls:
             with self.subTest(url=url), self.assertRaises(RocError):
                 profile_for_url(url)
+
+    def test_legacy_pcl_http_link_upgrades_only_same_registered_court(self):
+        raw = record('vawdc')
+        original = raw['caseLink'].replace('https:', 'http:')
+        raw['caseLink'] = original
+        case = build_index([raw])[0]
+        self.assertEqual(case['pacerLink'], original.replace('http:', 'https:'))
+        self.assertEqual(case['allCaseLinks'], [original])
+        self.assertEqual(case['sourceRows'][0]['caseLink'], original)
+        self.assertEqual(profile_for_case(case).court_id, 'vawdc')
+        self.assertEqual(profile_for_case(case | {'pacerLink': original}).court_id, 'vawdc')
+        # Transport destinations themselves remain HTTPS-only.
+        with self.assertRaises(RocError):
+            profile_for_url(original)
+        for wrong in ('http://ecf.nysd.uscourts.gov/cgi-bin/iqquerymenu.pl?1',
+                      'https://ecf.nysd.uscourts.gov/cgi-bin/iqquerymenu.pl?1',
+                      'http://ecf.vawd.uscourts.gov.evil.example/',
+                      'http://user@ecf.vawd.uscourts.gov/',
+                      'http://ecf.vawd.uscourts.gov:80/',
+                      'ftp://ecf.vawd.uscourts.gov/', 'http://[invalid'):
+            with self.subTest(url=wrong), self.assertRaises(RocError):
+                canonical_case_link('vawdc', wrong)
 
     def test_registry_listing_is_offline(self):
         with patch("socket.socket.connect", side_effect=AssertionError("Network prohibited")):

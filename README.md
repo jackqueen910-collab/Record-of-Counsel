@@ -91,6 +91,8 @@ A run folder is a durable job: restarting it reuses already purchased replies. C
 
 Unexpected forms, court redirects to login, ambiguous case choices and missing receipts stop the process. The narrow court adapter intentionally does not guess through unfamiliar screens. New courts require adapter checks and tests.
 
+PCL sometimes returns a legacy `http://` case link, as observed for Western Virginia. ROC upgrades it to HTTPS only when its exact hostname matches that case's registered court, with no credentials or explicit port in the URL. The raw link remains in source records and `allCaseLinks`. Court retrieval opens the registry's HTTPS origin; it never follows the insecure link or accepts an unfamiliar host as a fallback.
+
 ## District-court coverage and offline planning
 
 The checked-in `roc/district_courts.json` registry records official PACER court IDs, HTTPS origins, district labels, the shared adapter and validation evidence. It was sourced from the [official Court CM/ECF Lookup](https://pacer.uscourts.gov/file-case/court-cmecf-lookup) on September 30, 2026. It includes all 94 primary district-court systems, including D.C., Puerto Rico, Guam, the Northern Mariana Islands and the Virgin Islands. No bankruptcy, appellate, JPML or national specialty court is enabled for retrieval.

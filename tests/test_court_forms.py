@@ -160,7 +160,7 @@ class CourtFormTests(unittest.TestCase):
                 profile = court_profile(code)
                 verified_before = profile.sample_verified
                 case = {"courtId": code, "caseNumber": "1:24-cr-00001", "key": code + "|1:24-cr-00001",
-                        "pacerLink": profile.origin + "/cgi-bin/iqquerymenu.pl?fictional"}
+                        "pacerLink": profile.origin.replace('https:', 'http:') + "/cgi-bin/iqquerymenu.pl?fictional"}
                 path = retriever.retrieve(case)
                 parsed = enrich(parse_report(path.read_text(encoding="utf-8")), ["Jordan Lawyer"])
                 self.assertEqual(parsed["nature"], "Wire fraud (count 1).")
@@ -173,6 +173,7 @@ class CourtFormTests(unittest.TestCase):
             self.assertEqual(len(store.ledger["transactions"]), 2)
         self.assertEqual(len(contexts), 2)
         self.assertEqual(len(received), 4)
+        self.assertTrue(all(url.startswith('https://') for url in received))
 
 
 class CaseLookupTests(unittest.TestCase):

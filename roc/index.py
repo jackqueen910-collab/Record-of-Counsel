@@ -3,7 +3,7 @@ from collections import defaultdict
 from html import unescape
 
 from .common import RocError, case_key, clean, normalize_case_number
-from .courts import DISTRICT_COURTS
+from .courts import DISTRICT_COURTS, canonical_case_link
 
 COURTS = {code: profile.district for code, profile in DISTRICT_COURTS.items()}
 # Retain existing non-district index data; it does not enable docket retrieval.
@@ -54,6 +54,13 @@ def build_index(records, court_labels=None):
         closed = [bool(c.get("effectiveDateClosed") or c.get("dateTermed") or r.get("effectiveDateClosed")) for r, c in zip(entries, cases)]
         status = "Closed" if all(closed) else "Mixed" if any(closed) else "Open"
         links = sorted({c.get("caseLink") or r.get("caseLink") for r, c in zip(entries, cases)} - {None, ""})
+        link = links[0] if links else ""
+        if court in DISTRICT_COURTS and link:
+            try:
+                link = canonical_case_link(court, link)
+            except RocError:
+                # Keep index evidence; live retrieval still rejects this link.
+                warnings.append("Case link does not match its registered court; live retrieval is blocked.")
         codes = sorted({str(c.get("natureOfSuit") or r.get("natureOfSuit") or "").strip() for r, c in zip(entries, cases)} - {""})
         nature = "Charges not supplied by PCL" if kind == "Criminal" else "; ".join(f"{c} - {NOS[c]}" if c in NOS else c for c in codes) or "Not supplied by PCL"
         if kind != "Criminal" and any(c not in NOS for c in codes):
@@ -66,6 +73,6 @@ def build_index(records, court_labels=None):
         result.append({"key": key, "courtId": court, "caseNumber": number, "caseTitle": sorted(captions)[0],
                        "caseType": kind, "team": "", "court": court_type,
                        "district": courts.get(court, court), "dateFiled": dates[0] if dates else "", "nature": nature,
-                       "status": status, "pacerLink": links[0] if links else "", "allCaseLinks": links,
+                       "status": status, "pacerLink": link, "allCaseLinks": links,
                        "warnings": warnings, "sourceRows": entries})
     return sorted(result, key=lambda r: (r["dateFiled"], r["district"], r["caseNumber"]), reverse=True)

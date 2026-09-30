@@ -101,11 +101,29 @@ def profile_for_url(url):
     return profile
 
 
-def profile_for_case(case):
-    profile = court_profile(case["courtId"])
-    linked = profile_for_url(case.get("pacerLink", ""))
+def canonical_case_link(court_id, url):
+    """Upgrade a stale PCL HTTP link only for that exact registered court.
+
+    This does not follow the HTTP link or relax the HTTPS transport validator.
+    Retrieval always opens the registry's HTTPS origin; raw PCL links remain
+    in the source records for auditing.
+    """
+    profile = court_profile(court_id)
+    try:
+        parsed = urlparse(url)
+        if parsed.scheme == "http" and parsed.netloc.casefold() == urlparse(profile.origin).netloc:
+            url = parsed._replace(scheme="https").geturl()
+    except (TypeError, ValueError):
+        raise RocError("Court URL is not a registered HTTPS district-court origin.") from None
+    linked = profile_for_url(url)
     if linked.court_id != profile.court_id:
         raise RocError("Case court ID and court website disagree; no report submitted.")
+    return url
+
+
+def profile_for_case(case):
+    profile = court_profile(case["courtId"])
+    canonical_case_link(case["courtId"], case.get("pacerLink", ""))
     return profile
 
 
