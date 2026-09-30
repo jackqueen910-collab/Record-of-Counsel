@@ -8,6 +8,8 @@ import urllib.parse
 import urllib.request
 
 from .common import RocError, write_json
+from .docket import TEAM_VALUES
+from .review import case_issues, issue_text
 
 HEADERS = ["Case number", "Case title", "Case Type", "Team", "Court", "District", "Date filed", "Nature of Case", "Status (PACER)", "PACER link"]
 FIELDS = ["caseNumber", "caseTitle", "caseType", "team", "court", "district", "dateFiled", "nature", "status", "pacerLink"]
@@ -32,9 +34,10 @@ def source_note(case):
                   "; live-verified samples: " + str(coverage["verifiedSamples"]) + "." if coverage else "")
     return ("Docket: " + evidence["sourceFile"] + "; SHA256: " + evidence["sourceSha256"] +
             ". Represented parties: " + ", ".join(evidence["representedParties"]) +
-            ". Counts use the latest supported indictment version for the represented defendant(s). " +
-            "Earlier versions and dispositions are retained in evidence.json. " +
-            "; ".join(evidence["warnings"]) + validation)
+            ". Source roles: " + "; ".join(p["party"] + ": " + p["role"] for p in evidence.get("representedRoles", [])) +
+            ". Counts copy all listed source rows, including original, superseding and terminated entries. " +
+            "Defendant associations, source sections and dispositions are retained in evidence.json. " +
+            "; ".join(issue_text(i) for i in case_issues(case)) + validation)
 
 
 def export_local(cases, folder, title, metadata):
@@ -45,7 +48,9 @@ def export_local(cases, folder, title, metadata):
         writer.writerow(HEADERS)
         writer.writerows([csv_safe(x) for x in values(c)] for c in cases)
     write_json(folder / "evidence.json", {"run": metadata, "cases": cases})
-    write_json(folder / "review.json", [{"caseNumber": c["caseNumber"], "court": c["courtId"], "items": c["warnings"]} for c in cases if c["warnings"]])
+    write_json(folder / "review.json", [{"caseNumber": c["caseNumber"], "court": c["courtId"],
+               "issues": case_issues(c), "items": [issue_text(i) for i in case_issues(c)]}
+               for c in cases if case_issues(c)])
     try:
         from openpyxl import Workbook
         from openpyxl.comments import Comment
@@ -60,7 +65,7 @@ def export_local(cases, folder, title, metadata):
     sheet.sheet_view.showGridLines = False
     for row in [[], [title], [f"{len(cases)} cases. Generated {metadata['generatedUtc'][:10]}."],
                 ["Official PCL API index; court-web docket enrichment where available. See cell notes and evidence.json."],
-                ["Nature of Case lists client-specific charges and count numbers. Unresolved items are in review.json."], HEADERS]:
+                ["Nature of Case copies listed counts, including original and superseding entries. Source gaps and review items are categorized in review.json."], HEADERS]:
         sheet.append(row)
     for column, width in enumerate(WIDTHS, 1):
         sheet.column_dimensions[get_column_letter(column)].width = width
@@ -88,7 +93,7 @@ def export_local(cases, folder, title, metadata):
     end = max(7, len(cases) + 6)
     sheet.freeze_panes = "C7"
     sheet.auto_filter.ref = f"A6:J{end}"
-    dv = DataValidation(type="list", formula1='"Prosecution,Criminal Defense,Civil Defense,Civil Plaintiff"', allow_blank=True)
+    dv = DataValidation(type="list", formula1='"' + ','.join(TEAM_VALUES) + '"', allow_blank=True)
     sheet.add_data_validation(dv)
     dv.add(f"D7:D{end}")
     wb.save(folder / "case-index.xlsx")

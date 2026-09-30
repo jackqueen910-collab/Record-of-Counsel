@@ -15,6 +15,7 @@ from .docket import enrich, parse_report
 from .index import build_index
 from .pacer import Session
 from .progress import Progress
+from .review import issue, issue_text, review_warnings
 from .retrieve import CourtRetriever, pending_confirmation
 from .store import RunStore
 
@@ -110,9 +111,9 @@ def assess_report(raw, case):
         raise RocError("Purchased report identity differs from the selected case.")
     if report["caseType"] != case["caseType"]:
         raise RocError("Purchased report case type differs from PCL.")
-    warnings = list(report["warnings"])
+    issues = [issue("needs-review", "report-layout", w) for w in report["warnings"]]
     if not report["parties"]:
-        warnings.append("No party blocks parsed.")
+        issues.append(issue("needs-review", "no-party-blocks", "No party blocks parsed."))
     trials = []
     names = sorted({n for p in report["parties"] for n in p["counsel"] if name_key(n)})
     for counsel in names:
@@ -124,20 +125,26 @@ def assess_report(raw, case):
         if evidence["representedParties"] != expected:
             raise RocError("Attorney-to-party consistency check failed.")
         trials.append({"attorney": counsel, **evidence})
-        warnings.extend(counsel + ": " + warning for warning in evidence["warnings"])
-    roles = sorted({t["team"] for t in trials if t["team"]})
+        issues.extend({**item, "attorney": counsel} for item in evidence["issues"] if item["category"] == "needs-review")
+    roles = sorted({role for t in trials for role in t.get("teams", [])})
     required = {"Civil Plaintiff", "Civil Defense"} if case["caseType"] == "Civil" else {"Prosecution", "Criminal Defense"}
     missing = required - set(roles)
     if missing:
-        warnings.append("Sample does not exercise: " + ", ".join(sorted(missing)))
+        issues.append(issue("not-tested", "counsel-roles-not-tested",
+            "No counsel trial for: " + ", ".join(sorted(missing)) + ".", roles=sorted(missing)))
     if case["caseType"] == "Civil" and not report["natureOfSuit"]:
-        warnings.append("Civil Nature of Suit missing from parsed report.")
+        issues.append(issue("missing-source", "nature-not-listed", "Civil Nature of Suit is not listed.", field="nature"))
     if case["caseType"] == "Criminal":
+        for party in report["parties"]:
+            if party["role"] == "Defendant" and not party["counts"]:
+                issues.append(issue("missing-source", "counts-not-listed", "No structured counts are listed for this defendant.",
+                                    party=party["name"], field="nature"))
         defense = [t for t in trials if t["team"] == "Criminal Defense"]
-        if not any(t["nature"] and t["selectedCounts"] for t in defense):
-            warnings.append("No unambiguous client-specific criminal count summary in this sample.")
-    return {"automatedAssessment": "review-needed" if warnings else "checks-passed",
-            "independentlyReviewed": False, "rolesExercised": roles,
+        if not any(any(s["status"] == "resolved" for s in t["countSummaries"]) for t in defense):
+            issues.append(issue("not-tested", "client-counts-not-tested", "No defense-counsel trial with listed client counts in this sample."))
+    warnings = review_warnings(issues)
+    return {"automatedAssessment": "review-needed" if warnings else "source-limited" if issues else "checks-passed",
+            "independentlyReviewed": False, "rolesExercised": roles, "issues": issues,
             "warnings": warnings, "attorneyTrials": trials, "parsedDocket": report,
             "note": "Automated structural/consistency checks only. Source spot-check required; registry unchanged."}
 
@@ -147,6 +154,10 @@ def save_results(root, plan, samples, store, status, reason=None):
                "plan": plan, "samples": samples, "chargedCents": store.spent,
                "downloadedDockets": sum(bool(s.get("sourceFile")) for s in samples),
                "automatedChecksPassed": sum(s.get("assessment", {}).get("automatedAssessment") == "checks-passed" for s in samples),
+               "sourceLimitedReports": sum(s.get("assessment", {}).get("automatedAssessment") == "source-limited" for s in samples),
+               "reviewNeededReports": sum(s.get("assessment", {}).get("automatedAssessment") == "review-needed" for s in samples),
+               "reportsByIssueCategory": {category: sum(any(i["category"] == category for i in s.get("assessment", {}).get("issues", [])) for s in samples)
+                   for category in ("missing-source", "not-tested", "needs-review")},
                "registryPromoted": False}
     write_json(root / "validation-results.json", summary)
     table = []
@@ -155,18 +166,19 @@ def save_results(root, plan, samples, store, status, reason=None):
         cells = [s["courtId"], s["caseType"], case.get("caseNumber", ""), case.get("caseTitle", ""),
                  assessment.get("automatedAssessment", s.get("status", "pending")),
                  ", ".join(assessment.get("rolesExercised", [])),
-                 "; ".join(assessment.get("warnings", []) or [s.get("message", "")])]
+                 "; ".join([issue_text(i) for i in assessment.get("issues", [])] or assessment.get("warnings", []) or [s.get("message", "")])]
         table.append("<tr>" + "".join("<td>" + escape(str(v)) + "</td>" for v in cells) + "</tr>")
     html = """<!doctype html><meta charset="utf-8"><title>ROC court validation</title>
     <style>body{font:15px system-ui;margin:32px;color:#182630}table{border-collapse:collapse;width:100%}
     th,td{text-align:left;padding:9px;border-bottom:1px solid #ccd6de;vertical-align:top}th{background:#e7eff4}</style>
     <h1>ROC court validation</h1>"""
     html += f"<p>Status: {escape(status)}. Saved dockets: {summary['downloadedDockets']}/{plan['maximumDockets']}. Receipts: ${store.spent / 100:.2f}.</p>"
+    html += f"<p>Field checks passed: {summary['automatedChecksPassed']}. Source/sample limits: {summary['sourceLimitedReports']}. Needs review: {summary['reviewNeededReports']}.</p>"
     html += "<p>Automated checks are provisional. Review source reports before promoting court coverage.</p>"
     if reason:
         html += "<p>" + escape(reason) + "</p>"
     html += "<table><thead><tr>" + "".join("<th>" + h + "</th>" for h in
-        ["Court", "Type", "Case", "Title", "Assessment", "Roles", "Review"]) + "</tr></thead><tbody>"
+        ["Court", "Type", "Case", "Title", "Assessment", "Roles", "Findings"]) + "</tr></thead><tbody>"
     (root / "validation-report.html").write_text(html + "".join(table) + "</tbody></table>", encoding="utf-8")
     return summary
 

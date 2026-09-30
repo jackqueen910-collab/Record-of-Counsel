@@ -1,5 +1,7 @@
 # Completed district expansion — September 30, 2026
 
+**Policy update:** The later [source-counts change](counts-and-findings.md) copies all listed counts and separates source/sample limits from review items. Reprocessing yields **100 field-check passes, 48 source/sample limits and no items needing review**, with the same $81.00 receipts. The findings and table below record the original validation policy.
+
 ROC completed **148 of 148 selected full docket reports across 74 additional districts**, with **$81.00 in confirmed receipts under the $150 cap** and no unresolved charges. All **90 primary district courts in the states and D.C. now have reviewed live samples** and are eligible for the normal bounded retrieval workflow. The four territorial districts remain unverified and skipped by default.
 
 The two expansion rounds cost **$97.10**: $16.10 for the first 14 districts and $81.00 for this batch. This total excludes the original SDNY/New Jersey pilot and earlier attorney-index work.

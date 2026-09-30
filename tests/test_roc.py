@@ -5,7 +5,7 @@ import unittest
 from unittest.mock import patch
 
 from roc.common import RocError, normalize_case_number
-from roc.docket import enrich, parse_report, receipt_cents
+from roc.docket import enrich, parse_report, receipt_cents, NOT_LISTED
 from roc.index import build_index
 from roc.output import csv_safe, export_local
 from roc.pacer import Session, collect_index
@@ -52,7 +52,7 @@ class ParserTests(unittest.TestCase):
         html = report(party("Defendant", "Client", "Jordan Lawyer", count("18:1343.F FRAUD BY WIRE", "2s")) +
                       party("Defendant", "Other Person", "Other Attorney", count("18:111.F ASSAULT", "1s"), "2"))
         result = enrich(parse_report(html), ["Jordan Lawyer"])
-        self.assertEqual(result["nature"], "Wire fraud (count 2).")
+        self.assertEqual(result["nature"], "18:1343.F FRAUD BY WIRE (2s)")
         self.assertEqual(result["representedParties"], ["Client"])
         self.assertEqual(result["team"], "Criminal Defense")
 
@@ -81,15 +81,15 @@ class ParserTests(unittest.TestCase):
         self.assertEqual(parsed["parties"][0]["courtContacts"], ["US Probation", "USM"])
         self.assertEqual(parse_report(report(party("Plaintiff", "USA", "USM")))["parties"][0]["counsel"], ["USM"])
 
-    def test_nonstandard_roles_are_retained_without_invented_team(self):
-        for role in ("Claimant", "Intervenor", "Amicus", "Notice Party"):
+    def test_nonstandard_roles_use_explicit_source_roles(self):
+        for role in ("Claimant", "Intervenor", "Amicus", "Notice Party", "Petitioner", "Respondent"):
             parsed = parse_report(report(party("Defendant", "Property", "") +
                                          party(role, "Other Party", "Jordan Lawyer"), "CIVIL"))
             self.assertEqual(parsed["parties"][1]["role"], role)
             evidence = enrich(parsed, ["Jordan Lawyer"])
             self.assertEqual(evidence["representedParties"], ["Other Party"])
-            self.assertEqual(evidence["team"], "")
-            self.assertIn("Counsel side is ambiguous or unsupported.", evidence["warnings"])
+            self.assertEqual(evidence["team"], role)
+            self.assertFalse(evidence["warnings"])
 
     def test_mediator_in_representation_column_is_a_court_contact(self):
         parsed = parse_report(report(party("Defendant", "Client", "Jordan Lawyer") +
@@ -112,14 +112,14 @@ class ParserTests(unittest.TestCase):
         self.assertEqual(counts[0]["countIds"], [])
         self.assertEqual(counts[1]["countIds"][0]["number"], 2)
         evidence = enrich(parsed, ["Jordan Lawyer"])
-        self.assertEqual(evidence["nature"], "")
-        self.assertIn("Unrecognized count label: 1r", "; ".join(evidence["warnings"]))
+        self.assertEqual(evidence["nature"], "18:1343.F FRAUD BY WIRE (1r); 18:111.F ASSAULT (2)")
+        self.assertFalse(evidence["issues"])
 
-    def test_superseded_versions_not_double_counted(self):
+    def test_original_and_superseding_rows_both_copied_in_source_order(self):
         html = report(party("Defendant", "Client", "Jordan Lawyer",
             count("18:1343.F FRAUD BY WIRE", "1", "Superseded") + count("18:1343.F FRAUD BY WIRE", "1s-3s", "Guilty")))
         result = enrich(parse_report(html), ["Jordan Lawyer"])
-        self.assertEqual(result["nature"], "Wire fraud (counts 1–3).")
+        self.assertEqual(result["nature"], "18:1343.F FRAUD BY WIRE (1); 18:1343.F FRAUD BY WIRE (1s-3s)")
         self.assertNotIn("Guilty", result["nature"])
         self.assertNotIn("Client", result["nature"])
 
@@ -128,41 +128,35 @@ class ParserTests(unittest.TestCase):
         self.assertEqual(enrich(parse_report(html), ["Jordan B. Lawyer"])["team"], "")
         self.assertEqual(enrich(parse_report(html), ["Lawyer, Jordan A"])["team"], "Criminal Defense")
 
-    def test_partial_supersession_requires_review(self):
+    def test_partial_supersession_copies_all_rows_without_version_inference(self):
         html = report(party("Defendant", "Client", "Jordan Lawyer", count("18:111.F ASSAULT", "1") + count("18:1343.F FRAUD BY WIRE", "2s")))
         result = enrich(parse_report(html), ["Jordan Lawyer"])
-        self.assertEqual(result["nature"], "")
-        self.assertTrue(result["warnings"])
+        self.assertEqual(result["nature"], "18:111.F ASSAULT (1); 18:1343.F FRAUD BY WIRE (2s)")
+        self.assertFalse(result["issues"])
 
-    def test_granted_dismissal_motion_resolves_old_count_only_when_explicit(self):
-        for disposition in ("govt's oral motion to dismiss granted", "Motion to dismiss was granted"):
+    def test_dispositions_do_not_filter_source_counts(self):
+        for disposition in ("motion to dismiss granted", "Dismissed", "Superseded", "motion to dismiss denied"):
             html = report(party("Defendant", "Client", "Jordan Lawyer",
-                count("18:1343.F FRAUD BY WIRE", "1s") +
-                count("18:111.F ASSAULT", "2", disposition)))
+                count("18:1343.F FRAUD BY WIRE", "1s") + count("18:111.F ASSAULT", "2", disposition)))
             result = enrich(parse_report(html), ["Jordan Lawyer"])
-            self.assertEqual(result["nature"], "Wire fraud (count 1).")
-            self.assertFalse(result["warnings"])
-        for disposition in ("motion to dismiss denied", "motion to dismiss pending", "motion to dismiss not granted"):
-            html = report(party("Defendant", "Client", "Jordan Lawyer",
-                count("18:1343.F FRAUD BY WIRE", "1s") +
-                count("18:111.F ASSAULT", "2", disposition)))
-            result = enrich(parse_report(html), ["Jordan Lawyer"])
-            self.assertEqual(result["nature"], "")
-            self.assertTrue(result["warnings"])
+            self.assertEqual(result["nature"], "18:1343.F FRAUD BY WIRE (1s); 18:111.F ASSAULT (2)")
+            self.assertEqual(result["selectedCounts"][0]["counts"][1]["disposition"], disposition)
+            self.assertFalse(result["issues"])
 
-    def test_multiple_clients_different_counts_require_review(self):
+    def test_multiple_clients_keep_separate_labeled_summaries(self):
         html = report(party("Defendant", "A", "Jordan Lawyer", count("18:111.F ASSAULT", "1")) +
                       party("Defendant", "B", "Jordan Lawyer", count("18:1343.F FRAUD BY WIRE", "2"), "2"))
         result = enrich(parse_report(html), ["Jordan Lawyer"])
-        self.assertEqual(result["nature"], "")
+        self.assertEqual(result["nature"], "A (defendant 1): 18:111.F ASSAULT (1)\nB (defendant 2): 18:1343.F FRAUD BY WIRE (2)")
         self.assertEqual(len(result["selectedCounts"]), 2)
+        self.assertFalse(result["issues"])
 
     def test_prosecution_uses_government_counsel(self):
         html = report(party("Defendant", "A", "Defense Counsel", count("18:111.F ASSAULT", "1")) + party("Plaintiff", "USA", "Jordan Lawyer"))
         result = enrich(parse_report(html), ["Jordan Lawyer"])
         self.assertEqual(result["team"], "Prosecution")
         self.assertEqual(result["representedParties"], ["USA"])
-        self.assertEqual(result["nature"], "Assault (count 1).")
+        self.assertEqual(result["nature"], "18:111.F ASSAULT (1)")
 
     def test_civil_sides(self):
         for role, expected in [("Defendant", "Civil Defense"), ("Plaintiff", "Civil Plaintiff")]:
@@ -171,8 +165,10 @@ class ParserTests(unittest.TestCase):
 
     def test_absent_counts_not_guessed_from_docket_text(self):
         result = enrich(parse_report(report(party("Defendant", "Client", "Jordan Lawyer"))), ["Jordan Lawyer"])
-        self.assertEqual(result["nature"], "")
-        self.assertTrue(result["warnings"])
+        self.assertEqual(result["nature"], NOT_LISTED)
+        self.assertFalse(result["warnings"])
+        self.assertEqual(result["issues"][0]["category"], "missing-source")
+        self.assertEqual(result["fieldStatus"]["nature"], "missing-source")
 
     def test_receipt_required(self):
         self.assertEqual(receipt_cents(report("")), 300)

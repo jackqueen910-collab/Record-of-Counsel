@@ -106,12 +106,12 @@ class BatchValidationTests(unittest.TestCase):
         case = build_index([record("nyedc", "Criminal")])[0]
         result = assess_report(html(case), case)
         defense = next(t for t in result["attorneyTrials"] if t["attorney"] == "Defense Lawyer")
-        self.assertEqual(defense["nature"], "Wire fraud (count 2).")
+        self.assertEqual(defense["nature"], "18:1343.F FRAUD BY WIRE (2)")
         self.assertEqual(defense["representedParties"], ["Client"])
         self.assertFalse(result["independentlyReviewed"])
         self.assertIn("Prosecution", result["rolesExercised"])
         missing = html(case).replace(count("18:1343.F FRAUD BY WIRE", "2"), "").replace(count("18:111.F ASSAULT", "1"), "")
-        self.assertEqual(assess_report(missing, case)["automatedAssessment"], "review-needed")
+        self.assertEqual(assess_report(missing, case)["automatedAssessment"], "source-limited")
 
     def test_complete_batch_and_resume_charge_each_request_once(self):
         requests = []

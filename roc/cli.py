@@ -10,6 +10,7 @@ from .index import build_index, records_from
 from .output import export_local, publish_google
 from .pacer import Session, collect_index
 from .progress import Progress
+from .review import case_issues
 from .retrieve import CourtRetriever
 from .select import select_dockets, validate_options
 from .store import RunStore
@@ -33,6 +34,7 @@ def run(config_path, live=False, publish=False, session_provider=None):
     output_dir = run_dir / "output"
     budget = config.get("budgetCents", 0)
     metadata = {"generatedUtc": now(), "lawyer": lawyer, "mode": "live" if live else "offline",
+                "countPolicy": "all-listed-source-rows",
                 "methods": {"index": "saved records" if config.get("indexFile") else "official PCL API",
                             "dockets": "court web reports" if live else "saved reports"}}
     session = None
@@ -111,12 +113,18 @@ def run(config_path, live=False, publish=False, session_provider=None):
                 case["enrichment"] = evidence
                 case["team"] = evidence["team"]
                 case["nature"] = evidence["nature"] or ("Unresolved — see review" if parsed["caseType"] == "Criminal" else case["nature"])
+                case["issues"] = evidence["issues"]
+                case["fieldStatus"] = evidence["fieldStatus"]
+                if parsed["caseType"] == "Civil" and parsed["natureOfSuit"]:
+                    case["warnings"] = [w for w in case["warnings"] if w != "Unmapped Nature of Suit code retained for review."]
                 case["warnings"].extend(evidence["warnings"])
             except RocError as exc:
                 case["warnings"].append(str(exc))
         metadata.update(caseCount=len(cases), docketInputs=len(reports), enrichedCases=sum(bool(c.get("enrichment")) for c in cases),
                         resolvedTeamCases=sum(bool(c["team"]) for c in cases), unresolvedTeamCases=sum(not c["team"] for c in cases),
                         chargedCentsThisRunFolder=store.spent, status="stopped" if stop_reason else "complete", stopReason=stop_reason)
+        metadata["casesByIssueCategory"] = {category: sum(any(i["category"] == category for i in case_issues(c)) for c in cases)
+                                            for category in ("missing-source", "not-tested", "needs-review")}
         title = f"Record of Counsel (ROC): {first} {last}"
         path = export_local(cases, output_dir, title, metadata)
         if publish:

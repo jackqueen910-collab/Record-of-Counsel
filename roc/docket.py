@@ -1,17 +1,24 @@
 """Conservative parsing of CM/ECF party/counsel and count tables.
 
-The source remains authoritative. Unknown layouts, ambiguous versions and conflicting
-client charge profiles produce review items, not invented summaries.
+The source remains authoritative. Copy listed counts without resolving indictment
+versions, and keep each represented defendant's counts separate.
 """
 from __future__ import annotations
 
-from collections import defaultdict
 from decimal import Decimal
 from html.parser import HTMLParser
 import hashlib
 import re
 
 from .common import RocError, clean, name_key, normalize_case_number
+from .review import issue, review_warnings
+
+
+CIVIL_TEAMS = {"Plaintiff": "Civil Plaintiff", "Defendant": "Civil Defense", **{
+    role: role for role in ("Petitioner", "Respondent", "Claimant", "Amicus", "Intervenor",
+                           "Movant", "Interested Party", "Notice Party", "Debtor", "Creditor")}}
+TEAM_VALUES = ["Prosecution", "Criminal Defense", *CIVIL_TEAMS.values(), "Multiple roles"]
+NOT_LISTED = "Not listed in source"
 
 
 class Node:
@@ -168,19 +175,17 @@ def parse_report(html):
         if values[0].startswith("Highest Offense Level"):
             section = None
         if section in ("Pending Counts", "Terminated Counts") and len(cells) >= 3:
-            m = re.fullmatch(r"(.+?)\s*\(([\da-z,\-– ]+)\)", values[0], re.I)
-            if m:
+            if values[0] and values[0] != "None":
+                # The display copies this complete source row, including unfamiliar
+                # suffixes and ranges. Numeric IDs are optional evidence only.
+                m = re.fullmatch(r"(.+?)\s*\((\d[^()]*)\)", values[0])
+                charge, label = (m[1].strip(), m[2]) if m else (values[0], "")
                 try:
-                    ids = expand_count_ids(m[2])
-                except RocError as exc:
-                    party["warnings"].append(str(exc))
-                    # Keep the source charge and disposition, but do not assign
-                    # version ordering or summarize an unfamiliar count label.
+                    ids = expand_count_ids(label)
+                except RocError:
                     ids = []
-                party["counts"].append({"section": section, "rawCharge": m[1].strip(),
-                    "rawCountLabel": m[2], "countIds": ids, "disposition": values[-1]})
-            elif values[0] and values[0] != "None":
-                party["warnings"].append("Unrecognized count row: " + values[0])
+                party["counts"].append({"section": section, "rawCharge": charge,
+                    "rawCountLabel": label, "rawText": values[0], "countIds": ids, "disposition": values[-1]})
     if not result["parties"] or any(not p["name"] for p in result["parties"]):
         result["warnings"].append("Party table incomplete or unfamiliar.")
     text = clean(root.text())
@@ -189,114 +194,100 @@ def parse_report(html):
     return result
 
 
-# Label normalization, not inference of the charge from a statute alone.
-LABELS = {
-    "CONSPIRACY TO DEFRAUD THE UNITED STATES": "Conspiracy to defraud the U.S.",
-    "TRANSPORTING FOR PROSTITUTION": "Transportation to engage in prostitution",
-    "TRANSPORTATION TO ENGAGE IN PROSTITUTION": "Transportation to engage in prostitution",
-    "FRAUD BY WIRE": "Wire fraud",
-    "FRAUD BY WIRE, RADIO, OR TELEVISION": "Wire fraud",
-    "ATTEMPT TO EVADE OR DEFEAT TAX": "Tax evasion",
-    "SEX TRAFFICKING OF CHILDREN OR BY FORCE, FRAUD OR COERCION (SEX TRAFFICKING BY FORCE, FRAUD AND COERCION)": "Sex trafficking by force, fraud or coercion",
-}
-
-
-def charge_label(raw):
-    # Remove the source's statute/code prefix, but preserve unfamiliar descriptive text.
-    m = re.match(r"^(?:\d+:[\dA-Za-z().-]+(?:\s*&\s*(?:\d+:)?[\dA-Za-z().-]+)?\s+)([A-Z].*)$", raw)
-    text = m[1] if m else raw
-    text = re.sub(r"\s*\(dof\b.*$", "", text, flags=re.I).strip()
-    return LABELS.get(text.upper(), text.lower().capitalize())
-
-
-def compress(numbers):
-    numbers = sorted(set(numbers))
-    groups = []
-    for n in numbers:
-        if groups and n == groups[-1][-1] + 1:
-            groups[-1].append(n)
-        else:
-            groups.append([n])
-    return ", ".join(f"{g[0]}–{g[-1]}" if len(g) > 1 else str(g[0]) for g in groups)
-
-
-def selected_counts(party):
-    if party["warnings"]:
-        raise RocError("; ".join(party["warnings"]))
-    if not party["counts"]:
-        raise RocError("No structured counts supplied for this client.")
-    latest = max(i["revision"] for c in party["counts"] for i in c["countIds"])
-    chosen = {}
-    for count in party["counts"]:
-        for item in count["countIds"]:
-            if item["revision"] != latest:
-                continue
-            n = item["number"]
-            value = {**count, "countId": item["id"], "number": n, "revision": latest,
-                     "label": charge_label(count["rawCharge"])}
-            if n in chosen and chosen[n]["rawCharge"] != value["rawCharge"]:
-                raise RocError(f"Conflicting charges for count {n}.")
-            chosen[n] = value
-    for count in party["counts"]:
-        for item in count["countIds"]:
-            if item["revision"] < latest and item["number"] not in chosen and not re.search(
-                    r"\b(?:superseded|dismissed)\b|\bmotion to dismiss (?:is |was )?granted\b",
-                    count["disposition"], re.I):
-                raise RocError("Different indictment versions have unresolved unmatched counts.")
-    return [chosen[n] for n in sorted(chosen)]
+def listed_counts(party):
+    """Source order and labels are authoritative; do not filter versions."""
+    return [dict(c) for c in party["counts"]]
 
 
 def summarize_counts(counts):
-    groups = defaultdict(list)
+    lines = []
     for count in counts:
-        groups[count["label"]].append(count["number"])
-    parts = []
-    for label, numbers in sorted(groups.items(), key=lambda item: min(item[1])):
-        word = "count" if len(set(numbers)) == 1 else "counts"
-        parts.append(f"{label} ({word} {compress(numbers)})")
-    return "; ".join(parts) + "." if parts else ""
+        text = count.get("rawText") or (count["rawCharge"] +
+            (" (" + count["rawCountLabel"] + ")" if count["rawCountLabel"] else ""))
+        # Preserve the source's pending/terminated distinction without deciding
+        # which indictment supersedes another or appending sentencing prose.
+        if count["section"] == "Terminated Counts":
+            text += " [Terminated Counts]"
+        lines.append(text)
+    return "; ".join(lines)
 
 
 def enrich(report, aliases):
     keys = {name_key(n) for n in aliases}
     matched = [p for p in report["parties"] if any(name_key(n) in keys for n in p["counsel"])]
+    items = [issue("needs-review", "report-layout", w) for w in report["warnings"]]
     result = {"team": "", "nature": "", "representedParties": [p["name"] for p in matched],
-              "selectedCounts": [], "warnings": list(report["warnings"]),
+              "representedRoles": [{"party": p["name"], "role": p["role"]} for p in matched],
+              "selectedCounts": [], "countSummaries": [], "countPolicy": "all-listed-source-rows",
+              "issues": items, "warnings": [], "fieldStatus": {},
               "sourceSha256": report["sha256"], "caseNumber": report["caseNumber"]}
-    if not matched:
-        result["warnings"].append("No exact configured attorney alias found in the counsel table.")
+
+    def finish():
+        result["warnings"] = review_warnings(items)
         return result
+
+    if not matched:
+        items.append(issue("needs-review", "attorney-not-matched",
+                           "No exact configured attorney alias found in the counsel table.", field="team"))
+        result["fieldStatus"] = {"team": "needs-review", "nature": "needs-review"}
+        return finish()
     roles = set()
     for p in matched:
         if report["caseType"] == "Criminal":
-            roles.add("Criminal Defense" if p["role"] == "Defendant" else
-                      "Prosecution" if p["role"] == "Plaintiff" and name_key(p["name"]) in
-                      {"usa", "united states", "united states of america"} else "")
+            role = ("Criminal Defense" if p["role"] == "Defendant" else
+                    "Prosecution" if p["role"] == "Plaintiff" and name_key(p["name"]) in
+                    {"usa", "united states", "united states of america"} else "")
         else:
-            roles.add({"Defendant": "Civil Defense", "Plaintiff": "Civil Plaintiff"}.get(p["role"], ""))
-    if len(roles) != 1 or "" in roles:
-        result["warnings"].append("Counsel side is ambiguous or unsupported.")
-        return result
-    result["team"] = next(iter(roles))
-    if result["warnings"]:
-        return result
+            role = CIVIL_TEAMS.get(p["role"], "")
+        roles.add(role)
+    result["teams"] = sorted(roles - {""})
+    if "" in roles or not roles or (report["caseType"] == "Criminal" and len(roles) != 1):
+        items.append(issue("needs-review", "unsupported-or-conflicting-role",
+                           "Counsel side is ambiguous or unsupported.", field="team"))
+        result["fieldStatus"]["team"] = "needs-review"
+    else:
+        result["team"] = next(iter(roles)) if len(roles) == 1 else "Multiple roles"
+        result["fieldStatus"]["team"] = "resolved"
+    if report["warnings"]:
+        result["fieldStatus"]["nature"] = "needs-review"
+        return finish()
     if report["caseType"] == "Civil":
-        result["nature"] = report["natureOfSuit"]
-        return result
+        result["nature"] = report["natureOfSuit"] or NOT_LISTED
+        result["fieldStatus"]["nature"] = "resolved" if report["natureOfSuit"] else "missing-source"
+        if not report["natureOfSuit"]:
+            items.append(issue("missing-source", "nature-not-listed", "Civil Nature of Suit is not listed.", field="nature"))
+        return finish()
+    if not result["team"]:
+        result["fieldStatus"]["nature"] = "needs-review"
+        return finish()
     subjects = matched if result["team"] == "Criminal Defense" else [p for p in report["parties"] if p["role"] == "Defendant"]
     result["countScope"] = "represented defendants" if result["team"] == "Criminal Defense" else "case defendants; attorney represents the government"
-    profiles = []
+    if not subjects:
+        items.append(issue("missing-source", "defendants-not-listed", "No defendants are listed in the parsed party table.", field="nature"))
     for p in subjects:
-        try:
-            counts = selected_counts(p)
-            result["selectedCounts"].append({"party": p["name"], "counts": counts})
-            profiles.append(summarize_counts(counts))
-        except RocError as exc:
-            result["warnings"].append(p["name"] + ": " + str(exc))
-    if result["warnings"]:
-        return result
-    if len(set(profiles)) != 1:
-        result["warnings"].append("Multiple defendants have different charge profiles; review per-party evidence instead of merging count numbers.")
-        return result
-    result["nature"] = profiles[0]
-    return result
+        counts = listed_counts(p)
+        result["selectedCounts"].append({"party": p["name"], "defendantNumber": p.get("defendantNumber"), "counts": counts})
+        summary = summarize_counts(counts) if counts else NOT_LISTED
+        state = "resolved" if counts else "missing-source"
+        if not counts:
+            items.append(issue("missing-source", "counts-not-listed", "No structured counts are listed for this defendant.",
+                               party=p["name"], field="nature"))
+        if p["warnings"]:
+            items.extend(issue("needs-review", "count-layout", w, party=p["name"], field="nature") for w in p["warnings"])
+            state = "needs-review"
+        result["countSummaries"].append({"party": p["name"], "defendantNumber": p.get("defendantNumber"),
+                                          "text": summary, "status": state})
+    summaries = result["countSummaries"]
+    if len(summaries) == 1:
+        result["nature"] = summaries[0]["text"]
+    elif summaries:
+        # Names are needed only when distinguishing multiple defendants in one case.
+        result["nature"] = "\n".join(s["party"] +
+            (" (defendant " + s["defendantNumber"] + ")" if s.get("defendantNumber") else "") +
+            ": " + s["text"] for s in summaries)
+    else:
+        result["nature"] = NOT_LISTED
+    states = {s["status"] for s in summaries}
+    result["fieldStatus"]["nature"] = ("needs-review" if "needs-review" in states else
+        "partial" if len(states) > 1 else "resolved" if states == {"resolved"} else "missing-source")
+    return finish()

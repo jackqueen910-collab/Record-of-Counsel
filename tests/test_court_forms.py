@@ -163,7 +163,7 @@ class CourtFormTests(unittest.TestCase):
                         "pacerLink": profile.origin.replace('https:', 'http:') + "/cgi-bin/iqquerymenu.pl?fictional"}
                 path = retriever.retrieve(case)
                 parsed = enrich(parse_report(path.read_text(encoding="utf-8")), ["Jordan Lawyer"])
-                self.assertEqual(parsed["nature"], "Wire fraud (count 1).")
+                self.assertEqual(parsed["nature"], "18:1343.F FRAUD BY WIRE (1)")
                 self.assertEqual(parsed["representedParties"], ["Client"])
                 calls = len(received)
                 self.assertEqual(retriever.retrieve(case), path)
