@@ -19,10 +19,11 @@ def api_fee(raw):
 
 
 class RunStore:
-    def __init__(self, root, budget_cents):
+    def __init__(self, root, budget_cents, checkpoint=None):
         self.root = Path(root)
         self.root.mkdir(parents=True, exist_ok=True)
         self.limit = budget_cents
+        self.checkpoint = checkpoint or (lambda: None)
         if type(budget_cents) is not int or budget_cents < 0:
             raise RocError("Budget must be a nonnegative integer number of cents.")
         self.lock = self.root / ".run.lock"
@@ -67,6 +68,7 @@ class RunStore:
         return None
 
     def reserve(self, kind, parameters, max_cents):
+        self.checkpoint()
         self.check_pending()
         if self.spent + max_cents > self.limit:
             raise RocError(f"Budget stop: ${self.spent / 100:.2f} spent; next request reserves ${max_cents / 100:.2f}; limit ${self.limit / 100:.2f}.")

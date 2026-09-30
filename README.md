@@ -18,6 +18,31 @@ The main output columns are Case number, Case title, Case Type, Team, Court, Dis
 
 ## Run the free offline demo
 
+### Browser workspace
+
+After the Python/runtime setup below, double-click **`Start-ROC.cmd`** on Windows, or run:
+
+```console
+python -m roc ui
+```
+
+ROC opens a local browser interface. Nothing is hosted, no chat agent is required, and opening it submits no PACER requests. Keep its terminal open: the existing official API sign-in prompt appears there when you explicitly start a live operation. Credentials are never entered into the web form. **Open free demo** exercises the whole interface with one fictional case and no authentication, network access to PACER, or charges.
+
+1. Enter the lawyer's first/last name, optional filing dates/districts and a total run spending cap. Optional full-name aliases affect docket counsel matching, not the API search. Leaving courts unselected searches all federal courts, including prosecution records.
+2. **Search cases** performs only the official PCL attorney search and saves the index. It never automatically buys dockets. Search charges count against the cap. An incomplete search can be resumed explicitly using purchased pages.
+3. Filter, sort and select individual cases. **Review docket selection** previews the exact cases, saved reports, maximum additional charge and remaining cap. Selecting a page affects only that visible page; selections outside a filter remain visibly counted. **Retrieve these dockets** is the separate action that starts court-web retrieval. The controller requires enough budget for the entire selection's $3-per-new-report ceiling; actual charges can be lower. It never purchases filings or substitutes unselected cases.
+4. Inspect full charge text, matched parties and categorized findings in case details. Download Excel, CSV, HTML, evidence or findings directly. Later retrievals retain earlier enrichment. **Rebuild exports from saved data** uses the existing index and purchased reports without network access.
+
+The sidebar retains runs across launches under `runs/workspace`. Opening a saved run never resumes it automatically. New searches create separate snapshots and ledgers; use Resume for an interrupted operation instead of creating a duplicate search. Existing CLI run folders stay separate and are not automatically imported into this workspace. Google Sheets publishing and client/opposing-party reports are not part of this interface yet.
+
+**Pause after current request** is cooperative: the current response and receipt are saved before the next purchase can begin. It does not cancel a request already sent, a full-report continuation under its existing reservation, or a terminal sign-in prompt. Closing the browser tab does not stop the worker. The API session is retained in this process across searches and retrievals; an expired session requires explicit **New API sign-in**, then **Resume saved operation**. Reopening the program never restores credentials from disk.
+
+An uncertain receipt blocks further purchases. **Check saved receipts** attempts offline reconciliation only and never assumes an unknown charge is zero. If no receipt was saved, PACER billing/manual review is still needed. Changing the run cap never clears receipts or starts work. Existing run-folder locks still apply; a separate `.workspace.lock` prevents two interface processes from using the same workspace. After a crash, confirm the prior process has ended before removing that lock. Search parameters are fixed within a run.
+
+The interface listens only on `127.0.0.1`, checks the exact local Host/Origin and requires a per-process access token for its APIs and downloads. It serves only packaged UI assets and explicitly listed exports, not arbitrary local files. No remote fonts, scripts, analytics or UI services are used. `--no-open` prints the local link instead of opening a browser; `--directory` chooses another workspace. This is the development/local interface, not a decision about hosting or deployment on colleagues' managed computers.
+
+### Command-line demo
+
 Use Python 3.11 or newer. From the repository directory:
 
 ```console
@@ -214,6 +239,8 @@ The browser regression tests use fictional local forms and block network request
 | `roc/review.py` | Categorized source omissions, untested capabilities and review items |
 | `roc/output.py` | XLSX/CSV/HTML and optional Google Sheets |
 | `roc/cli.py` | Single runnable workflow |
+| `roc/workspace.py` | Separate search, preview, explicit selection, recovery and cumulative export controller |
+| `roc/interface.py`, `roc/ui/` | Local browser interface; terminal authentication and no hosted service |
 
 Public interface references: [PACER authentication API](https://pacer.uscourts.gov/sites/default/files/files/PACER%20Authentication%20API-2025_v2_0.pdf), [PCL API](https://pacer.uscourts.gov/sites/default/files/files/PCL-API-08-2026-1.pdf), [Playwright](https://playwright.dev/python/docs/intro), [Google Sheets API](https://developers.google.com/workspace/sheets/api/reference/rest/v4/spreadsheets/batchUpdate).
 

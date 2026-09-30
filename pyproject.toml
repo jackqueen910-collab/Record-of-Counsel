@@ -19,4 +19,4 @@ roc = "roc.cli:main"
 include = ["roc*"]
 
 [tool.setuptools.package-data]
-roc = ["district_courts.json"]
+roc = ["district_courts.json", "ui/*.html", "ui/*.css", "ui/*.js", "ui/*.json"]

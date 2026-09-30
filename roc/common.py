@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import time
 import unicodedata
 from datetime import datetime, timezone
 from pathlib import Path
@@ -21,7 +22,17 @@ def write_json(path, value):
     path.parent.mkdir(parents=True, exist_ok=True)
     temp = path.with_suffix(path.suffix + ".tmp")
     temp.write_text(json.dumps(value, ensure_ascii=False, indent=2), encoding="utf-8")
-    temp.replace(path)
+    # Windows readers (including our UI status polling) briefly deny deletion
+    # of the old file. Retry only this atomic local rename, never the operation
+    # that produced the data or any paid/authentication request.
+    for attempt in range(7):
+        try:
+            temp.replace(path)
+            break
+        except PermissionError as exc:
+            if getattr(exc, "winerror", None) not in (5, 32) or attempt == 6:
+                raise
+            time.sleep(0.02 * 2 ** attempt)
 
 
 def read_json(path):

@@ -20,7 +20,7 @@ def resolve(base, value):
     return (base / value).resolve()
 
 
-def run(config_path, live=False, publish=False, session_provider=None):
+def run(config_path, live=False, publish=False, session_provider=None, checkpoint=None):
     config_path = Path(config_path).resolve()
     config = read_json(config_path)
     validate_options(config)
@@ -39,10 +39,11 @@ def run(config_path, live=False, publish=False, session_provider=None):
                             "dockets": "court web reports" if live else "saved reports"}}
     session = None
     stop_reason = None
-    with RunStore(run_dir, budget) as store:
+    with RunStore(run_dir, budget, checkpoint=checkpoint) as store:
         progress = Progress(run_dir)
         progress("starting", f"ROC: {first} {last}. Run-folder spending limit: ${budget / 100:.2f}.")
         store.check_pending()
+        store.checkpoint()
         source = config.get("indexFile")
         if source:
             records = records_from(read_json(resolve(base, source)))
@@ -80,6 +81,7 @@ def run(config_path, live=False, publish=False, session_provider=None):
                                        allow_unverified=config.get("allowUnverifiedCourts", False))
             for case in selected:
                 try:
+                    store.checkpoint()
                     path = retriever.retrieve(case)
                     reports.append({"courtId": case["courtId"], "caseNumber": case["caseNumber"], "path": str(path)})
                 except RocError as exc:
@@ -158,6 +160,10 @@ def plan_run(config_path):
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Record of Counsel — deterministic, on-demand PACER workflow")
     sub = parser.add_subparsers(dest="command", required=True)
+    interface = sub.add_parser("ui", help="Open the local search, preview, docket selection and export interface.")
+    interface.add_argument("--directory", type=Path, default=Path("runs/workspace"))
+    interface.add_argument("--port", type=int, default=0)
+    interface.add_argument("--no-open", action="store_true", help="Print the local URL without opening a browser.")
     task = sub.add_parser("run", help="Build a case index and enrich selected dockets. Offline by default.")
     task.add_argument("config", type=Path)
     task.add_argument("--live", action="store_true", help="Enable official API searches and bounded court-web report selection within configured budget.")
@@ -175,6 +181,9 @@ def main(argv=None):
     validate.add_argument("--keep-session", action="store_true")
     args = parser.parse_args(argv)
     try:
+        if args.command == "ui":
+            from .interface import serve
+            return serve(args.directory, args.port, not args.no_open)
         if args.command == "validate-courts":
             if args.keep_session:
                 if not args.live:
