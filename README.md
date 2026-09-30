@@ -124,6 +124,8 @@ This creates a new workbook and returns its URL. It does not overwrite the exist
 
 `tests/` contains synthetic cases for defense, prosecution, civil sides, unrelated co-defendants, conflicting aliases, superseded counts, incomplete tables, safe export, request caching, budgets, failed login, and receipt recovery. The saved real two-docket pilot is tested locally and is intentionally excluded from Git.
 
+The browser regression tests use fictional local forms and block network requests. They check the keyboard-driven case finder, main-case versus defendant-subcase selection, removal of default date/document limits, inclusion of parties/counsel, and exclusion of document purchases. Run them with `ROC_BROWSER_TESTS=1` after installing the optional Playwright runtime; GitHub Actions includes them. They validate form handling, not live court coverage.
+
 | Module | Purpose |
 |---|---|
 | `roc/pacer.py` | Official authentication and PCL pagination |

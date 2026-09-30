@@ -8,6 +8,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: python -m pip install -e .
+      - run: python -m pip install -e ".[live]"
+      - run: python -m playwright install --with-deps chromium
       - run: python -m unittest discover -v
+        env:
+          ROC_BROWSER_TESTS: '1'
       - run: python -m roc run examples/demo.json

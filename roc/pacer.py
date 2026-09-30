@@ -127,7 +127,7 @@ def collect_index(session, criteria, store, delay=5, max_pages=1000, progress=No
     rows, total, seen_pages = [], None, set()
     spent_at_start = store.spent
     for page in range(max_pages):
-        if page:
+        if page and store.cached("pcl", {"criteria": criteria, "page": page}) is None:
             time.sleep(delay)
         response = session.search_page(criteria, page, store)
         info, content = response.get("pageInfo", {}), response.get("content", [])
