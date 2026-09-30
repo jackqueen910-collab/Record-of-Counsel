@@ -32,6 +32,22 @@ def report(parties, kind="CRIMINAL", receipt=True):
 
 
 class ParserTests(unittest.TestCase):
+    def test_pro_se_party_is_not_an_attorney(self):
+        html = report(party("Plaintiff", "Self Represented", "Self Represented<br>PRO SE"), "CIVIL")
+        # In real CM/ECF, the marker follows the bold name, outside that tag.
+        html = html.replace("<b>Self Represented<br>PRO SE</b>", "<b>Self Represented</b><br>PRO SE")
+        parsed = parse_report(html)
+        self.assertEqual(parsed["parties"][0]["counsel"], [])
+        self.assertEqual(parsed["parties"][0]["selfRepresentedNames"], ["Self Represented"])
+        self.assertEqual(enrich(parsed, ["Self Represented"])["team"], "")
+
+    def test_pro_se_marker_does_not_remove_other_attorney_in_same_cell(self):
+        html = report(party("Defendant", "Client", "Real Attorney", count("18:111.F ASSAULT", "1")))
+        html = html.replace("<b>Real Attorney</b>", "<b>Client</b><br>PRO SE<br><b>Real Attorney</b><br>ATTORNEY TO BE NOTICED")
+        parsed = parse_report(html)
+        self.assertEqual(parsed["parties"][0]["counsel"], ["Real Attorney"])
+        self.assertEqual(enrich(parsed, ["Real Attorney"])["team"], "Criminal Defense")
+
     def test_client_specific_not_all_defendants(self):
         html = report(party("Defendant", "Client", "Jordan Lawyer", count("18:1343.F FRAUD BY WIRE", "2s")) +
                       party("Defendant", "Other Person", "Other Attorney", count("18:111.F ASSAULT", "1s"), "2"))

@@ -4,14 +4,59 @@ This is web retrieval, NOT a PACER document API. It uses the official API token.
 The supported form contract is deliberately narrow; unknown forms stop before Run Report.
 """
 import re
-from urllib.parse import urlparse
+from html import escape
+from urllib.parse import urlparse, urljoin
 from xml.etree import ElementTree
 
-from .common import RocError, normalize_case_number, fingerprint, write_json
-from .docket import parse_report
+from .common import RocError, normalize_case_number, fingerprint, write_json, now, clean
+from .docket import parse_report, Tree
 from .courts import profile_for_url, profile_for_case, require_enabled
 
 COURT_TOKEN_COOKIE = "NextGenCSO"  # Court cookie is case-sensitive; API JSON uses nextGenCSO.
+LARGE_REPORT_NOTICE = "The report may take a long time to run because this case has many docket entries."
+
+
+def large_report_confirmation(raw, origin):
+    """Recognize only the observed full-report continuation, not a new purchase."""
+    tree = Tree(raw).root
+    text = clean(tree.text())
+    if LARGE_REPORT_NOTICE not in text or "as initially requested" not in text:
+        return None
+    if "Transaction Receipt" in text or "DOCKET FOR CASE" in text:
+        return None
+    forms = list(tree.walk("form"))
+    if len(forms) != 1 or forms[0].attrs.get("method", "").lower() != "post":
+        raise RocError("Unfamiliar large-report confirmation form; do not resubmit.")
+    target = urljoin(origin + "/cgi-bin/DktRpt.pl", forms[0].attrs.get("action", ""))
+    parsed = urlparse(target)
+    if (profile_for_url(target).origin != origin or parsed.path != "/cgi-bin/DktRpt.pl"
+            or not re.fullmatch(r"\d+-L_\d+_\d+-\d+", parsed.query) or parsed.fragment):
+        raise RocError("Large-report confirmation target is unfamiliar; do not resubmit.")
+    controls = list(forms[0].walk("input"))
+    radios = [n for n in controls if n.attrs.get("name") == "date_from"]
+    if (len(radios) != 4 or any(n.attrs.get("type", "").lower() != "radio" for n in radios)
+            or sum(n.attrs.get("value") == "" for n in radios) != 1
+            or any(n.attrs.get("name") not in ("date_from", "button1", "reset") for n in controls)):
+        raise RocError("Unfamiliar large-report confirmation controls; do not resubmit.")
+    return target
+
+
+def pending_confirmation(store):
+    """Unknown charges still block everything; one saved continuation can resume."""
+    pending = [t for t in store.ledger["transactions"] if t["state"] != "complete"]
+    if not pending:
+        store.check_pending()
+        return None
+    if len(pending) == 1 and not store.ledger.get("stoppedReason"):
+        t = pending[0]
+        path = store.root / t["responseFile"]
+        if t["kind"] == "docket" and path.exists() and not t.get("confirmationSubmittedUtc"):
+            from .courts import court_profile
+            profile = court_profile(t["parameters"]["court"])
+            if large_report_confirmation(path.read_text(encoding="utf-8"), profile.origin):
+                return t
+    store.check_pending()
+    return None
 
 
 def court_cookies(session, origin):
@@ -243,12 +288,7 @@ class CourtRetriever:
                 except Exception:
                     # A timeout can occur after submission. Observe; NEVER click again.
                     pass
-                try:
-                    page.get_by_text("Transaction Receipt", exact=True).wait_for(timeout=120000)
-                finally:
-                    raw = page.content()
-                    saved = self.store.finish(transaction, raw)
-                adapter.validate_report(raw, case, profile)
+                saved = self.finish_report(page, transaction, case, profile, adapter)
                 for cookie in context.cookies(origin):
                     if cookie["name"] == COURT_TOKEN_COOKIE:
                         self.session.token = cookie["value"]
@@ -261,6 +301,88 @@ class CourtRetriever:
             except Exception:
                 self.save_form_diagnostic(page, case, phase)
                 raise RocError(f"Court-web retrieval failed while {phase}. Inspect the saved ledger; no report was automatically resubmitted.") from None
+            finally:
+                context.close()
+                browser.close()
+
+    def finish_report(self, page, transaction, case, profile, adapter):
+        try:
+            page.wait_for_function("""() => document.body &&
+                (document.body.innerText.includes('Transaction Receipt') ||
+                 document.body.innerText.includes('The report may take a long time to run because this case has many docket entries.'))""",
+                timeout=120000)
+        except Exception:
+            pass  # Save what arrived; never click the initial report button again.
+        raw = page.content()
+        if large_report_confirmation(raw, profile.origin):
+            self.store.save_response(transaction, raw)
+            return self.finish_confirmation(page, transaction, case, profile, adapter)
+        saved = self.store.finish(transaction, raw)
+        adapter.validate_report(raw, case, profile)
+        return saved
+
+    def finish_confirmation(self, page, transaction, case, profile, adapter):
+        if transaction.get("confirmationSubmittedUtc"):
+            raise RocError("This report continuation was already submitted; receipt review is required before another request.")
+        original = page.locator('input[type="radio"][name="date_from"][value=""]')
+        if original.count() != 1:
+            raise RocError("Full-report confirmation option is missing; no continuation submitted.")
+        original.check()
+        # Mark before the click. A timeout/crash must never replay this POST.
+        transaction["confirmationSubmittedUtc"] = now()
+        self.store.save()
+        self.progress("confirming_full_report", f"Confirming the full report already requested for {case['key']}; same $3 reservation.",
+                      chargedCents=self.store.spent)
+        try:
+            page.get_by_role("button", name="Run Report", exact=True).click()
+        except Exception:
+            pass
+        try:
+            page.get_by_text("Transaction Receipt", exact=True).wait_for(timeout=120000)
+        except Exception:
+            pass  # Receipt parsing below decides whether the reservation resolves.
+        finally:
+            raw = page.content()
+            saved = self.store.finish(transaction, raw)
+        adapter.validate_report(raw, case, profile)
+        return saved
+
+    def resume_confirmation(self, transaction, case):
+        """Finish a saved, never-submitted confirmation using its original action.
+
+        The report form is NOT reopened. A local browser form posts the observed
+        original action and date_from='' once, under the same reservation.
+        """
+        profile = profile_for_case(case)
+        require_enabled(profile, self.allow_unverified)
+        if (transaction is not pending_confirmation(self.store)
+                or transaction["parameters"]["court"] != case["courtId"]
+                or transaction["parameters"]["caseNumber"] != case["caseNumber"]):
+            raise RocError("Saved continuation does not match this selected case.")
+        if self.store.spent + transaction["reservedCents"] > self.store.limit:
+            raise RocError("Remaining budget does not cover the existing report reservation.")
+        raw = (self.store.root / transaction["responseFile"]).read_text(encoding="utf-8")
+        target = large_report_confirmation(raw, profile.origin)
+        adapter = ADAPTERS[profile.adapter]
+        from playwright.sync_api import sync_playwright
+        with sync_playwright() as pw:
+            browser = pw.chromium.launch(headless=self.headless)
+            context = browser.new_context()
+            context.add_cookies(court_cookies(self.session, profile.origin))
+            page = context.new_page()
+            local_url = profile.origin + "/__roc_saved_report_confirmation__"
+            # Intercept this synthetic navigation completely. Only the final
+            # observed form action is allowed to reach the court.
+            form = ('<form method="post" enctype="multipart/form-data" action="' + escape(target, quote=True) + '">'
+                    '<input type="radio" name="date_from" value=""><button type="submit">Run Report</button></form>')
+            page.route(local_url, lambda route: route.fulfill(content_type="text/html", body=form))
+            try:
+                page.goto(local_url)
+                saved = self.finish_confirmation(page, transaction, case, profile, adapter)
+                for cookie in context.cookies(profile.origin):
+                    if cookie["name"] == COURT_TOKEN_COOKIE:
+                        self.session.token = cookie["value"]
+                return saved
             finally:
                 context.close()
                 browser.close()

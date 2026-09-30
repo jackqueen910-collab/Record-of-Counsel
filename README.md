@@ -151,6 +151,8 @@ The batch buys **one official PCL case-search results page (up to 54 records) pe
 
 All discovery finishes through the official API before reports are requested from court websites. Authentication, API, form, receipt and report-identity failures stop the batch; no browser search or login fallback occurs. Resume reuses saved search pages and reports. Changing the court/type/date scope requires a new run folder, preventing an unnoticed expansion of an existing batch.
 
+Some courts insert a large-report confirmation after the initial report submission. ROC recognizes the observed four-option date-range form and chooses **as initially requested**, preserving the full report. It saves that checkpoint and submits the continuation once under the original $3 reservation. If a saved confirmation was never submitted, an explicit batch resume can post that original form action without reopening or resubmitting the initial report. A durable marker prevents repeating the continuation after a timeout or crash. Unknown responses, already-submitted confirmations without receipts and multiple pending requests still block further purchases; the program never assumes their charges are zero.
+
 Each saved report is parsed once and tested against the attorneys found in its party/counsel blocks. This exercises civil plaintiff/defense or prosecution/criminal defense roles and client-specific counts without additional report purchases. `validation-results.json` preserves parsed parties, individual attorney trials, warnings and source file paths; `validation-report.html` gives a readable progress/results table. These are automated structural and consistency checks, **not independent verification of every source field**. Missing roles, missing civil Nature of Suit or absent usable defense counts produce review items. The command never promotes a court's registry status automatically; source review is a separate step.
 
 ## Receipts, interrupted runs and duplicate charges
@@ -176,6 +178,7 @@ This creates a new workbook and returns its URL. It does not overwrite the exist
 ## Rules and limits
 
 - Attorney matching is exact after punctuation/case normalization, using configured aliases. Similar surnames or incompatible middle initials do not automatically match.
+- A party marked PRO SE in the court's representation column is retained as self-represented, not classified as an attorney. Mixed representation cells retain actual lawyers separately.
 - Team comes from the represented party's role, never the case filing date or case title.
 - Prosecution is recognized when the matched attorney represents the United States. Prosecution charge summaries describe defendants' charges, not charges against the government.
 - Different charge profiles for multiple clients/defendants are flagged for review rather than flattened into misleading count numbers.

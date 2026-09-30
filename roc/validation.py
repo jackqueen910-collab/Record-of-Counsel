@@ -15,7 +15,7 @@ from .docket import enrich, parse_report
 from .index import build_index
 from .pacer import Session
 from .progress import Progress
-from .retrieve import CourtRetriever
+from .retrieve import CourtRetriever, pending_confirmation
 from .store import RunStore
 
 
@@ -180,7 +180,7 @@ def run_validation(config_path, live=False, session_provider=None):
         return 0
     root = (path.parent / config["runDirectory"]).resolve()
     with RunStore(root, config["budgetCents"]) as store:
-        store.check_pending()
+        continuation = pending_confirmation(store)
         progress = Progress(root)
         manifest_path = root / "validation-plan.json"
         identity = fingerprint({"slots": plan["slots"], "methods": plan["methods"]})
@@ -192,6 +192,15 @@ def run_validation(config_path, live=False, session_provider=None):
         session = (session_provider or Session.prompt)()
         retriever = CourtRetriever(session, store, headless=config.get("headless", True), progress=progress,
                                    allow_unverified=config.get("allowUnverifiedCourts", False))
+        if continuation:
+            prior = read_json(root / "validation-results.json")
+            matches = [s["case"] for s in prior["samples"] if s.get("case") and
+                       s["case"]["courtId"] == continuation["parameters"]["court"] and
+                       s["case"]["caseNumber"] == continuation["parameters"]["caseNumber"]]
+            if len(matches) != 1:
+                raise RocError("Pending confirmation has no unique saved case selection.")
+            retriever.resume_confirmation(continuation, matches[0])
+            store.check_pending()
         samples = []
         delay = config.get("requestDelaySeconds", 5)
         reason = None

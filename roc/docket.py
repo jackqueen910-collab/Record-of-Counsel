@@ -86,6 +86,32 @@ def expand_count_ids(label):
     return result
 
 
+def counsel_blocks(cell):
+    """CM/ECF also puts self-represented parties in its counsel column.
+
+    Read each bold name with its following block so PRO SE on one entry does
+    not remove other, actual attorneys from the same cell.
+    """
+    blocks = []
+    def visit(node):
+        if node.tag == "b":
+            blocks.append({"name": clean(node.text()), "text": node.text()})
+            return
+        for child in node.children:
+            if isinstance(child, Node):
+                visit(child)
+            elif blocks:
+                blocks[-1]["text"] += child
+    visit(cell)
+    attorneys, self_represented = [], []
+    for block in blocks:
+        if not block["name"]:
+            continue
+        target = self_represented if re.search(r"\bPRO[\s-]*SE\b", block["text"], re.I) else attorneys
+        target.append(block["name"])
+    return attorneys, self_represented
+
+
 def parse_report(html):
     root = Tree(html).root
     headings = [clean(n.text()) for n in root.walk("h3")]
@@ -117,7 +143,7 @@ def parse_report(html):
             if names:
                 party["name"] = names[0]
                 if len(cells) >= 3 and "represented" in values[1].lower():
-                    party["counsel"] = [clean(b.text()) for b in cells[-1].walk("b")]
+                    party["counsel"], party["selfRepresentedNames"] = counsel_blocks(cells[-1])
                 continue
         if values[0] in ("Pending Counts", "Terminated Counts", "Complaints"):
             section = values[0]

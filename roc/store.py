@@ -79,13 +79,18 @@ class RunStore:
         self.save()
         return t
 
-    def finish(self, transaction, raw):
+    def save_response(self, transaction, raw):
+        """Save an authentic reply without resolving its outstanding reservation."""
         path = self.root / transaction["responseFile"]
         path.parent.mkdir(parents=True, exist_ok=True)
         # Save the full reply BEFORE interpreting the receipt.
         temp = path.with_suffix(path.suffix + ".tmp")
         temp.write_text(raw, encoding="utf-8")
         temp.replace(path)
+        return path
+
+    def finish(self, transaction, raw):
+        path = self.save_response(transaction, raw)
         cost = receipt_cents(raw) if transaction["kind"] == "docket" else api_fee(raw)
         transaction.update(state="complete", chargedCents=cost, completedUtc=now())
         if cost > transaction["reservedCents"]:
