@@ -274,6 +274,7 @@ class CourtRetriever:
                               chargedCents=self.store.spent)
                 page.goto(origin + adapter.report_path, wait_until="load")
                 if urlparse(page.url).hostname != urlparse(origin).hostname:
+                    self.session.usable = False
                     raise RocError("Court redirected to sign-in. Stop; no browser-login fallback.")
                 phase = "finding the case"
                 adapter.select_case(page, number)

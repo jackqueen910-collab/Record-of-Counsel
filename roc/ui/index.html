@@ -10,7 +10,7 @@
     <div class="sidebar-bottom"><span class="status-dot"></span> Running on this computer<br><small>Official PCL API · court docket reports</small></div>
   </aside>
   <main>
-    <header><span id="breadcrumb">Workspace / New search</span><span class="local-badge">LOCAL WORKSPACE</span></header>
+    <header><span id="breadcrumb">Workspace / New search</span><div class="connection-controls"><span id="connection-status" class="tag">Sign-in required</span><button id="connect-pacer" class="secondary">Connect PACER</button><button id="disconnect-pacer" class="text-button" hidden>Disconnect</button><button id="stop-roc" class="text-button">Stop ROC</button></div></header>
     <div id="notice" role="alert" hidden></div>
     <section id="search-view">
       <div class="eyebrow">START WITH THE RECORD</div>
@@ -28,7 +28,7 @@
           <p class="help" id="court-help">Leave unselected for all federal courts. Hold Ctrl (⌘ on Mac) to select multiple districts. Docket retrieval is available for sampled state and D.C. district courts.</p>
         </details>
         <div class="budget-box"><label>Maximum total spend for this run<div class="money-input"><span>$</span><input name="budget" type="number" min="0.10" step="0.01" required placeholder="10.00"></div></label><p>Includes the case search and any dockets you later select. ROC stops at the cap. No docket is purchased by this search.</p></div>
-        <div class="form-footer"><span>Sign-in appears in the ROC terminal when needed.</span><button type="submit" class="primary" id="search-submit">Search cases →</button></div>
+        <div class="form-footer"><span>Connect PACER here when you're ready. No terminal needed.</span><button type="submit" class="primary" id="search-submit">Search cases →</button></div>
       </form>
       <div class="demo-callout"><div><strong>Take a look around first.</strong><p>Try the complete workflow with a fictional case. No sign-in. No charges.</p></div><button id="demo" class="secondary">Open free demo ↗</button></div>
     </section>
@@ -50,4 +50,12 @@
   <dialog id="quote-dialog"><form method="dialog"><button class="dialog-close" aria-label="Close preview">×</button></form><div class="eyebrow">BEFORE RETRIEVAL</div><h2>Your docket selection</h2><p id="quote-text"></p><div class="quote-amount"><span>Maximum additional charge</span><strong id="quote-cost"></strong></div><p id="quote-budget"></p><div id="quote-cases"></div><p class="help">Full docket reports with parties and counsel, retrieved from court websites using the API session. This does not buy filings. Actual charges may be lower than the $3-per-new-report ceiling.</p><button id="confirm-retrieve" class="primary">Retrieve these dockets</button></dialog>
   <dialog id="case-dialog"><form method="dialog"><button class="dialog-close" aria-label="Close case">×</button></form><div class="eyebrow">CASE DETAIL</div><h2 id="detail-number"></h2><p id="detail-title"></p><div id="detail-fields"></div><h3>Nature of Case</h3><pre id="detail-nature"></pre><h3>Source findings</h3><div id="detail-issues"></div></dialog>
   <dialog id="cap-dialog"><form id="cap-form"><button type="button" class="dialog-close" id="close-cap" aria-label="Close spending cap">×</button><div class="eyebrow">SPENDING CONTROL</div><h2>Change this run’s total cap</h2><p>Existing charges still count. Changing the cap does not start or resume any requests.</p><label>Total cap in dollars<input id="cap-input" type="number" min="0.10" step="0.01" required></label><button class="primary" type="submit">Save spending cap</button></form></dialog>
+  <dialog id="auth-dialog" aria-labelledby="auth-heading"><form id="auth-form" autocomplete="off"><button type="button" class="dialog-close" id="close-auth" aria-label="Close sign-in">×</button><div class="eyebrow">OFFICIAL PACER API</div><h2 id="auth-heading">Connect PACER</h2><p id="auth-context">Connect your PACER account to this ROC session. Signing in alone does not start a search.</p><div id="auth-message" class="auth-message" role="status" aria-live="polite" hidden></div>
+    <label>PACER username<input id="auth-username" name="username" required maxlength="1024" autocomplete="off" spellcheck="false" autocapitalize="none"></label>
+    <label>PACER password<div class="password-field"><input id="auth-password" name="password" type="text" required maxlength="1024" autocomplete="off" spellcheck="false" autocapitalize="none"><button type="button" id="toggle-password" class="secondary" aria-label="Hide password">Hide</button></div></label>
+    <div class="two-columns"><label>MFA code <span class="optional">if enabled</span><input id="auth-otp" name="otp" type="text" maxlength="1024" autocomplete="off" spellcheck="false"></label><label>Client code <span class="optional">if required</span><input id="auth-client" name="clientCode" maxlength="1024" autocomplete="off"></label></div>
+    <div class="redaction-notice"><p id="redaction-text"></p><label class="checkbox-label"><input id="auth-redact" type="checkbox" required>I have read and will comply with the redaction rules.</label></div>
+    <p class="help">Password entry is visible; use Hide if you prefer. ROC sends these details to PACER's official authentication API. Passwords and MFA codes are not saved in ROC files or logs.</p><button id="auth-submit" type="submit" class="primary">Connect PACER</button>
+  </form></dialog>
+  <dialog id="stop-dialog"><div class="eyebrow">CLOSE THE WORKSPACE</div><h2>Stop ROC?</h2><p>Any request already submitted will finish so its receipt can be saved. No further requests will begin. Your saved runs will be here when you reopen ROC.</p><div class="dialog-actions"><button id="cancel-stop" class="secondary">Keep working</button><button id="confirm-stop" class="primary">Stop ROC</button></div></dialog>
 </body></html>

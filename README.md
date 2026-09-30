@@ -20,13 +20,15 @@ The main output columns are Case number, Case title, Case Type, Team, Court, Dis
 
 ### Browser workspace
 
-After the Python/runtime setup below, double-click **`Start-ROC.cmd`** on Windows, or run:
+After the Python/runtime setup below, double-click **`Start-ROC.cmd`** on Windows. It starts `pythonw` in the background and exits; no terminal remains open. For a shortcut that avoids even the command launcher's brief window, run `Create-ROC-Shortcut.ps1` once and then double-click **Start ROC** in the project folder. The shortcut uses this machine's `.venv` and is not committed to Git. A developer can also run:
 
 ```console
 python -m roc ui
 ```
 
-ROC opens a local browser interface. Nothing is hosted, no chat agent is required, and opening it submits no PACER requests. Keep its terminal open: the existing official API sign-in prompt appears there when you explicitly start a live operation. Credentials are never entered into the web form. **Open free demo** exercises the whole interface with one fictional case and no authentication, network access to PACER, or charges.
+ROC opens a local browser interface. Nothing is hosted, no chat agent is required, and opening it submits no PACER requests. **Connect PACER** opens a sign-in dialog in ROC with username, a visible password field and Show/Hide toggle, optional MFA/client code and the redaction acknowledgment. The local application sends those values to the same official PACER authentication API used by the CLI; it does not automate PACER's login website. A rejected login leaves the form editable and never retries automatically. Password/MFA inputs clear on success or dismissal; passwords, MFA codes and PACER session tokens are never written to ROC files or logs. No credential remembering is enabled.
+
+Connecting from the header only connects the account. If an explicitly requested search, docket retrieval or resume needs authentication, **Connect and continue** carries out that one requested action after successful authentication. Canceling the dialog cancels that continuation. Reconnecting a stopped run using **New API sign-in** retains its case selection and receipts and waits for **Resume saved operation**. Disconnect drops ROC's in-memory session; it does not revoke sessions in other PACER clients. **Open free demo** still exercises the interface with one fictional case and no authentication, network access to PACER, or charges.
 
 1. Enter the lawyer's first/last name, optional filing dates/districts and a total run spending cap. Optional full-name aliases affect docket counsel matching, not the API search. Leaving courts unselected searches all federal courts, including prosecution records.
 2. **Search cases** performs only the official PCL attorney search and saves the index. It never automatically buys dockets. Search charges count against the cap. An incomplete search can be resumed explicitly using purchased pages.
@@ -35,11 +37,11 @@ ROC opens a local browser interface. Nothing is hosted, no chat agent is require
 
 The sidebar retains runs across launches under `runs/workspace`. Opening a saved run never resumes it automatically. New searches create separate snapshots and ledgers; use Resume for an interrupted operation instead of creating a duplicate search. Existing CLI run folders stay separate and are not automatically imported into this workspace. Google Sheets publishing and client/opposing-party reports are not part of this interface yet.
 
-**Pause after current request** is cooperative: the current response and receipt are saved before the next purchase can begin. It does not cancel a request already sent, a full-report continuation under its existing reservation, or a terminal sign-in prompt. Closing the browser tab does not stop the worker. The API session is retained in this process across searches and retrievals; an expired session requires explicit **New API sign-in**, then **Resume saved operation**. Reopening the program never restores credentials from disk.
+**Pause after current request** is cooperative: the current response and receipt are saved before the next purchase can begin. It does not cancel a request already sent or a full-report continuation under its existing reservation. **Stop ROC** similarly lets an in-flight request/authentication attempt settle, blocks further work, discards the in-memory connection and stops the local app. Closing the browser tab alone does not stop the worker. Reopen the launcher to reopen the same running app without making a PACER request. The API session is retained in this process across searches and retrievals; rejected/expired sessions require sign-in again. Reauthentication never clears an uncertain receipt or automatically retries the failed purchase. Restarting the process never restores PACER credentials from disk.
 
 An uncertain receipt blocks further purchases. **Check saved receipts** attempts offline reconciliation only and never assumes an unknown charge is zero. If no receipt was saved, PACER billing/manual review is still needed. Changing the run cap never clears receipts or starts work. Existing run-folder locks still apply; a separate `.workspace.lock` prevents two interface processes from using the same workspace. After a crash, confirm the prior process has ended before removing that lock. Search parameters are fixed within a run.
 
-The interface listens only on `127.0.0.1`, checks the exact local Host/Origin and requires a per-process access token for its APIs and downloads. It serves only packaged UI assets and explicitly listed exports, not arbitrary local files. No remote fonts, scripts, analytics or UI services are used. `--no-open` prints the local link instead of opening a browser; `--directory` chooses another workspace. This is the development/local interface, not a decision about hosting or deployment on colleagues' managed computers.
+The interface listens only on `127.0.0.1`, checks the exact local Host/Origin and requires a per-process access token for its APIs, sign-in, shutdown and downloads. It serves only packaged UI assets and explicitly listed exports, not arbitrary local files. No remote fonts, scripts, analytics or UI services are used. `interface-connection.json` under the private run workspace contains the **local interface URL/access key only**, so the launcher can reopen a closed tab; this is not a PACER token and is removed on normal shutdown. It is never served as a download. The launcher probes only a validated loopback URL and does not follow redirects. `--no-open` prints the local link instead of opening a browser; `--directory` chooses another workspace. This is the development/local interface, not a decision about hosting or deployment on colleagues' managed computers.
 
 ### Command-line demo
 
@@ -240,7 +242,8 @@ The browser regression tests use fictional local forms and block network request
 | `roc/output.py` | XLSX/CSV/HTML and optional Google Sheets |
 | `roc/cli.py` | Single runnable workflow |
 | `roc/workspace.py` | Separate search, preview, explicit selection, recovery and cumulative export controller |
-| `roc/interface.py`, `roc/ui/` | Local browser interface; terminal authentication and no hosted service |
+| `roc/interface.py`, `roc/ui/` | Local browser interface, sign-in dialog and graceful Stop ROC control |
+| `roc/connection.py`, `roc/desktop.py` | In-memory API connection, windowless launcher and reopening a running app |
 
 Public interface references: [PACER authentication API](https://pacer.uscourts.gov/sites/default/files/files/PACER%20Authentication%20API-2025_v2_0.pdf), [PCL API](https://pacer.uscourts.gov/sites/default/files/files/PCL-API-08-2026-1.pdf), [Playwright](https://playwright.dev/python/docs/intro), [Google Sheets API](https://developers.google.com/workspace/sheets/api/reference/rest/v4/spreadsheets/batchUpdate).
 

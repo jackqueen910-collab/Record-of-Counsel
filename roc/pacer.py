@@ -23,6 +23,10 @@ class SignInError(RocError):
         super().__init__(f"PACER sign-in failed (code {self.code}). No automatic login retry.")
 
 
+class SessionExpired(RocError):
+    """The server rejected this session. Receipt uncertainty is still preserved."""
+
+
 class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         return None
@@ -38,6 +42,8 @@ def request_json(url, payload, headers=None):
                 raise RocError("PACER response exceeded the supported size; no retry.")
             return raw.decode("utf-8"), dict(response.headers)
     except urllib.error.HTTPError as exc:
+        if exc.code in (401, 403):
+            raise SessionExpired(f"PACER rejected access (HTTP {exc.code}). Sign in again; no automatic request retry.") from None
         raise RocError(f"PACER HTTP {exc.code}; stopped without retry.") from None
     except (urllib.error.URLError, TimeoutError, OSError):
         raise RocError("PACER connection failed; stopped without retry.") from None
@@ -46,6 +52,7 @@ def request_json(url, payload, headers=None):
 class Session:
     def __init__(self, token, client_code="", requester=request_json):
         self.token, self.client_code, self.requester = token, client_code, requester
+        self.usable = True
 
     @classmethod
     def login(cls, username, password, otp="", client_code="", redact=False, requester=request_json):
@@ -117,7 +124,11 @@ class Session:
         headers = {"X-NEXT-GEN-CSO": self.token}
         if self.client_code:
             headers["X-CLIENT-CODE"] = self.client_code
-        raw, response_headers = self.requester(f"{endpoint}?page={page}", criteria, headers)
+        try:
+            raw, response_headers = self.requester(f"{endpoint}?page={page}", criteria, headers)
+        except SessionExpired:
+            self.usable = False
+            raise
         path = store.finish(t, raw)
         rotated = next((v for k, v in response_headers.items() if k.lower() == "x-next-gen-cso"), None)
         if rotated:

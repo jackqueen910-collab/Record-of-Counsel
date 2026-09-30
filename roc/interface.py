@@ -1,19 +1,28 @@
-"""Loopback-only browser interface; PACER credentials stay in the terminal."""
+"""Loopback-only interface. Credential entry calls the official authentication API."""
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib.resources import files
 import json
 import mimetypes
 import secrets
+import threading
 from urllib.parse import urlsplit
 import webbrowser
 
-from .common import RocError
+from .common import RocError, write_json
 from .courts import DISTRICT_COURTS
 from .workspace import Workspace
 
 
 def make_server(workspace, port=0):
     token = secrets.token_urlsafe(32)
+    stopping = threading.Event()
+
+    def shutdown():
+        workspace.close(release_lock=False)  # Keep ownership until the HTTP server exits.
+        # Give connected pages a chance to observe the completed stop before closing HTTP.
+        timer = threading.Timer(2.5, server.shutdown)
+        timer.daemon = True
+        timer.start()
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *_):
@@ -55,6 +64,8 @@ def make_server(workspace, port=0):
                 parts = path.strip("/").split("/")
                 if path == "/api/runs":
                     return self.send(200, workspace.list())
+                if path == "/api/connection":
+                    return self.send(200, {"app": "ROC", **workspace.connection.status(), "stopping": workspace.stopping, "closed": workspace.closed})
                 if path == "/api/courts":
                     return self.send(200, [{"id": c.court_id, "name": c.district} for c in sorted(DISTRICT_COURTS.values(), key=lambda c: c.district)])
                 if len(parts) == 3 and parts[:2] == ["api", "runs"]:
@@ -73,6 +84,7 @@ def make_server(workspace, port=0):
                 self.send(500, {"error": "Local read failed. Refresh after the current operation finishes."})
 
         def do_POST(self):
+            value = None
             try:
                 self.guard()
                 if self.headers.get("Content-Type") != "application/json":
@@ -84,6 +96,18 @@ def make_server(workspace, port=0):
                 if not isinstance(value, dict):
                     raise RocError("Expected a JSON object.")
                 parts = urlsplit(self.path).path.strip("/").split("/")
+                if parts == ["api", "connection", "sign-in"]:
+                    workspace.sign_in(value)
+                    return self.send(200, {"ok": True})
+                if parts == ["api", "connection", "disconnect"]:
+                    workspace.disconnect()
+                    return self.send(200, {"ok": True})
+                if parts == ["api", "stop"]:
+                    if not stopping.is_set():
+                        stopping.set()
+                        workspace.request_stop()
+                        threading.Thread(target=shutdown, daemon=True).start()
+                    return self.send(200, {"stopping": True})
                 if parts == ["api", "runs"]:
                     return self.send(200, {"id": workspace.new(value)})
                 if parts == ["api", "demo"]:
@@ -100,6 +124,9 @@ def make_server(workspace, port=0):
                 pass
             except Exception:
                 self.send(500, {"error": "Local operation failed. Inspect saved status before trying again."})
+            finally:
+                if isinstance(value, dict):
+                    value.clear()  # In particular, discard the HTTP credential body.
 
     server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     server.daemon_threads = True
@@ -115,15 +142,18 @@ def serve(directory, port=0, open_browser=True):
         workspace.close()
         raise
     print("ROC interface: " + url, flush=True)
-    print("Keep this terminal open. API sign-in will appear here only after you request a live operation.", flush=True)
-    print("Closing a browser tab does not pause a job. Use Pause in the interface. Ctrl+C stops after the current request settles.", flush=True)
-    if open_browser:
-        webbrowser.open(url)
+    print("Connect PACER and Stop ROC are in the browser interface. Closing a tab does not pause a job.", flush=True)
+    connection_file = workspace.root / "interface-connection.json"
     try:
+        # This is a local UI capability for reopening a tab, never a PACER session token.
+        write_json(connection_file, {"url": url})
+        if open_browser and not webbrowser.open(url):
+            raise RocError("ROC could not open the default browser. Set a default browser, then open ROC again.")
         server.serve_forever(poll_interval=0.5)
     except KeyboardInterrupt:
         print("Stopping after the current operation reaches a safe boundary...", flush=True)
     finally:
         server.server_close()
+        connection_file.unlink(missing_ok=True)
         workspace.close()
     return 0

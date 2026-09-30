@@ -13,3 +13,4 @@ private/
 local*.json
 *.xlsx
 *.csv
+*.lnk

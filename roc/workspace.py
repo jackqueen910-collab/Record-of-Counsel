@@ -10,7 +10,7 @@ import uuid
 
 from .cli import run
 from .common import RocError, case_key, now, read_json, write_json
-from .console import SessionHolder
+from .connection import BrowserConnection
 from .courts import DISTRICT_COURTS, profile_for_case, require_enabled
 from .index import build_index, records_from
 from .review import case_issues
@@ -66,19 +66,44 @@ class Workspace:
                 stream.write(str(os.getpid()))
         except FileExistsError:
             raise RocError("This workspace is already open, or its prior process ended unexpectedly. Confirm that process has stopped before removing .workspace.lock.") from None
-        self.holder = SessionHolder()
-        self.provider = session_provider or self.holder.get
+        self.connection = BrowserConnection()
+        self.provider = session_provider or self.connection.get
         self.pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="roc-workflow")
         self.lock = threading.RLock()
         self.pause_event = threading.Event()
         self.active = None
         self.future = None
+        self.stopping = False
+        self.closed = False
+        self.lock_released = False
+        self.close_lock = threading.Lock()
 
-    def close(self):
-        self.pause_event.set()
-        self.pool.shutdown(wait=True)
-        self.holder.clear()
-        self.process_lock.unlink(missing_ok=True)
+    def close(self, release_lock=True):
+        with self.close_lock:
+            if not self.closed:
+                self.request_stop()
+                self.pool.shutdown(wait=True)
+                self.closed = True
+            if release_lock and not self.lock_released:
+                self.process_lock.unlink(missing_ok=True)
+                self.lock_released = True
+
+    def request_stop(self):
+        with self.lock:
+            self.stopping = True
+            self.pause_event.set()
+            self.connection.stop()
+
+    def sign_in(self, values):
+        with self.lock:
+            self.idle()
+            fields = self.connection.prepare(values)
+            self.future = self.pool.submit(self.connection.authenticate, fields)
+
+    def disconnect(self):
+        with self.lock:
+            self.idle()
+            self.connection.disconnect()
 
     def folder(self, identifier):
         if not isinstance(identifier, str) or not re.fullmatch(r"[0-9a-f]{32}", identifier):
@@ -95,6 +120,10 @@ class Workspace:
         write_json(self.folder(identifier) / "workspace.json", manifest | {"updatedUtc": now()})
 
     def idle(self):
+        if self.stopping:
+            raise RocError("ROC is stopping. Reopen it to start another operation.")
+        if self.connection.status()["connecting"]:
+            raise RocError("Wait for the current PACER sign-in attempt to finish.")
         if self.active:
             raise RocError("Another operation is running. Pause it or wait for it to finish.")
 
@@ -199,7 +228,8 @@ class Workspace:
     def list(self):
         with self.lock:
             jobs = [self.summary(p.parent.name) for p in self.root.glob("*/workspace.json")]
-            return {"active": self.active, "jobs": sorted(jobs, key=lambda j: j["createdUtc"], reverse=True)}
+            return {"active": self.active, "jobs": sorted(jobs, key=lambda j: j["createdUtc"], reverse=True),
+                    "connection": self.connection.status(), "stopping": self.stopping, "closed": self.closed}
 
     def quote(self, identifier, keys):
         with self.lock:
@@ -261,9 +291,7 @@ class Workspace:
                 if not self.summary(identifier)["indexReady"]:
                     raise RocError("Finish the search before exporting.")
             elif action == "signin":
-                if m["demo"]:
-                    raise RocError("The free demo never signs in to PACER.")
-                self.holder.clear()
+                raise RocError("Use Connect PACER in the interface. Sign-in does not restart a saved run.")
             elif action != "reconcile":
                 raise RocError("Unknown operation.")
             self._start(identifier, action)
@@ -290,12 +318,7 @@ class Workspace:
         try:
             m = self.manifest(identifier)
             config = dict(m["config"])
-            if action == "signin":
-                from .progress import Progress
-                Progress(folder)("awaiting_sign_in", "Complete official PACER API sign-in in the ROC terminal. No search will start.")
-                self.provider()
-                code, message = 0, "PACER API session ready. Choose Resume or select dockets when ready."
-            elif action == "reconcile":
+            if action == "reconcile":
                 with RunStore(folder, config["budgetCents"]) as store:
                     store.reconcile()
                 code, message = 0, "Saved receipts checked. No network requests; choose Resume to continue."
@@ -316,7 +339,7 @@ class Workspace:
             with self.lock:
                 m = self.manifest(identifier)
                 # Auxiliary actions never erase an interrupted search/retrieval's Resume control.
-                auxiliary = action in ("signin", "reconcile", "export")
+                auxiliary = action in ("reconcile", "export")
                 m.update(state="stopped" if code or auxiliary and m.get("needsResume") else "ready", message=message)
                 if not auxiliary:
                     m["needsResume"] = bool(code)

@@ -16,6 +16,89 @@ from roc.workspace import Workspace
 
 @unittest.skipUnless(os.environ.get("ROC_BROWSER_TESTS") == "1", "Set ROC_BROWSER_TESTS=1 for local browser tests")
 class InterfaceBrowserTests(unittest.TestCase):
+    def test_browser_signin_cancel_retry_connect_continue_and_stop_without_terminal(self):
+        from playwright.sync_api import sync_playwright, expect
+        from roc.pacer import Session, SignInError
+        from tests.test_workspace import response, record
+        searches = []
+        def request(*args):
+            searches.append(True)
+            return response([record()])
+        session = Session('fixture-only-session',requester=request)
+        with tempfile.TemporaryDirectory() as folder, contextlib.redirect_stdout(io.StringIO()), \
+                patch.object(Session,'login',side_effect=[SignInError('13'),session,session]) as login, \
+                patch.object(Session,'prompt',side_effect=AssertionError('No terminal prompt')):
+            ws=Workspace(folder)
+            server,url=make_server(ws)
+            thread=threading.Thread(target=server.serve_forever,daemon=True)
+            thread.start()
+            try:
+                with sync_playwright() as pw:
+                    browser=pw.chromium.launch(headless=True)
+                    page=browser.new_page(viewport={'width':1440,'height':1120})
+                    page.route('**/*',lambda route: route.continue_() if urlsplit(route.request.url).netloc == urlsplit(url).netloc else route.abort())
+                    page.goto(url)
+                    page.get_by_label('First name',exact=True).fill('Jordan')
+                    page.get_by_label('Last name',exact=True).fill('Lawyer')
+                    page.locator('input[name="budget"]').fill('1.00')
+                    page.locator('#search-submit').click()
+                    expect(page.locator('#auth-dialog')).to_be_visible()
+                    self.assertEqual(searches,[])
+                    page.locator('#auth-password').fill('cancelled-fixture-password')
+                    page.locator('#auth-otp').fill('654321')
+                    page.get_by_role('button',name='Close sign-in').click()
+                    expect(page.locator('#auth-password')).to_have_value('')
+                    expect(page.locator('#auth-otp')).to_have_value('')
+                    self.assertEqual(ws.list()['jobs'],[])
+                    page.locator('#connect-pacer').click()
+                    page.locator('#auth-username').fill('fixture-user')
+                    page.locator('#auth-password').fill('incorrect-fixture-password')
+                    page.locator('#auth-otp').fill('123456')
+                    page.get_by_role('button',name='Hide password').click()
+                    expect(page.locator('#auth-password')).to_have_attribute('type','password')
+                    page.get_by_role('button',name='Show password').click()
+                    expect(page.locator('#auth-password')).to_have_attribute('type','text')
+                    page.locator('#auth-submit').click()  # Required acknowledgment prevents submission.
+                    self.assertEqual(login.call_count,0)
+                    page.locator('#auth-redact').check()
+                    page.locator('#auth-submit').click()
+                    expect(page.locator('#auth-message')).to_contain_text('did not accept',timeout=10000)
+                    expect(page.locator('#auth-password')).to_have_value('incorrect-fixture-password')
+                    self.assertEqual(login.call_count,1)
+                    page.locator('#auth-password').fill('correct-fixture-password')
+                    page.locator('#auth-otp').fill('111222')
+                    page.locator('#auth-submit').click()
+                    expect(page.locator('#connection-status')).to_have_text('PACER connected',timeout=10000)
+                    expect(page.locator('#auth-dialog')).not_to_be_visible()
+                    expect(page.locator('#auth-password')).to_have_value('')
+                    self.assertEqual(searches,[])  # Standalone Connect does not run the previously cancelled search.
+                    page.locator('#disconnect-pacer').click()
+                    expect(page.locator('#connection-status')).to_have_text('Sign-in required')
+                    page.locator('#search-submit').click()
+                    expect(page.locator('#auth-submit')).to_have_text('Connect and continue')
+                    page.locator('#auth-password').fill('correct-fixture-password')
+                    page.locator('#auth-redact').check()
+                    page.locator('#auth-submit').click()
+                    expect(page.locator('#run-status')).to_have_text('READY',timeout=15000)
+                    self.assertEqual(searches,[True])
+                    self.assertEqual(login.call_count,3)
+                    for key in ('password','otp'):
+                        expect(page.locator('#auth-'+key)).to_have_value('')
+                    saved=''.join(p.read_text(encoding='utf-8') for p in Path(folder).rglob('*.json'))
+                    for secret in ('incorrect-fixture-password','correct-fixture-password','fixture-only-session','111222'):
+                        self.assertNotIn(secret,saved)
+                    page.locator('#stop-roc').click()
+                    page.locator('#confirm-stop').click()
+                    expect(page.locator('#notice')).to_contain_text('ROC has stopped',timeout=15000)
+                    self.assertTrue(ws.closed)
+                    self.assertIsNone(ws.connection.session)
+                    browser.close()
+            finally:
+                server.shutdown()
+                server.server_close()
+                thread.join(10)
+                ws.close()
+
     def test_search_form_with_fake_api_requires_separate_docket_confirmation(self):
         from playwright.sync_api import sync_playwright, expect
         from roc.pacer import Session
@@ -27,6 +110,7 @@ class InterfaceBrowserTests(unittest.TestCase):
         FakeCourt.bought, FakeCourt.fail_key = [], None
         with tempfile.TemporaryDirectory() as folder, contextlib.redirect_stdout(io.StringIO()), patch("roc.cli.CourtRetriever", FakeCourt):
             ws = Workspace(folder, lambda: Session("fictional", requester=request))
+            ws.connection.session = Session("fictional", requester=request)
             server, url = make_server(ws)
             thread = threading.Thread(target=server.serve_forever, daemon=True)
             thread.start()

@@ -5,11 +5,13 @@ if (token) sessionStorage.setItem("roc-token", token);
 history.replaceState(null, "", location.pathname);
 let currentId = null, current = null, selected = new Set(), page = 0, pageRows = [], quote = null;
 let busyAction = false, refreshing = false, tableStamp = "", sidebarStamp = "", activeRun = null;
+let connection = {connected:false, connecting:false}, afterLogin = null, authSubmitted = false, authSending = false;
+let shuttingDown = false, stopped = false, pollTimer = null;
 const pageSize = 50;
 const money = cents => new Intl.NumberFormat("en-US", {style:"currency", currency:"USD"}).format(cents / 100);
 const labels = {"missing-source":"Missing from source", "needs-review":"Needs review", "not-tested":"Not tested by sample"};
 function node(tag, text, className) {const n = document.createElement(tag); if (text !== undefined) n.textContent = text; if (className) n.className = className; return n;}
-function error(e) {$('notice').textContent = e.message || String(e); $('notice').hidden = false;}
+function error(e) {if (stopped) return; $('notice').textContent = shuttingDown ? 'ROC is no longer reachable. Your stop request was sent; reopen the launcher to check saved run status.' : e.message || String(e); $('notice').hidden = false;}
 function bind(id, event, fn) {$(id).addEventListener(event, e => {Promise.resolve().then(() => fn(e)).catch(error);});}
 async function api(path, value) {
   const response = await fetch(path, {method:value === undefined ? "GET" : "POST", headers:{"X-ROC-Token":token, ...(value === undefined ? {} : {"Content-Type":"application/json"})}, ...(value === undefined ? {} : {body:JSON.stringify(value)})});
@@ -27,7 +29,12 @@ async function openRun(id) {
   $('search-view').hidden = true; $('run-view').hidden = false; await refresh();
 }
 function setButtons() {
-  const busy = Boolean(activeRun) || busyAction;
+  const busy = Boolean(activeRun) || busyAction || connection.connecting || shuttingDown;
+  $('connect-pacer').disabled = busy; $('disconnect-pacer').disabled = busy;
+  $('connect-pacer').hidden = connection.connected; $('disconnect-pacer').hidden = !connection.connected;
+  $('connection-status').textContent = stopped ? 'ROC stopped' : shuttingDown ? 'Stopping ROC…' : connection.connecting ? 'Connecting…' : connection.connected ? 'PACER connected' : 'Sign-in required';
+  $('stop-roc').disabled = shuttingDown;
+  for (const id of ['auth-username','auth-password','auth-otp','auth-client','auth-redact','auth-submit']) $(id).disabled = connection.connecting || authSending || authSubmitted || shuttingDown;
   $('search-submit').disabled = busy; $('demo').disabled = busy;
   $('preview').disabled = busy || !current || !current.indexReady || selected.size === 0;
   for (const id of ['resume','signin','reconcile','edit-cap','rebuild','select-visible']) $(id).disabled = busy;
@@ -43,9 +50,23 @@ function setButtons() {
   }
 }
 async function refresh() {
-  if (refreshing) return; refreshing = true;
+  if (refreshing || stopped) return; refreshing = true;
+  let continuation = null;
   try {
-    const listing = await api('/api/runs'); activeRun = listing.active;
+    const listing = await api('/api/runs'); activeRun = listing.active; connection = listing.connection;
+    shuttingDown = shuttingDown || listing.stopping;
+    if (listing.closed) {
+      stopped = true; clearInterval(pollTimer); $('notice').textContent = 'ROC has stopped. You can close this tab. Reopen Start ROC to return to your saved runs.'; $('notice').hidden = false;
+    }
+    $('redaction-text').textContent = connection.redactionNotice || '';
+    if (authSubmitted && !connection.connecting) {
+      authSubmitted = false;
+      if (connection.connected) {
+        continuation = afterLogin; afterLogin = null; clearCredentials(); $('auth-dialog').close();
+      } else {
+        $('auth-message').textContent = connection.message; $('auth-message').hidden = false;
+      }
+    }
     const stamp = JSON.stringify([currentId, listing.jobs.map(j => [j.id,j.state,j.caseCount,j.spentCents])]);
     if (stamp !== sidebarStamp) {
       sidebarStamp = stamp; $('runs').replaceChildren();
@@ -60,6 +81,7 @@ async function refresh() {
     if (requested) {const data = await api(`/api/runs/${requested}`); if (requested === currentId) {current = data; renderRun();}}
     setButtons();
   } finally {refreshing = false;}
+  if (continuation && !shuttingDown) await continuation();
 }
 function renderRun() {
   const r = current;
@@ -73,7 +95,7 @@ function renderRun() {
   const states = {running:'IN PROGRESS',ready:'READY',stopped:'STOPPED',interrupted:'INTERRUPTED',new:'NEW'};
   $('run-status').textContent = states[r.state] || r.state;
   $('progress-message').textContent = r.message;
-  $('pending-message').textContent = r.pauseRequested ? 'Waiting for the current request or terminal sign-in to finish. No further purchases will begin after the pause checkpoint.' : r.pendingCount ? `${r.pendingCount} unresolved receipt(s): ${money(r.pendingCents)} reserved. Further purchases are blocked.` : r.stoppedReason || (r.stage === 'awaiting_sign_in' && r.busy ? 'Bring the ROC terminal forward to enter your credentials.' : '');
+  $('pending-message').textContent = r.pauseRequested ? 'Waiting for the current request to finish. No further purchases will begin after the pause checkpoint.' : r.pendingCount ? `${r.pendingCount} unresolved receipt(s): ${money(r.pendingCents)} reserved. Further purchases are blocked.` : r.stoppedReason || '';
   const newStamp = JSON.stringify([r.cases,r.busy]); if (tableStamp !== newStamp) {tableStamp = newStamp; renderTable();}
   $('exports').replaceChildren();
   const formats = {'case-index.xlsx':'Excel ↓','case-index.csv':'CSV ↓','case-index.html':'HTML ↓','evidence.json':'Evidence ↓','review.json':'Findings ↓'};
@@ -132,7 +154,8 @@ async function download(file) {
 bind('home','click',e => {e.preventDefault(); showSearch();}); bind('new-search','click',showSearch); bind('new-from-run','click',showSearch);
 bind('search-form','submit',async e => {
   e.preventDefault(); const data = new FormData(e.target);
-  await action(async () => {const result = await api('/api/runs',{firstName:data.get('firstName'),lastName:data.get('lastName'),aliases:data.get('aliases').split('\n').map(s=>s.trim()).filter(Boolean),courts:data.getAll('courts'),dateFiledFrom:data.get('dateFiledFrom'),dateFiledTo:data.get('dateFiledTo'),budgetCents:cents(data.get('budget'))}); await openRun(result.id);});
+  const values = {firstName:data.get('firstName'),lastName:data.get('lastName'),aliases:data.get('aliases').split('\n').map(s=>s.trim()).filter(Boolean),courts:data.getAll('courts'),dateFiledFrom:data.get('dateFiledFrom'),dateFiledTo:data.get('dateFiledTo'),budgetCents:cents(data.get('budget'))};
+  await connectedAction('Connect to run the case search you just requested.', () => action(async () => {const result = await api('/api/runs', values); await openRun(result.id);}));
 });
 bind('demo','click',() => action(async () => {const result = await api('/api/demo',{}); await openRun(result.id);}));
 for (const id of ['filter','type-filter','review-filter','sort']) bind(id,id === 'filter' ? 'input' : 'change',() => {page = 0; renderTable();});
@@ -146,13 +169,47 @@ bind('preview','click',() => action(async () => {
   $('quote-budget').textContent = `${money(quote.spentCents)} already spent of the ${money(quote.budgetCents)} cap. ${quote.fitsBudget ? 'This selection fits within the cap.' : 'This exceeds the cap. Close this preview and select fewer cases or change the cap.'}`;
   $('quote-cases').replaceChildren(...quote.cases.map(c=>node('p',`${c.caseNumber} · ${c.district}`))); $('quote-dialog').showModal();
 }));
-bind('confirm-retrieve','click',() => action(async () => {await api(`/api/runs/${currentId}/retrieve`,{keys:quote.keys}); $('quote-dialog').close(); selected.clear(); tableStamp = '';}));
-for (const [id, command] of [['pause','pause'],['resume','resume'],['signin','signin'],['reconcile','reconcile'],['rebuild','export']]) bind(id,'click',() => action(() => api(`/api/runs/${currentId}/${command}`,{})));
+bind('confirm-retrieve','click',async () => {
+  const id = currentId, keys = [...quote.keys], needsConnection = quote.newReports > 0; $('quote-dialog').close();
+  const proceed = () => action(async () => {await api(`/api/runs/${id}/retrieve`,{keys}); selected.clear(); tableStamp = '';});
+  if (needsConnection) await connectedAction('Connect to retrieve the dockets you just confirmed.', proceed); else await proceed();
+});
+for (const [id, command] of [['pause','pause'],['reconcile','reconcile'],['rebuild','export']]) bind(id,'click',() => action(() => api(`/api/runs/${currentId}/${command}`,{})));
+bind('resume','click',async () => {const id = currentId; const proceed = () => action(() => api(`/api/runs/${id}/resume`,{})); if (current.demo) await proceed(); else await connectedAction('Connect to resume this saved operation. Existing receipts and selections are retained.', proceed);});
+bind('signin','click',() => openAuth('Reconnect PACER. After connecting, use Resume saved operation to continue.', null));
 bind('edit-cap','click',() => {$('cap-input').value = (current.budgetCents/100).toFixed(2); $('cap-dialog').showModal();});
 bind('close-cap','click',() => $('cap-dialog').close());
 bind('cap-form','submit',async e => {e.preventDefault(); await action(async () => {await api(`/api/runs/${currentId}/budget`,{budgetCents:cents($('cap-input').value)}); $('cap-dialog').close();});});
 async function start() {
   const courts = await api('/api/courts'); courts.forEach(c=>{const option=node('option',c.name);option.value=c.id;$('court-select').append(option);});
-  await refresh(); setInterval(() => refresh().catch(error),1800);
+  await refresh(); pollTimer = setInterval(() => refresh().catch(error),1800);
 }
+
+function clearCredentials() {$('auth-password').value = ''; $('auth-otp').value = '';}
+function openAuth(context, next) {
+  afterLogin = next; $('auth-context').textContent = context; $('auth-message').hidden = true;
+  $('auth-submit').textContent = next ? 'Connect and continue' : 'Connect PACER';
+  clearCredentials(); $('auth-password').type = 'text'; $('toggle-password').textContent = 'Hide'; $('toggle-password').setAttribute('aria-label','Hide password');
+  $('auth-redact').checked = false; $('auth-dialog').showModal(); setButtons();
+}
+async function connectedAction(context, next) {if (connection.connected) await next(); else openAuth(context, next);}
+bind('connect-pacer','click',() => openAuth('Connect your PACER account to this ROC session. Signing in alone does not start a search.', null));
+bind('disconnect-pacer','click',() => action(() => api('/api/connection/disconnect',{})));
+bind('close-auth','click',() => $('auth-dialog').close());
+$('auth-dialog').addEventListener('close',() => {clearCredentials(); afterLogin = null;});
+bind('toggle-password','click',() => {const hidden = $('auth-password').type === 'password'; $('auth-password').type = hidden ? 'text' : 'password'; $('toggle-password').textContent = hidden ? 'Hide' : 'Show'; $('toggle-password').setAttribute('aria-label', hidden ? 'Hide password' : 'Show password');});
+bind('auth-form','submit',async e => {
+  e.preventDefault(); if (authSending || authSubmitted || connection.connecting) return;
+  authSending = true; $('auth-message').textContent = 'Connecting to the official PACER authentication API…'; $('auth-message').hidden = false; setButtons();
+  const fields = {username:$('auth-username').value,password:$('auth-password').value,otp:$('auth-otp').value,clientCode:$('auth-client').value,redact:$('auth-redact').checked};
+  try {await api('/api/connection/sign-in',fields); authSubmitted = true; await refresh();}
+  catch(e) {$('auth-message').textContent = e.message;}
+  finally {fields.password = ''; fields.otp = ''; authSending = false; setButtons();}
+});
+bind('stop-roc','click',() => $('stop-dialog').showModal());
+bind('cancel-stop','click',() => $('stop-dialog').close());
+bind('confirm-stop','click',async () => {
+  await api('/api/stop',{}); shuttingDown = true; afterLogin = null; clearCredentials(); $('stop-dialog').close();
+  $('notice').textContent = 'Stopping ROC after the current request settles. No new requests will start.'; $('notice').hidden = false; setButtons(); await refresh();
+});
 start().catch(error);
