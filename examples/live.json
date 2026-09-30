@@ -1,0 +1,12 @@
+{
+  "lawyer": {"firstName": "Jordan", "lastName": "Lawyer", "aliases": ["Jordan A. Lawyer"]},
+  "runDirectory": "runs/my-fresh-search",
+  "budgetCents": 1000,
+  "requestDelaySeconds": 5,
+  "dockets": {
+    "order": "latest",
+    "limit": 2,
+    "courts": ["nysdc", "njdc"],
+    "caseTypes": ["Criminal"]
+  }
+}

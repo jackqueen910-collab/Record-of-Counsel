@@ -1,6 +1,8 @@
 """Official PACER authentication + PCL API. Never falls back to browser search."""
 import getpass
 import json
+import os
+import sys
 import time
 import urllib.error
 import urllib.request
@@ -14,6 +16,31 @@ REDACTION_NOTICE = (
     "financial account numbers, and (in criminal cases) home addresses in accordance with the "
     "applicable federal court redaction rules. This applies to attachments too."
 )
+
+
+def masked_input(prompt):
+    """Give Windows MFA typing feedback without exposing the code."""
+    if os.name != "nt":
+        return getpass.getpass(prompt)
+    import msvcrt
+    print(prompt, end="", flush=True)
+    chars = []
+    while True:
+        char = msvcrt.getwch()
+        if char in ("\r", "\n"):
+            print()
+            return "".join(chars)
+        if char == "\x03":
+            raise KeyboardInterrupt
+        if char in ("\x00", "\xe0"):
+            msvcrt.getwch()
+        elif char in ("\b", "\x7f"):
+            if chars:
+                chars.pop()
+                print("\b \b", end="", flush=True)
+        elif char.isprintable():
+            chars.append(char)
+            print("*", end="", flush=True)
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -64,6 +91,8 @@ class Session:
 
     @classmethod
     def prompt(cls):
+        if not sys.stdin.isatty() or not sys.stdout.isatty():
+            raise RocError("Open ROC in an interactive terminal to sign in. Do not supply credentials in a config file.")
         print("Official PACER API sign-in. Credentials and token stay in this process.")
         print(REDACTION_NOTICE)
         acknowledge = input("Acknowledge the redaction notice? [y/N]: ").strip().lower() in ("y", "yes")
@@ -72,7 +101,8 @@ class Session:
         username = input("PACER username: ").strip()
         password = getpass.getpass("PACER password (hidden): ")
         client = input("Client code (Enter if none): ").strip()
-        otp = getpass.getpass("MFA code (hidden; Enter if none): ").strip()
+        otp = masked_input("Current MFA code (typing shows *; Enter if none): ").strip()
+        print("Contacting the official PACER authentication API...", flush=True)
         return cls.login(username, password, otp, client, True)
 
     def search_page(self, criteria, page, store):
@@ -92,7 +122,7 @@ class Session:
         return json.loads(path.read_text(encoding="utf-8"))
 
 
-def collect_index(session, criteria, store, delay=5, max_pages=1000):
+def collect_index(session, criteria, store, delay=5, max_pages=1000, progress=None):
     rows, total, seen_pages = [], None, set()
     for page in range(max_pages):
         if page:
@@ -112,6 +142,10 @@ def collect_index(session, criteria, store, delay=5, max_pages=1000):
             raise RocError("Repeated PCL page; no further requests.")
         seen_pages.add(signature)
         rows.extend(content)
+        if progress:
+            progress("searching", f"PCL API: page {page + 1}; {len(rows)} of {total} attorney records collected. "
+                     f"Receipts so far: ${store.spent / 100:.2f}.", recordsCollected=len(rows),
+                     totalRecords=total, chargedCents=store.spent)
         if info.get("last"):
             if len(rows) != total:
                 raise RocError("Incomplete PCL collection.")

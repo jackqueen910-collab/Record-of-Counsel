@@ -55,6 +55,8 @@ def build_index(records, court_labels=None):
         links = sorted({c.get("caseLink") or r.get("caseLink") for r, c in zip(entries, cases)} - {None, ""})
         codes = sorted({str(c.get("natureOfSuit") or r.get("natureOfSuit") or "").strip() for r, c in zip(entries, cases)} - {""})
         nature = "Charges not supplied by PCL" if kind == "Criminal" else "; ".join(f"{c} - {NOS[c]}" if c in NOS else c for c in codes) or "Not supplied by PCL"
+        if kind != "Criminal" and any(c not in NOS for c in codes):
+            warnings.append("Unmapped Nature of Suit code retained for review.")
         if court not in courts:
             warnings.append("District label unavailable; court code retained for review.")
         result.append({"key": key, "courtId": court, "caseNumber": number, "caseTitle": sorted(captions)[0],

@@ -8,7 +8,7 @@ An on-demand, deterministic PACER workflow. No AI model, Codex session, chat con
 
 1. Reads saved official PCL responses, or authenticates and searches the official PCL API.
 2. Groups records by court and normalized case number, retaining prosecution and defense records.
-3. Optionally retrieves explicitly selected docket reports using court websites. This is **web retrieval**, not a document-retrieval API. Current adapters target SDNY and District of New Jersey forms.
+3. Selects a bounded docket sample from those results (latest/oldest, court, dates, case type and limit), or uses explicit case selections. Retrieves those reports using court websites. This is **web retrieval**, not a document-retrieval API. Current adapters target SDNY and District of New Jersey forms.
 4. Matches explicit attorney-name aliases to the docket's party/counsel table.
 5. Extracts the matched client's counts, preserves indictment versions, and summarizes the latest supported version without duplicate historical counts.
 6. Writes a ten-column case index as XLSX, CSV and readable HTML, plus detailed evidence and review JSON.
@@ -48,7 +48,7 @@ Live access is opt-in. A normal `run` cannot submit a PACER search or report.
 
 - Omit `indexFile` to collect a new attorney index. Optional `search` criteria are passed under PCL's `courtCase` object, for example `dateFiledFrom`, `dateFiledTo`, or `courtId`.
 - Set `budgetCents` to the maximum total PACER spending for that run folder. The ledger persists across reruns. Each PCL page reserves 10 cents; each court docket report reserves 300 cents.
-- Add explicit `retrieveDockets` selections with `courtId` and `caseNumber` to retrieve reports. No full-index docket sweep occurs by default.
+- Set `dockets` to select reports automatically from the search results; an explicit positive `limit` is required. Alternatively, use `retrieveDockets` with `courtId` and `caseNumber` for specific cases. Do not combine these two options. No reports are fetched if neither is configured.
 - Sign-in prompts for PACER username, password, optional client code and MFA. Passwords/MFA/tokens are not written to disk. Login failures stop; there is no browser-login fallback.
 - The program purchases no underlying filings. It selects full-case docket reports with parties/counsel and terminated parties included.
 
@@ -61,6 +61,31 @@ python -m roc run local-live.json --live
 ```
 
 This is the development/runtime setup, not a decision about installation or deployment on colleagues' managed computers. Hosting and colleague distribution remain a separate decision.
+
+### A fresh search followed by new docket retrieval
+
+Copy `examples/live.json` to `local-live.json`, replace the fictional lawyer with the lawyer you want, and set your spending cap. It contains neither `indexFile` nor `savedDockets`: every case comes from the new API search. It is not tied to any previous ROC dataset.
+
+```json
+{
+  "lawyer": {"firstName": "Jordan", "lastName": "Lawyer", "aliases": ["Jordan A. Lawyer"]},
+  "runDirectory": "runs/my-fresh-search",
+  "budgetCents": 1000,
+  "search": {"dateFiledFrom": "2020-01-01"},
+  "dockets": {
+    "order": "latest",
+    "limit": 2,
+    "courts": ["nysdc", "njdc"],
+    "caseTypes": ["Criminal"]
+  }
+}
+```
+
+Use `python -m roc run local-live.json --live`, or double-click `Run-ROC.cmd` on Windows after installing into `.venv`. Sign in once in that terminal. The program then collects the index, records its selection in `docket-plan.json`, retrieves the reports, parses them and writes the output without a chat agent. `status.json` tracks progress without credentials. It stops on API failure, uncertain charges or unsupported report forms.
+
+`search` limits the PCL search itself. The separate `dockets` filters only affect which index cases receive docket enrichment: `order` can be `latest` or `oldest`; `dateFiledFrom`/`dateFiledTo` are inclusive; `exclude` accepts court/case pairs. Cases outside supported court adapters remain in the index and are listed in the selection plan as skipped. Docket selection does not infer Team from a case's age.
+
+A run folder is a durable job: restarting it reuses already purchased replies. Choose a **new runDirectory** when you want a new search of current PACER data; reusing a folder intentionally resumes the existing snapshot. Saved records are optional replay inputs and test fixtures, not part of the live architecture.
 
 Unexpected forms, court redirects to login, ambiguous case choices and missing receipts stop the process. The narrow court adapter intentionally does not guess through unfamiliar screens. New courts require adapter checks and tests.
 
@@ -103,6 +128,7 @@ This creates a new workbook and returns its URL. It does not overwrite the exist
 |---|---|
 | `roc/pacer.py` | Official authentication and PCL pagination |
 | `roc/retrieve.py` | Independent court-web report retrieval |
+| `roc/select.py` | Bounded automatic docket selection from any index |
 | `roc/store.py` | Durable reservations, cache, receipts, run lock |
 | `roc/index.py` | Case normalization and deduplication |
 | `roc/docket.py` | Parties, counsel, roles, counts and charge summaries |
