@@ -1,7 +1,5 @@
 """Official PACER authentication + PCL API. Never falls back to browser search."""
-import getpass
 import json
-import os
 import sys
 import time
 import urllib.error
@@ -18,29 +16,10 @@ REDACTION_NOTICE = (
 )
 
 
-def masked_input(prompt):
-    """Give Windows MFA typing feedback without exposing the code."""
-    if os.name != "nt":
-        return getpass.getpass(prompt)
-    import msvcrt
-    print(prompt, end="", flush=True)
-    chars = []
-    while True:
-        char = msvcrt.getwch()
-        if char in ("\r", "\n"):
-            print()
-            return "".join(chars)
-        if char == "\x03":
-            raise KeyboardInterrupt
-        if char in ("\x00", "\xe0"):
-            msvcrt.getwch()
-        elif char in ("\b", "\x7f"):
-            if chars:
-                chars.pop()
-                print("\b \b", end="", flush=True)
-        elif char.isprintable():
-            chars.append(char)
-            print("*", end="", flush=True)
+class SignInError(RocError):
+    def __init__(self, code):
+        self.code = str(code)
+        super().__init__(f"PACER sign-in failed (code {self.code}). No automatic login retry.")
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -82,8 +61,7 @@ class Session:
         finally:
             payload.clear()
         if str(result.get("loginResult")) != "0" or not result.get("nextGenCSO"):
-            code = str(result.get("loginResult", "unknown"))
-            raise RocError(f"PACER sign-in failed (code {code}). No automatic login retry. Check credentials/MFA on PACER.")
+            raise SignInError(result.get("loginResult", "unknown"))
         # Successful login can still indicate a disabled account or missing client code.
         if result.get("errorDescription"):
             raise RocError("PACER returned an account notice after sign-in. Resolve it on PACER before running paid searches.")
@@ -93,17 +71,33 @@ class Session:
     def prompt(cls):
         if not sys.stdin.isatty() or not sys.stdout.isatty():
             raise RocError("Open ROC in an interactive terminal to sign in. Do not supply credentials in a config file.")
-        print("Official PACER API sign-in. Credentials and token stay in this process.")
+        print("Official PACER API sign-in. Password and MFA typing are visible in this terminal.")
         print(REDACTION_NOTICE)
         acknowledge = input("Acknowledge the redaction notice? [y/N]: ").strip().lower() in ("y", "yes")
         if not acknowledge:
             raise RocError("Sign-in cancelled.")
-        username = input("PACER username: ").strip()
-        password = getpass.getpass("PACER password (hidden): ")
-        client = input("Client code (Enter if none): ").strip()
-        otp = masked_input("Current MFA code (typing shows *; Enter if none): ").strip()
-        print("Contacting the official PACER authentication API...", flush=True)
-        return cls.login(username, password, otp, client, True)
+        while True:
+            username = input("PACER username: ").strip()
+            password = input("PACER password (visible): ")
+            client = input("Client code (Enter if none): ").strip()
+            otp = input("Current MFA code (visible; Enter if none): ").strip()
+            try:
+                if not username or not password:
+                    print("Username and password are required. Nothing was sent to PACER.")
+                else:
+                    print("Contacting the official PACER authentication API...", flush=True)
+                    try:
+                        return cls.login(username, password, otp, client, True)
+                    except SignInError as exc:
+                        if exc.code != "13":
+                            raise
+                        print("PACER did not accept the username, password or MFA code. No search was submitted.")
+            finally:
+                # Deliberate terminal echo is the only credential display; never write to logs/configs.
+                password = otp = ""
+            retry = input("Re-enter credentials and try again? [y/N]: ").strip().lower()
+            if retry not in ("y", "yes"):
+                raise RocError("Sign-in cancelled. No automatic login retry.")
 
     def search_page(self, criteria, page, store):
         parameters = {"criteria": criteria, "page": page}

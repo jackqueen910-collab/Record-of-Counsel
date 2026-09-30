@@ -49,7 +49,7 @@ Live access is opt-in. A normal `run` cannot submit a PACER search or report.
 - Omit `indexFile` to collect a new attorney index. Optional `search` criteria are passed under PCL's `courtCase` object, for example `dateFiledFrom`, `dateFiledTo`, or `courtId`.
 - Set `budgetCents` to the maximum total PACER spending for that run folder. The ledger persists across reruns. Each PCL page reserves 10 cents; each court docket report reserves 300 cents.
 - Set `dockets` to select reports automatically from the search results; an explicit positive `limit` is required. Alternatively, use `retrieveDockets` with `courtId` and `caseNumber` for specific cases. Do not combine these two options. No reports are fetched if neither is configured.
-- Sign-in prompts for PACER username, password, optional client code and MFA. Passwords/MFA/tokens are not written to disk. Login failures stop; there is no browser-login fallback.
+- Sign-in prompts for PACER username, password, optional client code and MFA. Password and MFA entry are visible in the operator's terminal. ROC does not write them or tokens to its files. An invalid-credentials/MFA response offers an explicit `y` to re-enter the fields in the same terminal; it never retries automatically. Connection failures and account notices stop. There is no browser-login fallback.
 - The program purchases no underlying filings. It selects full-case docket reports with parties/counsel and terminated parties included.
 
 Install the optional court-browser dependency only on a machine where that installation is permitted:
