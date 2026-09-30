@@ -15,7 +15,7 @@ if not exist "%ROC_CONFIG%" (
   pause
   exit /b 2
 )
-".venv\Scripts\python.exe" -m roc run "%ROC_CONFIG%" --live
+".venv\Scripts\python.exe" -m roc run "%ROC_CONFIG%" --live --keep-session
 set "ROC_RESULT=%ERRORLEVEL%"
 echo.
 if "%ROC_RESULT%"=="0" (echo ROC finished. Results are in your configured run folder.) else (echo ROC stopped. The message above and saved status explain why. No automatic retry.)

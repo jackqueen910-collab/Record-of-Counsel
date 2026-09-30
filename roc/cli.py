@@ -18,7 +18,7 @@ def resolve(base, value):
     return (base / value).resolve()
 
 
-def run(config_path, live=False, publish=False):
+def run(config_path, live=False, publish=False, session_provider=None):
     config_path = Path(config_path).resolve()
     config = read_json(config_path)
     validate_options(config)
@@ -47,7 +47,7 @@ def run(config_path, live=False, publish=False):
             if budget < 10:
                 raise RocError("Live index search requires a positive configured budget of at least 10 cents.")
             progress("awaiting_sign_in", "Ready for official PACER API sign-in. No new searches have been submitted.")
-            session = Session.prompt()
+            session = (session_provider or Session.prompt)()
             criteria = {"firstName": first, "lastName": last, "partyType": "aty"}
             if config.get("search"):
                 criteria["courtCase"] = config["search"]
@@ -72,7 +72,7 @@ def run(config_path, live=False, publish=False):
         if live and selected:
             if session is None:
                 progress("awaiting_sign_in", "Ready for official PACER API sign-in for court reports.")
-                session = Session.prompt()
+                session = (session_provider or Session.prompt)()
             retriever = CourtRetriever(session, store, headless=config.get("headless", True), progress=progress)
             for case in selected:
                 try:
@@ -131,6 +131,7 @@ def main(argv=None):
     task.add_argument("config", type=Path)
     task.add_argument("--live", action="store_true", help="Enable official API searches and bounded court-web report selection within configured budget.")
     task.add_argument("--publish", action="store_true", help="Publish a fresh Google Sheet using your own configured OAuth grant.")
+    task.add_argument("--keep-session", action="store_true", help="Pause after errors with the API token in memory; resume only on explicit terminal input.")
     reconcile = sub.add_parser("reconcile", help="Resolve pending receipts from saved responses only; no network.")
     reconcile.add_argument("run_directory", type=Path)
     args = parser.parse_args(argv)
@@ -140,18 +141,35 @@ def main(argv=None):
                 store.reconcile()
             print("Saved receipts reconciled. No network requests made.")
             return 0
-        return run(args.config, args.live, args.publish)
+        if args.keep_session:
+            if not args.live:
+                raise RocError("--keep-session requires --live.")
+            from .console import run_live_session
+            return run_live_session(args.config, args.publish)
+        return execute_run(args.config, args.live, args.publish)
+    except (RocError, KeyError, ValueError, FileNotFoundError, EOFError) as exc:
+        print("ROC stopped: " + str(exc), file=sys.stderr)
+        return 2
+    except KeyboardInterrupt:
+        print("ROC interrupted. Check the saved ledger before any paid retry.", file=sys.stderr)
+        return 130
+
+
+def execute_run(config_path, live=False, publish=False, session_provider=None):
+    """One attempt. The optional console owns the session across explicit resumes."""
+    try:
+        return run(config_path, live, publish, session_provider)
     except (RocError, KeyError, ValueError, FileNotFoundError, EOFError) as exc:
         print("ROC stopped: " + str(exc), file=sys.stderr)
         # The context manager has released our lock. Never overwrite another active run's status.
-        if args.command == "run":
-            try:
-                config = read_json(args.config)
-                root = resolve(args.config.resolve().parent, config["runDirectory"])
-                if not (root / ".run.lock").exists():
-                    Progress(root)("stopped", str(exc))
-            except (KeyError, ValueError, OSError):
-                pass
+        try:
+            config_path = Path(config_path).resolve()
+            config = read_json(config_path)
+            root = resolve(config_path.parent, config["runDirectory"])
+            if not (root / ".run.lock").exists():
+                Progress(root)("stopped", str(exc))
+        except (KeyError, ValueError, OSError):
+            pass
         return 2
     except KeyboardInterrupt:
         print("ROC interrupted. Check the saved ledger before any paid retry.", file=sys.stderr)
