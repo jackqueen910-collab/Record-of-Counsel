@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from roc.common import RocError
+from roc.common import BudgetStop, RocError
 from roc.retrieve import CourtRetriever, choose_case, configure_report, lookup_main_case, select_case_line
 from roc.courts import court_profile
 from roc.docket import enrich, parse_report
@@ -170,6 +170,12 @@ class CourtFormTests(unittest.TestCase):
                 self.assertEqual(len(received), calls)
                 self.assertEqual(court_profile(code).sample_verified, verified_before)
             self.assertEqual(store.spent, 600)  # Fictional receipts only.
+            self.assertEqual(len(store.ledger["transactions"]), 2)
+            # A cap stop happens before opening another court form, even when
+            # the unspent allowance is close to a full $3 reservation.
+            store.limit = store.spent + 299
+            with self.assertRaises(BudgetStop):
+                retriever.retrieve(case | {"caseNumber": "1:24-cr-00002", "key": code + "|1:24-cr-00002"})
             self.assertEqual(len(store.ledger["transactions"]), 2)
         self.assertEqual(len(contexts), 2)
         self.assertEqual(len(received), 4)

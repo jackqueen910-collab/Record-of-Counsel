@@ -147,8 +147,8 @@ class InterfaceBrowserTests(unittest.TestCase):
                     expect(page.locator('#docket-cap')).to_have_value('')
                     expect(page.locator('#confirm-retrieve')).to_be_disabled()
                     page.locator('#docket-cap').fill('3.00')
-                    expect(page.locator('#docket-cap-message')).to_contain_text('Choose fewer cases')
-                    expect(page.locator('#confirm-retrieve')).to_be_disabled()
+                    expect(page.locator('#docket-cap-message')).to_contain_text('may cover only part')
+                    expect(page.locator('#confirm-retrieve')).to_be_enabled()
                     page.locator('#revise-dockets').click()
                     page.locator('#filter').fill('00002')
                     expect(page.locator('#selection-hidden')).to_contain_text('1 outside this filter')
@@ -197,6 +197,89 @@ class InterfaceBrowserTests(unittest.TestCase):
                 server.server_close()
                 thread.join(10)
                 ws.close()
+
+    def test_clients_bulk_preview_selection_cap_stop_and_remaining_reports(self):
+        from playwright.sync_api import sync_playwright, expect
+        from roc.pacer import Session
+        from tests.test_workspace import FakeCourt, response, record, form, retrieval_values
+        requests=[]
+        def request(*args):
+            requests.append(True)
+            return response([record(seq=1), record(seq=2), record(seq=3,filed='2024-03-01'), record('gudc',4)])
+        FakeCourt.bought,FakeCourt.fail_key=[],None
+        with tempfile.TemporaryDirectory() as folder, contextlib.redirect_stdout(io.StringIO()), patch('roc.cli.CourtRetriever',FakeCourt):
+            session=Session('fictional',requester=request)
+            ws=Workspace(folder,lambda:session); ws.connection.session=session
+            identifier=ws.new(form());ws.future.result(10)
+            ws.act(identifier,'retrieve',retrieval_values(ws,identifier,['nysdc|1:24-cr-00001']));ws.future.result(10)
+            server,url=make_server(ws)
+            thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
+            try:
+                with sync_playwright() as pw:
+                    browser=pw.chromium.launch(headless=True)
+                    page=browser.new_page(viewport={'width':1440,'height':1100})
+                    errors=[];blocked=[]
+                    def route(r):
+                        if urlsplit(r.request.url).netloc == urlsplit(url).netloc:r.continue_()
+                        else:blocked.append(r.request.url);r.abort()
+                    page.route('**/*',route);page.on('pageerror',lambda e:errors.append(str(e)))
+                    page.goto(url);page.get_by_role('button',name='Jordan Lawyer').click()
+                    page.locator('#filter').fill('00002')
+                    page.locator('#view-clients').click()
+                    expect(page.locator('#clients-docket-scope')).to_contain_text('2 supported cases')
+                    expect(page.locator('#clients-docket-scope')).to_contain_text('1 other cases')
+                    page.locator('#clients-dockets').click()
+                    expect(page.locator('#quote-scope')).to_contain_text('outside your current filters')
+                    expect(page.locator('#quote-cases p')).to_have_count(2)
+                    expect(page.locator('#quote-cases p').first).to_contain_text('00003')
+                    expect(page.locator('#quote-cost')).to_have_text('$6.00')
+                    expect(page.locator('#confirm-retrieve')).to_be_disabled()
+                    expect(page.locator('#quote-dialog .cost-warning')).to_contain_text('select fewer cases')
+                    page.get_by_role('button',name='Choose specific cases',exact=True).click()
+                    expect(page.locator('#cases-panel')).to_be_visible()
+                    expect(page.locator('#filter')).to_have_value('')
+                    expect(page.locator('#selection-count')).to_have_text('0')
+                    expect(page.locator('#active-filters')).to_contain_text('Without docket report')
+                    page.locator('#view-clients').click();page.locator('#clients-dockets').click()
+                    expect(page.locator('#docket-cap')).to_have_value('')
+                    page.locator('#docket-cap').fill('2.99')
+                    expect(page.locator('#confirm-retrieve')).to_be_disabled()
+                    page.locator('#docket-cap').fill('3.00')
+                    expect(page.locator('#confirm-retrieve')).to_be_enabled()
+                    capture=os.environ.get('ROC_UI_SCREENSHOTS')
+                    if capture:
+                        Path(capture).mkdir(parents=True,exist_ok=True)
+                        page.screenshot(path=str(Path(capture)/'clients-bulk-cap.png'),full_page=True)
+                    self.assertEqual(FakeCourt.bought,['nysdc|1:24-cr-00001'])
+                    page.locator('#confirm-retrieve').click()
+                    expect(page.locator('#docket-cap-stop')).to_be_visible(timeout=15000)
+                    expect(page.locator('#run-status')).to_have_text('STOPPED')
+                    expect(page.locator('#stat-spent')).to_have_text('$6.10')
+                    expect(page.locator('#stat-dockets')).to_have_text('2')
+                    expect(page.locator('#party-rows td').last).to_have_text('2')
+                    expect(page).to_have_title('ROC — Docket spending limit reached')
+                    self.assertEqual(FakeCourt.bought,['nysdc|1:24-cr-00001','nysdc|1:24-cr-00003'])
+                    if capture:page.screenshot(path=str(Path(capture)/'clients-cap-stop.png'),full_page=True)
+                    page.locator('#new-from-run').click()
+                    expect(page.locator('#other-cap-stop')).to_contain_text('Jordan Lawyer',timeout=10000)
+                    page.locator('#view-cap-stop').click()
+                    expect(page.locator('#docket-cap-stop')).to_be_visible()
+                    page.reload();page.get_by_role('button',name='Jordan Lawyer').click()
+                    expect(page.locator('#docket-cap-stop')).to_be_visible()
+                    page.locator('#view-clients').click();page.locator('#clients-dockets').click()
+                    expect(page.locator('#quote-cases p')).to_have_count(1)
+                    expect(page.locator('#quote-cases')).to_contain_text('00002')
+                    expect(page.locator('#docket-cap')).to_have_value('')
+                    page.locator('#docket-cap').fill('3.00');page.locator('#confirm-retrieve').click()
+                    expect(page.locator('#run-status')).to_have_text('READY',timeout=15000)
+                    expect(page.locator('#docket-cap-stop')).not_to_be_visible()
+                    expect(page.locator('#clients-dockets')).to_be_disabled()
+                    expect(page.locator('#stat-dockets')).to_have_text('3')
+                    self.assertEqual(len(FakeCourt.bought),3)
+                    self.assertEqual(requests,[True]);self.assertEqual((errors,blocked),([],[]))
+                    browser.close()
+            finally:
+                server.shutdown();server.server_close();thread.join(10);ws.close()
 
     def test_demo_preview_enrich_filter_details_download_and_reopen(self):
         from playwright.sync_api import sync_playwright, expect

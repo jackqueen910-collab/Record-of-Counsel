@@ -278,6 +278,7 @@ class Workspace:
             "lawyer": m["config"]["lawyer"], "search": m["config"].get("search", {}), "demo": m["demo"],
             "budgetCents": m["config"]["budgetCents"], "state": state, "busy": busy,
             "message": (progress.get("message", m["message"]) if busy else m["message"]),
+            "docketCapStopped": not busy and state == "stopped" and m.get("docketCapStopped", False),
             "stage": progress.get("stage", ""), "pauseRequested": busy and self.pause_event.is_set(),
             "lastAction": m["lastAction"], "caseCount": len(cases) if detail else metadata.get("caseCount", 0),
             "enrichedCount": sum(bool(c.get("enrichment")) for c in cases) if detail else metadata.get("enrichedCases", 0), **receipt,
@@ -308,7 +309,7 @@ class Workspace:
             jobs = [self.summary(p.parent.name) for p in self.root.glob("*/workspace.json")]
             return {"active": self.active, "jobs": sorted(jobs, key=lambda j: j["createdUtc"], reverse=True),
                     "connection": self.connection.status(), "stopping": self.stopping, "closed": self.closed,
-                    "nameRulesRevision": self.name_rules.public()["revision"], "docketBudgetVersion": 1, "documentGrabberVersion": 1,
+                    "nameRulesRevision": self.name_rules.public()["revision"], "docketBudgetVersion": 2, "documentGrabberVersion": 1,
                     "clientReportVersion": CLIENT_REPORT_VERSION}
 
     def quote(self, identifier, keys):
@@ -368,8 +369,8 @@ class Workspace:
                 allowance = values.get("docketBudgetCents")
                 if type(allowance) is not int or allowance < 0:
                     raise RocError("Enter a fresh spending cap for this docket selection.")
-                if allowance < quote["maximumAdditionalCents"]:
-                    raise RocError("This docket cap does not cover the selected reports. Select fewer cases or raise the docket cap.")
+                if quote["newReports"] and allowance < 300:
+                    raise RocError("Enter at least $3 to reserve the first new docket. ROC stops before the next report would exceed your cap.")
                 if m["demo"] and allowance != 0:
                     raise RocError("The demo is free; its docket cap must be zero.")
                 # Approve additional spending once, atomically with the exact
@@ -400,6 +401,7 @@ class Workspace:
             m["needsResume"] = True  # Prior process interruption, not automatic completion.
         if action in ("search", "retrieve", "documents-analyze", "documents-download"):
             m["lastAction"] = action
+            m["docketCapStopped"] = False
         message = {'documents-analyze': 'Analyzing selected docket entries with Claude. No document purchases.',
                    'documents-download': 'Retrieving selected PDFs under the approved document spending cap.'}.get(action, 'Starting ' + action + '.')
         m.update(state="running", message=message)
@@ -449,6 +451,7 @@ class Workspace:
                 m.update(state="stopped" if code or auxiliary and m.get("needsResume") else "ready", message=message)
                 if not auxiliary:
                     m["needsResume"] = bool(code)
+                    m["docketCapStopped"] = bool(action == "retrieve" and code and progress.get("stopReasonCode") == "budget")
                 self.save(identifier, m)
         except RocError as exc:
             with self.lock:

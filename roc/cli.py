@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 import sys
 
-from .common import RocError, case_key, now, read_json, write_json
+from .common import BudgetStop, RocError, case_key, now, read_json, write_json
 from .courts import DISTRICT_COURTS, registry_summary
 from .docket import enrich, parse_report
 from .index import build_index, records_from
@@ -43,6 +43,7 @@ def run(config_path, live=False, publish=False, session_provider=None, checkpoin
                             "dockets": "court web reports" if live else "saved reports"}}
     session = None
     stop_reason = None
+    stop_reason_code = None
     with RunStore(run_dir, budget, checkpoint=checkpoint) as store:
         progress = Progress(run_dir)
         progress("starting", f"ROC: {first} {last}. Run-folder spending limit: ${budget / 100:.2f}.")
@@ -90,6 +91,7 @@ def run(config_path, live=False, publish=False, session_provider=None, checkpoin
                     reports.append({"courtId": case["courtId"], "caseNumber": case["caseNumber"], "path": str(path)})
                 except RocError as exc:
                     stop_reason = str(exc)
+                    stop_reason_code = "budget" if isinstance(exc, BudgetStop) else "retrieval"
                     case["warnings"].append(stop_reason)
                     progress("retrieval_stopped", stop_reason, chargedCents=store.spent)
                     break
@@ -129,7 +131,8 @@ def run(config_path, live=False, publish=False, session_provider=None, checkpoin
                 case["warnings"].append(str(exc))
         metadata.update(caseCount=len(cases), docketInputs=len(reports), enrichedCases=sum(bool(c.get("enrichment")) for c in cases),
                         resolvedTeamCases=sum(bool(c["team"]) for c in cases), unresolvedTeamCases=sum(not c["team"] for c in cases),
-                        chargedCentsThisRunFolder=store.spent, status="stopped" if stop_reason else "complete", stopReason=stop_reason)
+                        chargedCentsThisRunFolder=store.spent, status="stopped" if stop_reason else "complete",
+                        stopReason=stop_reason, stopReasonCode=stop_reason_code)
         metadata["casesByIssueCategory"] = {category: sum(any(i["category"] == category for i in case_issues(c)) for c in cases)
                                             for category in ("missing-source", "not-tested", "needs-review")}
         metadata["resolvedRoleCases"] = metadata["resolvedTeamCases"]
@@ -143,7 +146,7 @@ def run(config_path, live=False, publish=False, session_provider=None, checkpoin
         write_json(run_dir / "result.json", metadata | {"workbook": str(path)})
         progress(metadata["status"], f"Saved {len(cases)} cases, enriched {metadata['enrichedCases']} dockets. "
                  f"PACER receipts: ${store.spent / 100:.2f}." + (" Stopped: " + stop_reason if stop_reason else ""),
-                 chargedCents=store.spent, workbook=str(path))
+                 chargedCents=store.spent, workbook=str(path), stopReasonCode=stop_reason_code)
         print(json.dumps(metadata | {"workbook": str(path)}, indent=2))
         return 2 if stop_reason else 0
 

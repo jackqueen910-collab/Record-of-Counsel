@@ -2,7 +2,7 @@
 import os
 from pathlib import Path
 
-from .common import RocError, fingerprint, now, read_json, write_json
+from .common import BudgetStop, RocError, fingerprint, now, read_json, write_json
 from .docket import receipt_cents
 
 
@@ -67,11 +67,14 @@ class RunStore:
                 return path
         return None
 
+    def check_budget(self, max_cents):
+        if self.spent + max_cents > self.limit:
+            raise BudgetStop(f"Budget stop: ${self.spent / 100:.2f} spent; next request reserves ${max_cents / 100:.2f}; limit ${self.limit / 100:.2f}.")
+
     def reserve(self, kind, parameters, max_cents):
         self.checkpoint()
         self.check_pending()
-        if self.spent + max_cents > self.limit:
-            raise RocError(f"Budget stop: ${self.spent / 100:.2f} spent; next request reserves ${max_cents / 100:.2f}; limit ${self.limit / 100:.2f}.")
+        self.check_budget(max_cents)
         key = fingerprint({"kind": kind, "parameters": parameters})
         if any(t["key"] == key for t in self.ledger["transactions"]):
             raise RocError("Duplicate paid request refused; use the saved response.")

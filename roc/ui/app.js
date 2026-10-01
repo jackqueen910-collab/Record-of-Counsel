@@ -8,6 +8,7 @@ let busyAction = false, refreshing = false, tableStamp = "", sidebarStamp = "", 
 let connection = {connected:false, connecting:false}, afterLogin = null, authSubmitted = false, authSending = false;
 let shuttingDown = false, stopped = false, pollTimer = null;
 let reportView = 'cases', partyPage = 0;
+let capStoppedRun = null;
 let selectedNames = new Map(), rulesAvailable = false, ruleState = null, editingRule = null, pendingRule = null, rulesBusy = false;
 let docketBudgetsAvailable = false, clientReportsAvailable = false;
 let caseRows = [], facetChoices = {};
@@ -58,6 +59,8 @@ function setButtons() {
   $('preview').title = docketBudgetsAvailable ? 'Review only selected cases and set a docket cap' : 'Stop ROC and reopen Start ROC to load separate docket caps';
   $('choose-dockets').disabled = busy || !docketBudgetsAvailable;
   $('choose-dockets').textContent = docketBudgetsAvailable ? 'Choose cases for docket reports' : 'Restart ROC to enable docket caps';
+  $('clients-dockets').disabled = busy || !docketBudgetsAvailable || !current?.indexReady || missingDockets().length === 0;
+  $('clients-dockets').textContent = docketBudgetsAvailable ? 'Run docket reports →' : 'Restart ROC to enable docket caps';
   document.querySelectorAll('button.docket-field').forEach(b => b.disabled = busy || !docketBudgetsAvailable);
   for (const id of ['resume','signin','reconcile','edit-cap','rebuild','select-visible']) $(id).disabled = busy;
   $('confirm-retrieve').disabled = busy || !docketCapValid();
@@ -78,8 +81,11 @@ async function refresh() {
   let continuation = null;
   try {
     const listing = await api('/api/runs'); activeRun = listing.active; connection = listing.connection;
+    capStoppedRun = listing.jobs.find(j=>j.docketCapStopped && j.id !== currentId) || null;
+    $('other-cap-stop').hidden = !capStoppedRun;
+    if (capStoppedRun) $('other-cap-stop-text').textContent = `Docket retrieval for ${capStoppedRun.lawyer.firstName} ${capStoppedRun.lawyer.lastName} stopped at its spending limit. Purchased reports and results are saved.`;
     rulesAvailable = Number.isInteger(listing.nameRulesRevision);
-    docketBudgetsAvailable = listing.docketBudgetVersion === 1;
+    docketBudgetsAvailable = listing.docketBudgetVersion === 2;
     clientReportsAvailable = listing.clientReportVersion === 1;
     if ($('rules-dialog').open && ruleState && rulesAvailable && listing.nameRulesRevision !== ruleState.revision && !rulesBusy) {
       invalidateRulePreview(); $('rules-message').textContent = 'Name rules changed in another tab. Close and reopen Name rules to load the latest version.'; $('rules-message').hidden = false;
@@ -127,6 +133,10 @@ function renderRun() {
   $('run-status').textContent = states[r.state] || r.state;
   $('progress-message').textContent = r.message;
   $('pending-message').textContent = r.pauseRequested ? 'Waiting for the current request to finish. No further purchases will begin after the pause checkpoint.' : r.pendingCount ? `${r.pendingCount} unresolved receipt(s): ${money(r.pendingCents)} reserved. Further purchases are blocked.` : r.stoppedReason || '';
+  $('docket-cap-stop').hidden = !r.docketCapStopped;
+  document.title = r.docketCapStopped ? 'ROC — Docket spending limit reached' : 'Record of Counsel';
+  const missing = missingDockets().length, unsupported = r.cases.filter(c=>!c.eligible && !c.enriched).length;
+  $('clients-docket-scope').textContent = `${missing} supported cases still lack a parsed docket. Default: run all of them, newest filed first, within your cap. Saved dockets are reused.${unsupported ? ` ${unsupported} other cases have no supported retrieval; see the Case index.` : ''}`;
   const newStamp = JSON.stringify([r.cases,r.partyReports,r.busy,activeRun,rulesAvailable,docketBudgetsAvailable]); if (tableStamp !== newStamp) {tableStamp = newStamp; caseRows = buildCaseRows(r.cases,r.partyReports); renderFacetGroups(); renderTable(); renderParties();}
   $('docket-guidance').hidden = !r.indexReady || !r.cases.some(c=>!c.enriched);
   const coverage = r.partyReports?.coverage;
@@ -354,6 +364,7 @@ async function download(file) {
   const url = URL.createObjectURL(await response.blob()), a = node('a'); a.href = url; a.download = file; document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url),1000);
 }
 bind('home','click',e => {e.preventDefault(); showSearch();}); bind('new-search','click',showSearch); bind('new-from-run','click',showSearch);
+bind('view-cap-stop','click',()=>capStoppedRun && openRun(capStoppedRun.id));
 bind('search-form','submit',async e => {
   e.preventDefault(); const data = new FormData(e.target);
   const values = {firstName:data.get('firstName'),lastName:data.get('lastName'),aliases:data.get('aliases').split('\n').map(s=>s.trim()).filter(Boolean),courts:data.getAll('courts'),dateFiledFrom:data.get('dateFiledFrom'),dateFiledTo:data.get('dateFiledTo'),budgetCents:cents(data.get('budget'))};
@@ -377,31 +388,43 @@ bind('choose-dockets','click',() => {
   facetChoices.docket = new Set(['Without docket report']); page = 0; renderFacetGroups(); renderTable();
   $('filter').scrollIntoView({block:'center'}); $('filter').focus();
 });
+function missingDockets() {
+  return (current?.cases || []).filter(c=>c.eligible && !c.enriched).sort((a,b)=>(b.dateFiled || '').localeCompare(a.dateFiled || '') || alphabet.compare(a.key,b.key));
+}
+bind('clients-dockets','click',()=>action(()=>previewDockets(missingDockets().map(c=>c.key), true)));
 function docketCapValid() {
   if (!quote?.quoteId) return false;
-  try {return cents($('docket-cap').value) >= quote.maximumAdditionalCents;} catch {return false;}
+  try {return cents($('docket-cap').value) >= (quote.newReports ? 300 : 0);} catch {return false;}
 }
 function updateDocketCap() {
   if (!quote) return;
   let cap = null; try {cap = cents($('docket-cap').value);} catch {}
   $('quote-budget').textContent = `${money(quote.spentCents)} already charged for this run. This new cap is additional to those charges and replaces any unused allowance from the previous cap.`;
-  $('docket-cap-message').textContent = !quote.newReports ? 'No new charges: this selection uses saved or demo reports.' : cap === null ? 'Enter a fresh cap to enable retrieval. Opening this preview buys nothing.' : cap < quote.maximumAdditionalCents ? `This selection needs a cap of at least ${money(quote.maximumAdditionalCents)}. Choose fewer cases or raise this cap.` : `At most ${money(cap)} in new charges authorized. Total run limit after confirmation: ${money(quote.spentCents + cap)}. Resuming keeps this limit.`;
-  $('docket-cap-message').classList.toggle('cap-short',cap !== null && cap < quote.maximumAdditionalCents); setButtons();
+  $('docket-cap-message').textContent = !quote.newReports ? 'No new charges: this selection uses saved or demo reports.' : cap === null ? 'Enter a fresh cap to enable retrieval. Opening this preview buys nothing.' : cap < 300 ? 'At least $3 is needed to reserve the first new report.' : `At most ${money(cap)} in new charges authorized. ${cap < quote.maximumAdditionalCents ? 'Your cap may cover only part of this list. ' : ''}ROC stops and shows a notice before the next $3 reservation would exceed your cap; it may stop with less than $3 unspent. Total run limit: ${money(quote.spentCents + cap)}. Resuming keeps this limit.`;
+  $('docket-cap-message').classList.toggle('cap-short',quote.newReports > 0 && cap !== null && cap < 300); setButtons();
 }
-async function previewDockets(keys) {
+async function previewDockets(keys, allMissing = false) {
   const id = currentId;
   const result = await api(`/api/runs/${id}/quote`,{keys});
   if (!result.quoteId) throw new Error('Stop ROC and reopen Start ROC to load separate docket spending caps. No retrieval submitted.');
-  quote = {...result,runId:id};
+  quote = {...result,runId:id,allMissing};
+  $('quote-heading').textContent = allMissing ? 'Run dockets to identify clients' : 'Your docket selection';
+  $('quote-scope').textContent = allMissing ? 'Default: all supported cases in this search without parsed dockets, newest filed first. This includes cases outside your current filters. Choose specific cases below to narrow the list.' : 'ROC retrieves cases in the order listed below until they are complete or the spending cap stops the run.';
+  $('revise-dockets').textContent = allMissing ? 'Choose specific cases' : 'Back to case selection';
   $('quote-text').textContent = `${quote.selectedCount} selected · ${quote.newReports} new reports · ${quote.cachedReports} saved or demo reports`;
   $('quote-cost').textContent = money(quote.maximumAdditionalCents);
   $('docket-cap').value = quote.newReports ? '' : '0.00';
+  $('docket-cap').min = quote.newReports ? '3' : '0';
   updateDocketCap();
   $('quote-cases').replaceChildren(...quote.cases.map(c=>node('p',`${c.caseNumber} · ${c.district}`))); $('quote-dialog').showModal();
 }
 bind('preview','click',() => action(()=>previewDockets([...selected])));
 bind('docket-cap','input',updateDocketCap);
-bind('revise-dockets','click',() => $('quote-dialog').close());
+bind('revise-dockets','click',() => {
+  const allMissing = quote?.allMissing; $('quote-dialog').close(); setReportView('cases');
+  if (allMissing) {selected.clear(); facetChoices = {docket:new Set(['Without docket report'])}; $('filter').value = ''; $('sort').value = 'newest'; page = 0; renderFacetGroups(); renderTable();}
+  $('filter').scrollIntoView({block:'center'}); $('filter').focus();
+});
 $('quote-dialog').addEventListener('close',()=>{quote = null; setButtons();});
 bind('confirm-retrieve','click',async () => {
   if (!docketCapValid()) return;

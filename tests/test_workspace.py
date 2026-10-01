@@ -115,7 +115,7 @@ class WorkspaceTests(unittest.TestCase):
         original = self.ws.manifest(identifier)
         request = retrieval_values(self.ws, identifier, keys, 300)
         # A large old cap is not permission for another docket selection.
-        for invalid in ({"keys": keys}, request, request | {"docketBudgetCents": True},
+        for invalid in ({"keys": keys}, request | {"docketBudgetCents": 299}, request | {"docketBudgetCents": True},
                         request | {"docketBudgetCents": "600"}, request | {"docketBudgetCents": -1}):
             with self.assertRaises(RocError):
                 self.ws.act(identifier, "retrieve", invalid)
@@ -155,6 +155,45 @@ class WorkspaceTests(unittest.TestCase):
             self.ws.act(identifier, "retrieve", request)
         self.assertEqual(FakeCourt.bought, [])
         self.assertEqual(self.ws.receipts(identifier)["spentCents"], 10)
+
+    def test_partial_cap_stops_notifies_preserves_results_and_never_resets_on_resume(self):
+        identifier=self.new()
+        keys=[c['key'] for c in self.ws.cases(identifier)]
+        self.ws.act(identifier,'retrieve',retrieval_values(self.ws,identifier,keys,300))
+        self.wait()
+        stopped=self.ws.summary(identifier,True)
+        self.assertEqual((stopped['state'],stopped['enrichedCount'],stopped['spentCents']),('stopped',1,310))
+        self.assertTrue(stopped['docketCapStopped'])
+        self.assertEqual(stopped['partyReports']['clients']['summary'][0]['caseCount'],1)
+        self.assertIn('Budget stop',stopped['message'])
+        self.assertEqual(FakeCourt.bought,keys[:1])
+        self.assertTrue(self.ws.download(identifier,'case-index.xlsx').exists())
+        self.ws.act(identifier,'refresh-reports');self.wait()
+        self.assertTrue(self.ws.summary(identifier)['docketCapStopped'])
+        self.ws.act(identifier,'resume');self.wait()
+        self.assertTrue(self.ws.summary(identifier)['docketCapStopped'])
+        self.assertEqual(FakeCourt.bought,keys[:1])
+        self.assertEqual(self.ws.receipts(identifier)['pendingCount'],0)
+        self.ws.act(identifier,'retrieve',retrieval_values(self.ws,identifier,keys,300));self.wait()
+        self.assertEqual(FakeCourt.bought,keys)
+        self.assertEqual(self.ws.summary(identifier)['spentCents'],610)
+        self.assertFalse(self.ws.summary(identifier)['docketCapStopped'])
+        self.assertEqual(len(self.requests),1)
+
+    def test_discounted_dockets_use_actual_receipts_and_stop_before_next_reservation(self):
+        self.session.requester=lambda *args: response([record(seq=n) for n in range(1,5)])
+        identifier=self.new()
+        keys=[c['key'] for c in self.ws.cases(identifier)]
+        finish=RunStore.finish
+        def low_fee(store,transaction,raw):
+            return finish(store,transaction,raw.replace('<td>3.00</td>','<td>0.10</td>'))
+        with patch.object(RunStore,'finish',low_fee):
+            self.ws.act(identifier,'retrieve',retrieval_values(self.ws,identifier,keys,310));self.wait()
+        stopped=self.ws.summary(identifier)
+        self.assertEqual(FakeCourt.bought,keys[:2])
+        self.assertEqual((stopped['spentCents'],stopped['budgetCents']),(30,320))
+        self.assertTrue(stopped['docketCapStopped'])
+        self.assertEqual(stopped['pendingCount'],0)
 
     def test_partial_retrieval_resume_only_remaining_selected_reports(self):
         identifier = self.new()

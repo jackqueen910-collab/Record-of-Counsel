@@ -252,8 +252,7 @@ class CourtRetriever:
                           courtId=profile.court_id, validationStatus=profile.validation_status)
         # Validate budget before opening the court form; reserve immediately before submission.
         self.store.check_pending()
-        if self.store.spent + 300 > self.store.limit:
-            raise RocError("Insufficient remaining budget for a $3 docket report reservation.")
+        self.store.check_budget(300)
         try:
             from playwright.sync_api import sync_playwright
         except ImportError:

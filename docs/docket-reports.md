@@ -2,6 +2,12 @@
 
 Each explicitly selected docket is retrieved by the existing bounded court-web adapter using the official API session. The parser reads the docket header, party/counsel blocks and structured criminal count tables. It does not follow document links or infer representation from mentions in docket-entry prose. API search, authentication, receipt handling, spending caps, pause/resume and purchased-report reuse are unchanged.
 
+## Running reports from Clients
+
+**Run docket reports** opens a cost-warning dialog, defaulting to every supported case in the search without a parsed docket, newest filed first. Current case filters do not narrow this default; the dialog states the scope and offers **Choose specific cases**. Unsupported cases remain in the index and are counted separately. Previewing does not contact PACER.
+
+New purchases require an explicitly entered additional cap of at least $3. The cap may cover only part of the list. ROC checks that $3 remains before opening the next court form and reserves that amount before submitting the report; confirmed receipts replace the reservation. ROC stops before the next reservation would exceed the limit, saves partial results, and displays a persistent spending-limit notice in the interface. The notice survives reload; no automatic continuation, cap increase, or replacement case occurs. Saved reports are reused, and a fresh selection previews only the remaining work.
+
 ## Reports and counting
 
 The case index retains all indexed cases. **Role** replaces the visible Team label; `role` is the canonical presentation field, with `team` retained for existing integrations. Criminal Nature of Case copies the represented defendant's listed counts; prosecution cases retain separate count profiles for the defendants. Civil Nature of Case uses the docket's Nature of Suit.

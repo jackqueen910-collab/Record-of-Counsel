@@ -13,6 +13,10 @@ class RocError(Exception):
     """An actionable stop, without secret request data in the message."""
 
 
+class BudgetStop(RocError):
+    """The next paid request cannot fit within the approved spending limit."""
+
+
 def now():
     return datetime.now(timezone.utc).isoformat()
 
