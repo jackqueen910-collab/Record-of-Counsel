@@ -10,7 +10,7 @@ import zipfile
 
 from .common import RocError, write_json
 from .docket import ROLE_VALUES
-from .parties import build_party_reports, case_role, coverage_text, report_tables
+from .parties import CLIENT_REPORT_VERSION, build_party_reports, case_role, coverage_text, report_tables
 from .review import case_issues, issue_text
 
 HEADERS = ["Case number", "Case title", "Case Type", "Role", "Court", "District", "Date filed", "Nature of Case", "Status (PACER)", "PACER link"]
@@ -54,6 +54,7 @@ def export_local(cases, folder, title, metadata):
     reports = build_party_reports(cases, aliases, metadata.get("nameRules"))
     metadata["nameRules"] = reports["nameRules"]
     metadata["partyCoverage"] = reports["coverage"]
+    metadata["clientReportVersion"] = CLIENT_REPORT_VERSION
     write_json(folder / "evidence.json", {"run": metadata, "cases": cases})
     write_json(folder / "party-reports.json", reports)
     tables = report_tables(reports)
@@ -118,8 +119,8 @@ def export_local(cases, folder, title, metadata):
     dv.add(f"D7:D{end}")
     coverage = wb.create_sheet("Coverage")
     for line in [title, *report_note.splitlines(), "Names are labels, not verified unique identities. Former counsel and terminated parties may be included.",
-                 "Case index retains every indexed case. Party sheets include parsed docket appearances only.",
-                 "Opposed as civil plaintiff counsel counts defendants on the other side when Role is Civil Plaintiff; it does not establish original filing counsel."]:
+                 "Case index retains every indexed case. Client sheets include counsel-matched appearances in saved dockets only.",
+                 "Client type is the listed party role for that case. A client can have different types in different cases; Role describes the lawyer's role in the case."]:
         coverage.append([line])
         coverage.cell(coverage.max_row, 1).data_type = "s"
         coverage.cell(coverage.max_row, 1).alignment = Alignment(wrap_text=True, vertical="top")

@@ -144,22 +144,23 @@ def coverage_text(reports):
             f"{c['partyTablesNeedingReview']} party tables need review. Summaries cover these saved dockets only.")
 
 
+CLIENT_REPORT_VERSION = 1
+
+
 def report_tables(reports):
-    """Shared rows for CSV, Excel, HTML and Google Sheets."""
-    tables = []
-    for group in ("clients", "defendants", "plaintiffs"):
-        headers = ["Name", "Distinct cases", "As client", "Opposing party", "Other on same side", "Unresolved", "Lawyer roles", "Source names", "Grouping"]
-        rows = [[s["name"], s["caseCount"], s["clientCaseCount"], s["opposingCaseCount"], s["sameSideCaseCount"],
-                 s["unresolvedCaseCount"], "; ".join(s["roles"]), "; ".join(s["sourceNames"]), s["groupKind"]] for s in reports[group]["summary"]]
-        if group == "defendants":
-            headers.insert(4, "Opposed as civil plaintiff counsel")
-            for row, summary in zip(rows, reports[group]["summary"]):
-                row.insert(4, summary["civilPlaintiffCaseCount"])
-        tables.append({"name": group.title(), "file": group + "-summary.csv", "headers": headers, "rows": rows})
-        fields = ["name", "caseNumber", "caseTitle", "caseType", "role", "partyRole", "relationship", "court", "district", "dateFiled", "nature", "status", "pacerLink"]
-        headers = ["Name", "Case number", "Case title", "Case Type", "Role", "Party role", "Relationship", "Court", "District", "Date filed", "Nature of Case", "Status (PACER)", "PACER link", "Matched counsel", "Source names", "Party table", "Grouping", "Source associations"]
-        rows = [[r[f] for f in fields] + ["; ".join(r["matchedCounsel"]), "; ".join(r["sourceNames"]), r["partyTableStatus"], r["groupKind"],
-                "; ".join(p["name"] + " [" + p["partyRole"] + "]: " + p["relationship"] +
-                          (" (" + ", ".join(p["matchedCounsel"]) + ")" if p["matchedCounsel"] else "") for p in r["sourceParties"])] for r in reports[group]["cases"]]
-        tables.append({"name": group.title() + " cases", "file": group + "-cases.csv", "headers": headers, "rows": rows})
-    return tables
+    """Client-only presentation shared by CSV, Excel, HTML and Google Sheets.
+
+    Party evidence and legacy groups stay available internally. Client type is
+    case-specific, never a property of the cross-case name summary.
+    """
+    clients = reports["clients"]
+    summary = {"name": "Clients", "file": "clients-summary.csv",
+               "headers": ["Name", "Distinct cases", "Source names", "Grouping"],
+               "rows": [[s["name"], s["caseCount"], "; ".join(s["sourceNames"]), s["groupKind"]]
+                        for s in clients["summary"]]}
+    fields = ["name", "caseNumber", "caseTitle", "caseType", "role", "partyRole", "court", "district", "dateFiled", "nature", "status", "pacerLink"]
+    headers = ["Name", "Case number", "Case title", "Case Type", "Role", "Client type", "Court", "District", "Date filed", "Nature of Case", "Status (PACER)", "PACER link", "Matched counsel", "Source names", "Party table", "Grouping", "Source associations"]
+    rows = [[r[f] for f in fields] + ["; ".join(r["matchedCounsel"]), "; ".join(r["sourceNames"]), r["partyTableStatus"], r["groupKind"],
+            "; ".join(p["name"] + " [" + p["partyRole"] + "]: " + p["relationship"] +
+                      (" (" + ", ".join(p["matchedCounsel"]) + ")" if p["matchedCounsel"] else "") for p in r["sourceParties"])] for r in clients["cases"]]
+    return [summary, {"name": "Clients cases", "file": "clients-cases.csv", "headers": headers, "rows": rows}]

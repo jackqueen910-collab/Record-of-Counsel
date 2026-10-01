@@ -96,8 +96,8 @@ class NameRuleTests(unittest.TestCase):
             book=load_workbook(Path(tmp)/"case-index.xlsx")
             self.assertEqual(book["Name rules"]["A2"].data_type,"s")
             self.assertEqual(book["Clients"]["A4"].value,"=EXAMPLE()")
-            self.assertIn("Example Client",book["Clients cases"]["R4"].value)
-            self.assertNotIn("Another Defendant",book["Clients cases"]["R4"].value)
+            self.assertIn("Example Client",book["Clients cases"]["Q4"].value)
+            self.assertNotIn("Another Defendant",book["Clients cases"]["Q4"].value)
             self.assertEqual(read_json(Path(tmp)/"evidence.json")["run"]["nameRules"]["revision"],2)
 
 
@@ -133,9 +133,9 @@ class WorkspaceNameRuleTests(unittest.TestCase):
         request=self.request(one)
         preview=self.ws.preview_name_rule(request)
         self.assertEqual(preview['affectedRuns'],2)
-        defendants=next(c for c in preview['comparisons'] if c['report']=='defendants')
-        self.assertEqual(len(defendants['before']),2)
-        self.assertEqual(defendants['after'][0]['caseCount'],1)
+        clients=next(c for c in preview['comparisons'] if c['report']=='clients')
+        self.assertEqual(len(clients['before']),1)
+        self.assertEqual(clients['after'][0]['caseCount'],1)
         self.assertEqual(self.ws.name_rules.public()['revision'],0)
         self.assertFalse((Path(self.tmp.name)/'name-rules.json').exists())
         with self.assertRaisesRegex(RocError,'Preview'): self.ws.apply_name_rule(request)
@@ -151,6 +151,23 @@ class WorkspaceNameRuleTests(unittest.TestCase):
         self.assertTrue(self.ws.download(two,'party-reports.zip').exists())
         newer=self.demo()
         self.assertEqual(self.ws.summary(newer,True)['partyReports']['defendants']['summary'][0]['name'],'Example group')
+
+    def test_old_report_layout_requires_free_export_refresh(self):
+        identifier=self.demo()
+        folder=self.ws.folder(identifier)
+        metadata=read_json(folder/'result.json')
+        metadata.pop('clientReportVersion')
+        write_json(folder/'result.json',metadata)
+        receipts=self.ws.receipts(identifier)
+        self.assertTrue(self.ws.summary(identifier)['exportsNeedRefresh'])
+        with self.assertRaisesRegex(RocError,'Update exports'):
+            self.ws.download(identifier,'case-index.xlsx')
+        with patch('roc.pacer.request_json',side_effect=AssertionError('No PACER requests')):
+            self.ws.act(identifier,'refresh-reports');self.ws.future.result(10)
+        self.assertFalse(self.ws.summary(identifier)['exportsNeedRefresh'])
+        self.assertEqual(self.ws.receipts(identifier),receipts)
+        book=load_workbook(self.ws.download(identifier,'case-index.xlsx'))
+        self.assertEqual(book.sheetnames,['Case index','Coverage','Clients','Clients cases'])
 
     def test_stale_preview_cannot_commit_after_case_changes(self):
         identifier=self.demo();request=self.request(identifier);preview=self.ws.preview_name_rule(request)

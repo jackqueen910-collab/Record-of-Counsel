@@ -4,7 +4,7 @@ Name rules group report labels using saved docket evidence. Creating, previewing
 
 ## Use in the workspace
 
-1. In Clients, Defendants or Plaintiffs, check the names to combine and choose **Group selected names**. One name is enough for a spelling correction. Alternatively, use **Name rules → New rule** and type the source spellings.
+1. In Clients, check the names to combine and choose **Group selected names**. One name is enough for a spelling correction. Alternatively, use **Name rules → New rule** and type the source spellings.
 2. Enter the preferred report name and select **Name correction — same party** or **Organization group — related entities**. The latter keeps the distinction between a reporting group and a single legal entity visible in reports.
 3. Check the source names, one per line. Matching uses only capitalization, Unicode presentation and whitespace normalization; no fuzzy matching, suffix stripping, substring matching or inferred corporate relationships.
 4. **Preview change** shows before/after names and distinct-case totals for the open run, plus the number of saved runs with matching names. Preview is read-only. Changing the form invalidates it. **Save rule** commits the reviewed change.
@@ -18,7 +18,7 @@ Already-grouped rows have a clickable grouping label. Edit them there or through
 
 A group counts the union of its members' court/case pairs. If two names each appear in the same case, their group has one case, not two. All their distinct cases remain available in the case breakdown. Client selection occurs **before** report grouping. Grouping a client and an opposing party never adds the opponent to the client list or copies the opponent's charges onto the client.
 
-Grouped rows retain their source spellings and per-source party roles, defendant numbers, matched counsel and relationships. The case detail continues to show the original parties. A group can be both a client and an opposing/same-side party in a case; relationship counts can overlap. A name correction is the operator's explicit grouping decision, not an independent identity verification.
+Grouped rows retain their source spellings and per-source party roles, defendant numbers, matched counsel and relationships. The case detail continues to show the original parties. Only counsel-matched members enter the Clients reports. Opposing and other parties remain in the underlying evidence. Client type is recorded per case rather than assigned to a group globally. A name correction is the operator's explicit grouping decision, not an independent identity verification.
 
 ## Editing, removing and undoing
 

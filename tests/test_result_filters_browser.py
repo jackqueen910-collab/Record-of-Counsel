@@ -58,6 +58,33 @@ def browser_fixture(cases):
 
 @unittest.skipUnless(os.environ.get('ROC_BROWSER_TESTS') == '1','Set ROC_BROWSER_TESTS=1')
 class ResultFilterBrowserTests(unittest.TestCase):
+    def test_client_types_vary_by_case_and_old_server_requires_export_restart(self):
+        from playwright.sync_api import expect
+        rows=[case(1,'First case','nysdc','2024-01-01',['Shared Client'],'Contract'),
+              case(2,'Second case','njdc','2023-01-01',['Shared Client'],'Contract')]
+        rows[0]['enrichment']['partyDetails'][0]['role']='Plaintiff'
+        rows[0]['role']='Civil Plaintiff'
+        with browser_fixture(rows) as (page,ws,identifier,path,evidence,errors,blocked,mutations):
+            page.locator('#view-clients').click()
+            expect(page.locator('#party-rows tr')).to_have_count(1)
+            expect(page.locator('#party-rows td').last).to_have_text('2')
+            page.get_by_role('button',name='Shared Client',exact=True).click()
+            expect(page.locator('.party-appearance').nth(0)).to_contain_text('Client type: Plaintiff')
+            expect(page.locator('.party-appearance').nth(1)).to_contain_text('Client type: Defendant')
+            page.get_by_role('button',name='Close party').click()
+            def old_server(route):
+                response=route.fetch(); data=response.json(); data.pop('clientReportVersion')
+                route.fulfill(response=response,json=data)
+            page.route('**/api/runs',old_server)
+            expect(page.locator('#exports-stale-message')).to_contain_text('Restarting ends the current PACER sign-in',timeout=10000)
+            expect(page.get_by_role('button',name='Excel ↓',exact=True)).to_be_disabled()
+            expect(page.locator('#refresh-reports')).to_be_disabled()
+            expect(page.locator('#party-rows tr')).to_have_count(1)
+            page.unroute('**/api/runs',old_server)
+            expect(page.locator('#exports-stale')).not_to_be_visible(timeout=10000)
+            expect(page.get_by_role('button',name='Excel ↓',exact=True)).to_be_enabled()
+            self.assertEqual((errors,blocked,mutations),([],[],[]))
+
     def test_sort_directions_multivalue_filters_missing_names_and_name_rules(self):
         from playwright.sync_api import expect
         rows = [case(1,'Zulu','nysdc','2024-01-01',['Zeta','Beta'],'Fraud'),
@@ -116,7 +143,7 @@ class ResultFilterBrowserTests(unittest.TestCase):
             expect(numbers).to_have_text(['1:24-cv-00001'])
             expect(page.locator('.case-parties')).to_contain_text('Aardvark Group')
             page.locator('#clear-filters').click()
-            page.locator('#view-defendants').click()
+            page.locator('#view-clients').click()
             page.locator('#party-sort').select_option('name-desc')
             expect(page.locator('#party-rows td:first-child>button:first-of-type')).to_have_text(['Zeta','Omega','Alpha','Aardvark Group'])
             page.locator('#party-sort').select_option('name-asc')

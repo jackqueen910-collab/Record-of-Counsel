@@ -9,7 +9,7 @@ let connection = {connected:false, connecting:false}, afterLogin = null, authSub
 let shuttingDown = false, stopped = false, pollTimer = null;
 let reportView = 'cases', partyPage = 0;
 let selectedNames = new Map(), rulesAvailable = false, ruleState = null, editingRule = null, pendingRule = null, rulesBusy = false;
-let docketBudgetsAvailable = false;
+let docketBudgetsAvailable = false, clientReportsAvailable = false;
 let caseRows = [], facetChoices = {};
 const alphabet = new Intl.Collator('en', {sensitivity:'base', numeric:true});
 const facetDefinitions = [
@@ -36,7 +36,7 @@ function showSearch() {currentId = null; current = null; selected.clear(); $('se
 async function openRun(id) {
   currentId = id; current = null; selected.clear(); page = 0; tableStamp = ""; sidebarStamp = "";
   $('filter').value = ''; $('sort').value = 'newest'; facetChoices = {}; caseRows = []; $('result-filters').open = false; renderFacetGroups();
-  $('party-filter').value = ''; $('party-relation').value = ''; $('party-sort').value = 'count-desc'; setReportView('cases');
+  $('party-filter').value = ''; $('party-sort').value = 'count-desc'; setReportView('cases');
   $('search-view').hidden = true; $('run-view').hidden = false; await refresh();
 }
 function setButtons() {
@@ -44,7 +44,7 @@ function setButtons() {
   $('name-rules').disabled = busy || !rulesAvailable;
   $('name-rules').title = rulesAvailable ? 'Saved name corrections and organization groups' : 'Restart ROC to load name rules';
   $('group-names').disabled = busy || !rulesAvailable || selectedNames.size === 0;
-  $('refresh-reports').disabled = busy;
+  $('refresh-reports').disabled = busy || !clientReportsAvailable;
   for (const id of ['rule-label','rule-kind','rule-names','preview-rule','new-rule','delete-rule']) $(id).disabled = busy || rulesBusy;
   $('undo-rule').disabled = busy || rulesBusy || !ruleState?.canUndo;
   $('apply-rule').disabled = busy || rulesBusy || !pendingRule;
@@ -63,14 +63,14 @@ function setButtons() {
   $('confirm-retrieve').disabled = busy || !docketCapValid();
   $('docket-cap').disabled = busy || !quote?.newReports;
   if (current) {
-    for (const view of ['clients','defendants','plaintiffs']) $('view-'+view).disabled = !current.partyReports;
+    $('view-clients').disabled = !current.partyReports;
     $('pause').hidden = !current.busy; $('pause').disabled = busyAction || current.pauseRequested;
     $('pause').textContent = current.pauseRequested ? "Pause requested…" : "Pause after current request";
     $('resume').hidden = !['stopped','interrupted'].includes(current.state);
     $('signin').hidden = current.demo || !['stopped','interrupted'].includes(current.state);
     $('reconcile').hidden = !current.pendingCount && !current.stoppedReason;
     $('edit-cap').hidden = current.demo; $('rebuild').disabled = busy || !current.indexReady;
-    $('exports').querySelectorAll('button').forEach(b => b.disabled = current.busy || current.exportsNeedRefresh);
+    $('exports').querySelectorAll('button').forEach(b => b.disabled = current.busy || current.exportsNeedRefresh || !clientReportsAvailable);
   }
 }
 async function refresh() {
@@ -80,6 +80,7 @@ async function refresh() {
     const listing = await api('/api/runs'); activeRun = listing.active; connection = listing.connection;
     rulesAvailable = Number.isInteger(listing.nameRulesRevision);
     docketBudgetsAvailable = listing.docketBudgetVersion === 1;
+    clientReportsAvailable = listing.clientReportVersion === 1;
     if ($('rules-dialog').open && ruleState && rulesAvailable && listing.nameRulesRevision !== ruleState.revision && !rulesBusy) {
       invalidateRulePreview(); $('rules-message').textContent = 'Name rules changed in another tab. Close and reopen Name rules to load the latest version.'; $('rules-message').hidden = false;
     }
@@ -129,10 +130,11 @@ function renderRun() {
   const newStamp = JSON.stringify([r.cases,r.partyReports,r.busy,activeRun,rulesAvailable,docketBudgetsAvailable]); if (tableStamp !== newStamp) {tableStamp = newStamp; caseRows = buildCaseRows(r.cases,r.partyReports); renderFacetGroups(); renderTable(); renderParties();}
   $('docket-guidance').hidden = !r.indexReady || !r.cases.some(c=>!c.enriched);
   const coverage = r.partyReports?.coverage;
-  $('report-coverage').textContent = coverage ? `${coverage.parsedDockets} of ${coverage.indexedCases} indexed cases have parsed dockets · ${coverage.indexOnlyCases} index only · Counsel matched in ${coverage.casesWithMatchedClients} cases${coverage.partyTablesNeedingReview ? ` · ${coverage.partyTablesNeedingReview} party tables need review` : ''}. Party summaries cover saved dockets only.` : 'An update is ready. Use Stop ROC, then reopen Start ROC to load party reports. Saved work is retained; reconnect PACER when you next need access.';
-  $('exports-stale').hidden = !r.exportsNeedRefresh;
+  $('report-coverage').textContent = coverage ? `${coverage.parsedDockets} of ${coverage.indexedCases} indexed cases have parsed dockets · ${coverage.indexOnlyCases} index only · Counsel matched in ${coverage.casesWithMatchedClients} cases${coverage.partyTablesNeedingReview ? ` · ${coverage.partyTablesNeedingReview} party tables need review` : ''}. Client summaries cover saved dockets only.` : 'An update is ready. Use Stop ROC, then reopen Start ROC to load party reports. Saved work is retained; reconnect PACER when you next need access.';
+  $('exports-stale').hidden = clientReportsAvailable && !r.exportsNeedRefresh;
+  $('exports-stale-message').textContent = clientReportsAvailable ? 'Updated reports are available. Refresh this run’s downloads from saved evidence, free.' : 'The Clients view is ready. To update downloads, use Stop ROC and reopen Start ROC, then choose Update exports. Restarting ends the current PACER sign-in; saved data stays available.';
   $('exports').replaceChildren();
-  const formats = {'case-index.xlsx':'Excel ↓','case-index.csv':'CSV ↓','party-reports.zip':'Party CSVs ↓','case-index.html':'HTML ↓','evidence.json':'Evidence ↓','review.json':'Findings ↓'};
+  const formats = {'case-index.xlsx':'Excel ↓','case-index.csv':'CSV ↓','party-reports.zip':'Client CSVs ↓','case-index.html':'HTML ↓','evidence.json':'Evidence ↓','review.json':'Findings ↓'};
   for (const [file, title] of Object.entries(formats)) if (r.downloads.includes(file)) {
     const b = node('button', title, 'secondary'); b.addEventListener('click', () => download(file).catch(error)); $('exports').append(b);
   }
@@ -289,25 +291,19 @@ function setReportView(view) {
   reportView = view; partyPage = 0;
   selectedNames.clear(); updateNameSelection();
   $('cases-panel').hidden = view !== 'cases'; $('parties-panel').hidden = view === 'cases';
-  for (const name of ['cases','clients','defendants','plaintiffs']) {
+  for (const name of ['cases','clients']) {
     $('view-'+name).classList.toggle('active',view === name); $('view-'+name).setAttribute('aria-pressed',String(view === name));
   }
   renderTable(); renderParties();
-}
-function partyMatches(row) {
-  const relation = $('party-relation').value;
-  if (relation === 'civilPlaintiffCaseCount') return row.role === 'Civil Plaintiff' && row.relationships.includes('Opposing party');
-  const target = {clientCaseCount:'Client',opposingCaseCount:'Opposing party',sameSideCaseCount:'Other party on same side',unresolvedCaseCount:'Unresolved'}[relation];
-  return !target || row.relationships.includes(target);
 }
 function renderParties() {
   if (reportView === 'cases' || !current?.partyReports) return;
   const available = new Set(current.partyReports[reportView].summary.filter(s=>!s.groupId).map(s=>s.nameKey));
   for (const key of selectedNames.keys()) if (!available.has(key)) selectedNames.delete(key);
-  const text = $('party-filter').value.trim().toLocaleLowerCase(), relation = $('party-relation').value;
-  const rows = current.partyReports[reportView].summary.filter(s => (!text || [s.name,...s.sourceNames].join(' ').toLocaleLowerCase().includes(text)) && (!relation || s[relation] > 0));
+  const text = $('party-filter').value.trim().toLocaleLowerCase();
+  const rows = current.partyReports.clients.summary.filter(s => !text || [s.name,...s.sourceNames].join(' ').toLocaleLowerCase().includes(text));
   const order = $('party-sort').value;
-  rows.sort((a,b) => (order.startsWith('name-') ? (order === 'name-desc' ? -1 : 1) * alphabet.compare(a.name,b.name) : (order === 'count-asc' ? 1 : -1) * (a[relation || 'caseCount']-b[relation || 'caseCount'])) || alphabet.compare(a.name,b.name) || alphabet.compare(a.nameKey,b.nameKey));
+  rows.sort((a,b) => (order.startsWith('name-') ? (order === 'name-desc' ? -1 : 1) * alphabet.compare(a.name,b.name) : (order === 'count-asc' ? 1 : -1) * (a.caseCount-b.caseCount)) || alphabet.compare(a.name,b.name) || alphabet.compare(a.nameKey,b.nameKey));
   partyPage = Math.min(partyPage,Math.max(0,Math.ceil(rows.length/pageSize)-1));
   $('party-rows').replaceChildren();
   for (const s of rows.slice(partyPage*pageSize,(partyPage+1)*pageSize)) {
@@ -320,24 +316,23 @@ function renderParties() {
       const badge = node('button',s.groupKind === 'organization-group' ? 'Organization group' : 'Name correction','group-badge');
       badge.disabled = !rulesAvailable || Boolean(activeRun); badge.addEventListener('click',() => openRules(s.groupId).catch(error)); cell.append(badge);
     }
-    for (const value of [s[relation || 'caseCount'],s.clientCaseCount,s.opposingCaseCount,s.civilPlaintiffCaseCount,s.sameSideCaseCount,s.unresolvedCaseCount,s.roles.join('; ')]) {const td = node('td',String(value)); td.title = String(value); tr.append(td);}
+    const count = node('td',String(s.caseCount)); tr.append(count);
     $('party-rows').append(tr);
   }
   $('party-empty').hidden = Boolean(rows.length);
-  $('party-empty').textContent = current.partyReports.coverage.parsedDockets ? 'No names match this view. Check the docket coverage and counsel matches.' : 'Retrieve selected dockets from the Case index to build these reports.';
+  $('party-empty').textContent = current.partyReports.coverage.parsedDockets ? 'No clients match this view. Check the docket coverage and counsel matches.' : 'Retrieve selected dockets from the Case index to identify clients.';
   $('result-count').textContent = `${rows.length.toLocaleString()} names`;
-  $('party-page-summary').textContent = rows.length ? `${partyPage*pageSize+1}–${Math.min((partyPage+1)*pageSize,rows.length)} of ${rows.length} names${relation ? ' · Filtered distinct-case count; relationship columns show full totals' : ''}` : '0 names';
+  $('party-page-summary').textContent = rows.length ? `${partyPage*pageSize+1}–${Math.min((partyPage+1)*pageSize,rows.length)} of ${rows.length} names` : '0 names';
   $('party-previous').disabled = partyPage === 0; $('party-next').disabled = (partyPage+1)*pageSize >= rows.length;
   updateNameSelection();
 }
 function updateNameSelection() {
-  const relation = $('party-relation').value;
-  const visible = new Set((current?.partyReports?.[reportView]?.summary || []).filter(s => (!relation || s[relation]>0) && [s.name,...s.sourceNames].join(' ').toLocaleLowerCase().includes($('party-filter').value.trim().toLocaleLowerCase())).map(s=>s.nameKey));
+  const visible = new Set((current?.partyReports?.[reportView]?.summary || []).filter(s => [s.name,...s.sourceNames].join(' ').toLocaleLowerCase().includes($('party-filter').value.trim().toLocaleLowerCase())).map(s=>s.nameKey));
   const hidden = [...selectedNames.keys()].filter(k=>!visible.has(k)).length;
   $('name-selection-count').textContent = `${selectedNames.size} names selected${hidden ? ` (${hidden} outside these filters)` : ''}`; setButtons();
 }
 function showParty(summary) {
-  const appearances = current.partyReports[reportView].cases.filter(p => p.nameKey === summary.nameKey && partyMatches(p));
+  const appearances = current.partyReports.clients.cases.filter(p => p.nameKey === summary.nameKey);
   const byCase = new Map(); appearances.forEach(p => {if (!byCase.has(p.caseKey)) byCase.set(p.caseKey,[]); byCase.get(p.caseKey).push(p);});
   $('party-name').textContent = summary.name; $('party-source-names').textContent = (summary.groupKind === 'organization-group' ? 'Organization group — separate legal entities. ' : '')+'Source names: '+summary.sourceNames.join('; ');
   $('party-case-count').textContent = `${byCase.size} distinct cases in this view. Counts reflect saved docket coverage.`;
@@ -347,7 +342,7 @@ function showParty(summary) {
   for (const [key, parties] of rows) {
     const c = caseMap.get(key), block = node('div',undefined,'party-appearance'), b = node('button',c.caseNumber,'text-button');
     b.addEventListener('click',() => showCase(c)); block.append(b,node('strong',c.caseTitle),node('p',`${c.district} · ${c.dateFiled} · ${c.status} · ${c.role || 'Unresolved'}`));
-    block.append(node('p',parties.map(p => `${p.partyRole}: ${p.relationship}`).join('; '),'help'));
+    block.append(node('p','Client type: '+parties.map(p => p.partyRole).join('; '),'help'));
     for (const p of parties) for (const source of p.sourceParties || []) if (p.groupId) block.append(node('p',`${source.name} · ${source.partyRole} · ${source.relationship}${source.matchedCounsel.length ? ' · Matched counsel: '+source.matchedCounsel.join('; ') : ''}`,'help'));
     $('party-case-list').append(block);
   }
@@ -365,8 +360,8 @@ bind('search-form','submit',async e => {
   await connectedAction('Connect to run the case search you just requested.', () => action(async () => {const result = await api('/api/runs', values); await openRun(result.id);}));
 });
 bind('demo','click',() => action(async () => {const result = await api('/api/demo',{}); await openRun(result.id);}));
-for (const view of ['cases','clients','defendants','plaintiffs']) bind('view-'+view,'click',() => setReportView(view));
-bind('party-filter','input',() => {partyPage = 0; renderParties();}); bind('party-relation','change',() => {partyPage = 0; renderParties();});
+for (const view of ['cases','clients']) bind('view-'+view,'click',() => setReportView(view));
+bind('party-filter','input',() => {partyPage = 0; renderParties();});
 bind('party-sort','change',() => {partyPage = 0; renderParties();});
 bind('party-previous','click',() => {partyPage--; renderParties();}); bind('party-next','click',() => {partyPage++; renderParties();});
 bind('clear-names','click',() => {selectedNames.clear(); renderParties();});

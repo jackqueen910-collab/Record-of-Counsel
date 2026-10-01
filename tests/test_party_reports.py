@@ -11,7 +11,7 @@ from openpyxl import load_workbook
 
 from roc.docket import enrich, parse_report
 from roc.output import export_local, publish_google
-from roc.parties import build_party_reports, party_key
+from roc.parties import build_party_reports, party_key, report_tables
 from tests.test_roc import party, count, report
 
 
@@ -120,19 +120,34 @@ class PartyReportTests(unittest.TestCase):
         self.assertEqual(len(build_party_reports([c])["clients"]["summary"]), len(names))
         self.assertEqual(party_key("  Éxample  LLC "), party_key("E\u0301XAMPLE LLC"))
 
+    def test_client_types_are_per_case_and_opponents_are_not_clients(self):
+        first = case(party("Plaintiff", "Shared Client", "Jordan Lawyer") +
+                     party("Defendant", "Opponent", "Other Lawyer"))
+        second = case(party("Defendant", "Shared Client", "Jordan Lawyer") +
+                      party("Plaintiff", "Opponent", "Other Lawyer"), "njdc|1:24-cv-00002")
+        summary, cases = report_tables(build_party_reports([first, second]))
+        self.assertEqual(summary["rows"], [["Shared Client", 2, "Shared Client", ""]])
+        self.assertNotIn("Client type", summary["headers"])
+        rows = [dict(zip(cases["headers"], row)) for row in cases["rows"]]
+        self.assertEqual({(r["Case number"], r["Client type"], r["Role"]) for r in rows}, {
+            ("1:24-cv-00001", "Plaintiff", "Civil Plaintiff"),
+            ("1:24-cv-00002", "Defendant", "Civil Defense")})
+        self.assertEqual({r["Name"] for r in rows}, {"Shared Client"})
+
     def test_exports_include_rankings_cases_coverage_and_literal_source_text(self):
-        c = case(party("Plaintiff", "=DANGEROUS()", "Jordan Lawyer") + party("Defendant", "&lt;img src=x&gt;", "Defense"))
+        c = case(party("Plaintiff", "=DANGEROUS()", "Jordan Lawyer") + party("Defendant", "Opponent", "Defense"))
+        c["caseTitle"] = "<img src=x>"
         with tempfile.TemporaryDirectory() as folder:
             export_local([c], folder, "Fixture", {"generatedUtc":"2026-09-30", "lawyer":{"firstName":"Jordan","lastName":"Lawyer"}})
             book = load_workbook(Path(folder) / "case-index.xlsx")
             self.assertEqual(book.active["D6"].value, "Role")
             self.assertEqual(book["Clients"]["A4"].value, "=DANGEROUS()")
             self.assertEqual(book["Clients"]["A4"].data_type, "s")
-            self.assertEqual(book["Defendants"]["B4"].value, 1)
+            self.assertEqual(book["Clients"]["B4"].value, 1)
             self.assertIn("1 of 1", book["Coverage"]["A2"].value)
-            self.assertEqual(set(book.sheetnames), {"Case index","Coverage","Clients","Clients cases","Defendants","Defendants cases","Plaintiffs","Plaintiffs cases"})
+            self.assertEqual(set(book.sheetnames), {"Case index","Coverage","Clients","Clients cases"})
             with zipfile.ZipFile(Path(folder)/"party-reports.zip") as archive:
-                self.assertEqual(len(archive.namelist()), 8)
+                self.assertEqual(len(archive.namelist()), 4)
                 rows = list(csv.reader(io.StringIO(archive.read("clients-cases.csv").decode("utf-8-sig"))))
                 self.assertEqual(rows[1][0], "'=DANGEROUS()")
                 self.assertIn("summaries", archive.read("README.txt").decode().lower())
@@ -145,7 +160,7 @@ class PartyReportTests(unittest.TestCase):
         with patch('roc.output.google_token', return_value='fictional'), patch('roc.output.google_request') as request:
             request.side_effect = [{'spreadsheetId':'fictional','spreadsheetUrl':'https://example.invalid'}, {}]
             publish_google([c], "Fixture", "unused.json")
-        self.assertEqual(len(request.call_args_list[0].args[1]["sheets"]), 7)
+        self.assertEqual(len(request.call_args_list[0].args[1]["sheets"]), 3)
         updates = [r["updateCells"] for r in request.call_args_list[1].args[1]["requests"] if "updateCells" in r]
         clients = next(u for u in updates if u["start"]["sheetId"] == 1)
         self.assertEqual(clients["rows"][1]["values"][0]["userEnteredValue"], {"stringValue":"=DANGEROUS()"})

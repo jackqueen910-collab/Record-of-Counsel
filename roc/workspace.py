@@ -13,7 +13,7 @@ from .common import RocError, case_key, now, read_json, write_json
 from .connection import BrowserConnection
 from .courts import DISTRICT_COURTS, profile_for_case, require_enabled
 from .index import build_index, records_from
-from .parties import build_party_reports, case_role, details
+from .parties import CLIENT_REPORT_VERSION, build_party_reports, case_role, details
 from .name_rules import NameRules, fingerprint, party_key, snapshot
 from .output import export_local
 from .review import case_issues
@@ -112,7 +112,7 @@ class Workspace:
                 before = self.party_reports(identifier, rules=snapshot(state))
                 after = self.party_reports(identifier, rules=proposed)
                 fields = ("name", "caseCount", "caseKeys", "sourceNames", "groupKind", "groupId")
-                for group in ("clients", "defendants", "plaintiffs"):
+                for group in ("clients",):
                     old = {s["nameKey"]: {k: s[k] for k in fields} for s in before[group]["summary"]}
                     new = {s["nameKey"]: {k: s[k] for k in fields} for s in after[group]["summary"]}
                     keys = {k for k in old.keys() | new.keys() if old.get(k) != new.get(k)}
@@ -282,7 +282,8 @@ class Workspace:
             "lastAction": m["lastAction"], "caseCount": len(cases) if detail else metadata.get("caseCount", 0),
             "enrichedCount": sum(bool(c.get("enrichment")) for c in cases) if detail else metadata.get("enrichedCases", 0), **receipt,
             "downloads": [n for n in sorted(DOWNLOADS) if (folder / "output" / n).is_file()],
-            "exportsNeedRefresh": (folder / "output/evidence.json").exists() and snapshot(metadata.get("nameRules")) != snapshot(rules),
+            "exportsNeedRefresh": (folder / "output/evidence.json").exists() and (
+                snapshot(metadata.get("nameRules")) != snapshot(rules) or metadata.get("clientReportVersion") != CLIENT_REPORT_VERSION),
             "indexReady": (folder / "pcl-records.json").exists() or m["demo"] and (folder / "output/evidence.json").exists()}
         if state == "interrupted":
             result["message"] = "The previous process ended. Resume explicitly to reuse saved work; pending receipts still block purchases."
@@ -307,7 +308,8 @@ class Workspace:
             jobs = [self.summary(p.parent.name) for p in self.root.glob("*/workspace.json")]
             return {"active": self.active, "jobs": sorted(jobs, key=lambda j: j["createdUtc"], reverse=True),
                     "connection": self.connection.status(), "stopping": self.stopping, "closed": self.closed,
-                    "nameRulesRevision": self.name_rules.public()["revision"], "docketBudgetVersion": 1, "documentGrabberVersion": 1}
+                    "nameRulesRevision": self.name_rules.public()["revision"], "docketBudgetVersion": 1, "documentGrabberVersion": 1,
+                    "clientReportVersion": CLIENT_REPORT_VERSION}
 
     def quote(self, identifier, keys):
         with self.lock:
