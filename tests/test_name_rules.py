@@ -111,7 +111,8 @@ class WorkspaceNameRuleTests(unittest.TestCase):
 
     def demo(self):
         identifier=self.ws.new(demo=True);self.ws.future.result(10)
-        self.ws.act(identifier,"retrieve",{"keys":["nysdc|1:24-cr-00001"]});self.ws.future.result(10)
+        from tests.test_workspace import retrieval_values
+        self.ws.act(identifier,"retrieve",retrieval_values(self.ws, identifier, ["nysdc|1:24-cr-00001"]));self.ws.future.result(10)
         return identifier
 
     def request(self,identifier=None):

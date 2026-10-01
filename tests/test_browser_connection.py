@@ -16,7 +16,7 @@ from roc.desktop import existing_url
 from roc.interface import make_server
 from roc.pacer import Session, SessionExpired, SignInError
 from roc.workspace import Workspace
-from tests.test_workspace import FakeCourt, form, record, response
+from tests.test_workspace import FakeCourt, form, record, response, retrieval_values
 
 
 def credentials(**overrides):
@@ -123,7 +123,7 @@ class ConnectionTests(unittest.TestCase):
                 key = ws.cases(identifier)[0]["key"]
                 FakeCourt.bought, FakeCourt.fail_key = [], key
                 with patch("roc.cli.CourtRetriever", FakeCourt):
-                    ws.act(identifier,"retrieve",{"keys":[key]})
+                    ws.act(identifier,"retrieve",retrieval_values(ws, identifier, [key]))
                     ws.future.result(10)
                     before = ws.manifest(identifier)
                     before_receipts = ws.ledger(identifier)

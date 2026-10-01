@@ -13,6 +13,7 @@ from openpyxl import load_workbook
 
 from roc.interface import make_server
 from roc.workspace import Workspace
+from tests.test_workspace import retrieval_values
 
 
 @unittest.skipUnless(os.environ.get('ROC_BROWSER_TESTS') == '1', 'Set ROC_BROWSER_TESTS=1')
@@ -24,7 +25,7 @@ class NameRulesBrowserTests(unittest.TestCase):
                 patch('roc.pacer.request_json',side_effect=AssertionError('No PACER requests')):
             ws=Workspace(tmp)
             identifier=ws.new(demo=True);ws.future.result(10)
-            ws.act(identifier,'retrieve',{'keys':['nysdc|1:24-cr-00001']});ws.future.result(10)
+            ws.act(identifier,'retrieve',retrieval_values(ws, identifier, ['nysdc|1:24-cr-00001']));ws.future.result(10)
             server,url=make_server(ws)
             thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
             try:

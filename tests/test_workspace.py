@@ -29,6 +29,12 @@ def response(rows, page=0, last=True, total=None):
         "numberOfElements": len(rows), "last": last}, "receipt": {"searchFee": ".10"}}), {}
 
 
+def retrieval_values(ws, identifier, keys, cap=None):
+    quote = ws.quote(identifier, keys)
+    return {"keys": keys, "quoteId": quote["quoteId"],
+            "docketBudgetCents": quote["maximumAdditionalCents"] if cap is None else cap}
+
+
 class FakeCourt:
     bought = []
     fail_key = None
@@ -86,10 +92,10 @@ class WorkspaceTests(unittest.TestCase):
         keys = [c["key"] for c in summary["cases"]]
         quote = self.ws.quote(identifier, [keys[0]])
         self.assertEqual(quote["maximumAdditionalCents"], 300)
-        self.ws.act(identifier, "retrieve", {"keys": [keys[0]]})
+        self.ws.act(identifier, "retrieve", retrieval_values(self.ws, identifier, [keys[0]]))
         self.wait()
         self.assertEqual(FakeCourt.bought, [keys[0]])
-        self.ws.act(identifier, "retrieve", {"keys": [keys[1]]})
+        self.ws.act(identifier, "retrieve", retrieval_values(self.ws, identifier, [keys[1]]))
         self.wait()
         self.assertEqual(self.ws.summary(identifier)["enrichedCount"], 2)
         self.assertEqual(len(self.requests), 1)  # Never re-search for enrichment.
@@ -103,35 +109,68 @@ class WorkspaceTests(unittest.TestCase):
         self.assertNotIn("test-secret-token", files)
         self.assertEqual(read_json(self.ws.folder(identifier) / "output/evidence.json")["cases"][0]["team"], "Criminal Defense")
 
-    def test_budget_preview_and_commit_both_enforce_cap_and_cannot_reset_ledger(self):
-        identifier = self.new(310)
+    def test_fresh_docket_cap_is_separate_from_search_and_cannot_reset_ledger(self):
+        identifier = self.new(1000)
         keys = [c["key"] for c in self.ws.cases(identifier)]
-        self.assertFalse(self.ws.quote(identifier, keys)["fitsBudget"])
-        with self.assertRaises(RocError):
-            self.ws.act(identifier, "retrieve", {"keys": keys})
+        original = self.ws.manifest(identifier)
+        request = retrieval_values(self.ws, identifier, keys, 300)
+        # A large old cap is not permission for another docket selection.
+        for invalid in ({"keys": keys}, request, request | {"docketBudgetCents": True},
+                        request | {"docketBudgetCents": "600"}, request | {"docketBudgetCents": -1}):
+            with self.assertRaises(RocError):
+                self.ws.act(identifier, "retrieve", invalid)
+            self.assertEqual(self.ws.manifest(identifier), original)
         self.assertEqual(FakeCourt.bought, [])
-        self.ws.act(identifier, "retrieve", {"keys": keys[:1]})
+        self.ws.act(identifier, "retrieve", retrieval_values(self.ws, identifier, keys[:1]))
         self.wait()
-        self.assertFalse(self.ws.quote(identifier, keys[1:])["fitsBudget"])
+        self.assertEqual(self.ws.summary(identifier)["budgetCents"], 310)  # Unused old allowance is replaced.
         with self.assertRaises(RocError):
             self.ws.act(identifier, "budget", {"budgetCents": 10})
-        self.ws.act(identifier, "budget", {"budgetCents": 700})
         self.assertEqual(self.ws.receipts(identifier)["spentCents"], 310)
-        self.assertEqual(len(FakeCourt.bought), 1)  # Changing cap starts nothing.
+        # A fresh docket allowance works even when the prior cap is exhausted.
+        second = retrieval_values(self.ws, identifier, keys[1:])
+        self.ws.act(identifier, "retrieve", second)
+        self.wait()
+        self.assertEqual(self.ws.receipts(identifier)["spentCents"], 610)
+        self.assertEqual(self.ws.summary(identifier)["budgetCents"], 610)
+        self.assertEqual(FakeCourt.bought, keys)
+        with self.assertRaisesRegex(RocError, "out of date"):
+            self.ws.act(identifier, "retrieve", second)
+        self.ws.act(identifier, "retrieve", retrieval_values(self.ws, identifier, keys, 0))
+        self.wait()
+        self.assertEqual(len(FakeCourt.bought), 2)  # Cached rerun adds no charges or authentication.
+        self.assertEqual(len(self.requests), 1)
+
+    def test_preview_is_read_only_and_rejects_changed_cap_or_selection(self):
+        identifier = self.new(10)
+        keys = [c["key"] for c in self.ws.cases(identifier)]
+        manifest, ledger = self.ws.manifest(identifier), self.ws.ledger(identifier)
+        request = retrieval_values(self.ws, identifier, keys[:1])
+        self.assertEqual(self.ws.manifest(identifier), manifest)
+        self.assertEqual(self.ws.ledger(identifier), ledger)
+        with self.assertRaisesRegex(RocError, "out of date"):
+            self.ws.act(identifier, "retrieve", request | {"keys": keys[1:]})
+        self.ws.act(identifier, "budget", {"budgetCents": 500})
+        with self.assertRaisesRegex(RocError, "out of date"):
+            self.ws.act(identifier, "retrieve", request)
+        self.assertEqual(FakeCourt.bought, [])
+        self.assertEqual(self.ws.receipts(identifier)["spentCents"], 10)
 
     def test_partial_retrieval_resume_only_remaining_selected_reports(self):
         identifier = self.new()
         keys = [c["key"] for c in self.ws.cases(identifier)]
         FakeCourt.fail_key = keys[1]
-        self.ws.act(identifier, "retrieve", {"keys": keys})
+        self.ws.act(identifier, "retrieve", retrieval_values(self.ws, identifier, keys))
         self.wait()
         self.assertEqual(self.ws.summary(identifier)["state"], "stopped")
         self.assertEqual(self.ws.summary(identifier)["enrichedCount"], 1)
+        self.assertEqual(self.ws.summary(identifier)["budgetCents"], 610)
         FakeCourt.fail_key = None
         self.ws.act(identifier, "resume")
         self.wait()
         self.assertEqual(FakeCourt.bought, keys)
         self.assertEqual(self.ws.summary(identifier)["enrichedCount"], 2)
+        self.assertEqual(self.ws.summary(identifier)["budgetCents"], 610)
 
     def test_pending_receipts_never_retry_and_offline_reconciliation_is_explicit(self):
         identifier = self.new()
@@ -182,7 +221,7 @@ class WorkspaceTests(unittest.TestCase):
     def test_missing_purchased_report_refuses_to_rebuy(self):
         identifier = self.new()
         key = self.ws.cases(identifier)[0]["key"]
-        self.ws.act(identifier, "retrieve", {"keys": [key]})
+        self.ws.act(identifier, "retrieve", retrieval_values(self.ws, identifier, [key]))
         self.wait()
         Path(self.ws.completed_reports(identifier)[key]["path"]).unlink()
         with self.assertRaisesRegex(RocError, "missing"):
@@ -205,7 +244,7 @@ class WorkspaceTests(unittest.TestCase):
         with patch("roc.pacer.Session.prompt", side_effect=AssertionError("no login")), patch("urllib.request.OpenerDirector.open", side_effect=AssertionError("no network")):
             identifier = self.ws.new(demo=True)
             self.wait()
-            self.ws.act(identifier, "retrieve", {"keys": ["nysdc|1:24-cr-00001"]})
+            self.ws.act(identifier, "retrieve", retrieval_values(self.ws, identifier, ["nysdc|1:24-cr-00001"]))
             self.wait()
             summary = self.ws.summary(identifier, True)
             self.assertEqual(summary["spentCents"], 0)

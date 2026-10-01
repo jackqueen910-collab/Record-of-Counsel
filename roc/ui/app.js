@@ -9,6 +9,7 @@ let connection = {connected:false, connecting:false}, afterLogin = null, authSub
 let shuttingDown = false, stopped = false, pollTimer = null;
 let reportView = 'cases', partyPage = 0;
 let selectedNames = new Map(), rulesAvailable = false, ruleState = null, editingRule = null, pendingRule = null, rulesBusy = false;
+let docketBudgetsAvailable = false;
 const pageSize = 50;
 const money = cents => new Intl.NumberFormat("en-US", {style:"currency", currency:"USD"}).format(cents / 100);
 const labels = {"missing-source":"Missing from source", "needs-review":"Needs review", "not-tested":"Not tested by sample"};
@@ -19,7 +20,7 @@ async function api(path, value) {
   const response = await fetch(path, {method:value === undefined ? "GET" : "POST", headers:{"X-ROC-Token":token, ...(value === undefined ? {} : {"Content-Type":"application/json"})}, ...(value === undefined ? {} : {body:JSON.stringify(value)})});
   const result = await response.json(); if (!response.ok) throw new Error(result.error || "Request failed."); return result;
 }
-function cents(value) {if (!/^\d+(\.\d{1,2})?$/.test(value)) throw new Error("Enter a dollar amount with at most two decimal places."); return Math.round(Number(value) * 100);}
+function cents(value) {if (!/^\d+(\.\d{1,2})?$/.test(value)) throw new Error("Enter a dollar amount with at most two decimal places."); const result = Math.round(Number(value) * 100); if (!Number.isSafeInteger(result)) throw new Error('Enter a smaller dollar amount.'); return result;}
 async function action(fn) {
   if (busyAction) return; busyAction = true; $('notice').hidden = true;
   try {await fn(); await refresh();} finally {busyAction = false; setButtons();}
@@ -46,9 +47,14 @@ function setButtons() {
   $('stop-roc').disabled = shuttingDown;
   for (const id of ['auth-username','auth-password','auth-otp','auth-client','auth-redact','auth-submit']) $(id).disabled = connection.connecting || authSending || authSubmitted || shuttingDown;
   $('search-submit').disabled = busy; $('demo').disabled = busy;
-  $('preview').disabled = busy || !current || !current.indexReady || selected.size === 0;
+  $('preview').disabled = busy || !docketBudgetsAvailable || !current || !current.indexReady || selected.size === 0;
+  $('preview').title = docketBudgetsAvailable ? 'Review only selected cases and set a docket cap' : 'Stop ROC and reopen Start ROC to load separate docket caps';
+  $('choose-dockets').disabled = busy || !docketBudgetsAvailable;
+  $('choose-dockets').textContent = docketBudgetsAvailable ? 'Choose cases for docket reports' : 'Restart ROC to enable docket caps';
+  document.querySelectorAll('button.docket-field').forEach(b => b.disabled = busy || !docketBudgetsAvailable);
   for (const id of ['resume','signin','reconcile','edit-cap','rebuild','select-visible']) $(id).disabled = busy;
-  $('confirm-retrieve').disabled = busy || !quote?.fitsBudget;
+  $('confirm-retrieve').disabled = busy || !docketCapValid();
+  $('docket-cap').disabled = busy || !quote?.newReports;
   if (current) {
     for (const view of ['clients','defendants','plaintiffs']) $('view-'+view).disabled = !current.partyReports;
     $('pause').hidden = !current.busy; $('pause').disabled = busyAction || current.pauseRequested;
@@ -66,6 +72,7 @@ async function refresh() {
   try {
     const listing = await api('/api/runs'); activeRun = listing.active; connection = listing.connection;
     rulesAvailable = Number.isInteger(listing.nameRulesRevision);
+    docketBudgetsAvailable = listing.docketBudgetVersion === 1;
     if ($('rules-dialog').open && ruleState && rulesAvailable && listing.nameRulesRevision !== ruleState.revision && !rulesBusy) {
       invalidateRulePreview(); $('rules-message').textContent = 'Name rules changed in another tab. Close and reopen Name rules to load the latest version.'; $('rules-message').hidden = false;
     }
@@ -111,7 +118,8 @@ function renderRun() {
   $('run-status').textContent = states[r.state] || r.state;
   $('progress-message').textContent = r.message;
   $('pending-message').textContent = r.pauseRequested ? 'Waiting for the current request to finish. No further purchases will begin after the pause checkpoint.' : r.pendingCount ? `${r.pendingCount} unresolved receipt(s): ${money(r.pendingCents)} reserved. Further purchases are blocked.` : r.stoppedReason || '';
-  const newStamp = JSON.stringify([r.cases,r.partyReports,r.busy,activeRun,rulesAvailable]); if (tableStamp !== newStamp) {tableStamp = newStamp; renderTable(); renderParties();}
+  const newStamp = JSON.stringify([r.cases,r.partyReports,r.busy,activeRun,rulesAvailable,docketBudgetsAvailable]); if (tableStamp !== newStamp) {tableStamp = newStamp; renderTable(); renderParties();}
+  $('docket-guidance').hidden = !r.indexReady || !r.cases.some(c=>!c.enriched);
   const coverage = r.partyReports?.coverage;
   $('report-coverage').textContent = coverage ? `${coverage.parsedDockets} of ${coverage.indexedCases} indexed cases have parsed dockets · ${coverage.indexOnlyCases} index only · Counsel matched in ${coverage.casesWithMatchedClients} cases${coverage.partyTablesNeedingReview ? ` · ${coverage.partyTablesNeedingReview} party tables need review` : ''}. Party summaries cover saved dockets only.` : 'An update is ready. Use Stop ROC, then reopen Start ROC to load party reports. Saved work is retained; reconnect PACER when you next need access.';
   $('exports-stale').hidden = !r.exportsNeedRefresh;
@@ -129,7 +137,7 @@ function filteredRows() {
   const names = new Map();
   for (const p of current?.partyReports?.parties || []) names.set(p.caseKey, `${names.get(p.caseKey) || ''} ${p.name}`);
   for (const group of ['clients','defendants','plaintiffs']) for (const p of current?.partyReports?.[group]?.cases || []) names.set(p.caseKey, `${names.get(p.caseKey) || ''} ${p.name}`);
-  let rows = (current?.cases || []).filter(c => (!kind || c.caseType === kind) && (!review || (review === 'enriched' ? c.enriched : c.issues.some(i => i.category === review))) && (!text || [c.caseNumber,c.caseTitle,c.district,c.role || c.team,c.nature,names.get(c.key)].join(' ').toLocaleLowerCase().includes(text)));
+  let rows = (current?.cases || []).filter(c => (!kind || c.caseType === kind) && (!review || (review === 'enriched' ? c.enriched : review === 'needs-docket' ? !c.enriched : c.issues.some(i => i.category === review))) && (!text || [c.caseNumber,c.caseTitle,c.district,c.role || c.team,c.nature,names.get(c.key)].join(' ').toLocaleLowerCase().includes(text)));
   const sort = $('sort').value;
   rows.sort((a,b) => sort === 'court' ? a.district.localeCompare(b.district) || a.caseNumber.localeCompare(b.caseNumber) : (sort === 'oldest' ? 1 : -1) * a.dateFiled.localeCompare(b.dateFiled) || a.key.localeCompare(b.key));
   return rows;
@@ -137,6 +145,17 @@ function filteredRows() {
 function selectionLabel(rows) {
   const shown = new Set(rows.map(r => r.key)), hidden = [...selected].filter(k => !shown.has(k)).length;
   $('selection-count').textContent = selected.size; $('selection-hidden').textContent = hidden ? `(${hidden} outside this filter)` : ''; setButtons();
+}
+function docketField(c, field, value) {
+  const td = node('td');
+  const missing = !c.enriched && (field === 'Role' ? !value || /^unresolved/i.test(value) : !value || /^(charges )?not supplied by PCL$|^N\/A$/i.test(value));
+  if (!missing) {td.textContent = value || 'Unresolved'; td.title = value || 'Unresolved'; return td;}
+  if (!c.eligible) {td.append(node('span','Docket unavailable','pill')); td.title = c.ineligibleReason; return td;}
+  const b = node('button','Run docket report','docket-field');
+  b.setAttribute('aria-label',`Run docket for ${field} in ${c.caseNumber}`);
+  b.title = `Review this case and set a spending cap to investigate ${field}. No purchase until you confirm.`;
+  b.addEventListener('click',()=>action(()=>previewDockets([c.key])).catch(error));
+  td.append(b); return td;
 }
 function renderTable() {
   const rows = filteredRows(); page = Math.min(page, Math.max(0, Math.ceil(rows.length / pageSize)-1)); pageRows = rows.slice(page*pageSize, (page+1)*pageSize);
@@ -149,7 +168,8 @@ function renderTable() {
     const checkCell = node('td'); checkCell.append(cb); tr.append(checkCell);
     const titleCell = node('td'), b = node('button',c.caseNumber); b.addEventListener('click', () => showCase(c));
     titleCell.append(b, node('span',c.caseTitle,'case-title')); titleCell.title = c.caseTitle; tr.append(titleCell);
-    for (const value of [c.caseType,c.district,c.dateFiled,c.role || c.team || 'Unresolved',c.nature,c.status]) {const td = node('td',value); td.title = value; tr.append(td);}
+    for (const value of [c.caseType,c.district,c.dateFiled]) {const td = node('td',value); td.title = value; tr.append(td);}
+    tr.append(docketField(c,'Role',c.role || c.team),docketField(c,'Nature of Case',c.nature),node('td',c.status));
     const findings = node('td'), review = c.issues.some(i => i.category === 'needs-review'), missing = c.issues.some(i => i.category === 'missing-source');
     findings.append(node('span',review ? 'Review' : missing ? 'Source gap' : c.enriched ? 'Enriched' : 'Index only',`pill${review || missing ? ' warn' : c.enriched ? ' good' : ''}`)); tr.append(findings); $('case-rows').append(tr);
   }
@@ -264,16 +284,40 @@ for (const id of ['filter','type-filter','review-filter','sort']) bind(id,id ===
 bind('previous','click',() => {page--; renderTable();}); bind('next','click',() => {page++; renderTable();});
 bind('select-visible','click',() => {pageRows.filter(c=>c.eligible).forEach(c=>selected.add(c.key)); renderTable();});
 bind('clear-selection','click',() => {selected.clear(); renderTable();});
-bind('preview','click',() => action(async () => {
-  quote = await api(`/api/runs/${currentId}/quote`,{keys:[...selected]});
+bind('choose-dockets','click',() => {
+  $('review-filter').value = 'needs-docket'; page = 0; renderTable();
+  $('filter').scrollIntoView({block:'center'}); $('filter').focus();
+});
+function docketCapValid() {
+  if (!quote?.quoteId) return false;
+  try {return cents($('docket-cap').value) >= quote.maximumAdditionalCents;} catch {return false;}
+}
+function updateDocketCap() {
+  if (!quote) return;
+  let cap = null; try {cap = cents($('docket-cap').value);} catch {}
+  $('quote-budget').textContent = `${money(quote.spentCents)} already charged for this run. This new cap is additional to those charges and replaces any unused allowance from the previous cap.`;
+  $('docket-cap-message').textContent = !quote.newReports ? 'No new charges: this selection uses saved or demo reports.' : cap === null ? 'Enter a fresh cap to enable retrieval. Opening this preview buys nothing.' : cap < quote.maximumAdditionalCents ? `This selection needs a cap of at least ${money(quote.maximumAdditionalCents)}. Choose fewer cases or raise this cap.` : `At most ${money(cap)} in new charges authorized. Total run limit after confirmation: ${money(quote.spentCents + cap)}. Resuming keeps this limit.`;
+  $('docket-cap-message').classList.toggle('cap-short',cap !== null && cap < quote.maximumAdditionalCents); setButtons();
+}
+async function previewDockets(keys) {
+  const id = currentId;
+  const result = await api(`/api/runs/${id}/quote`,{keys});
+  if (!result.quoteId) throw new Error('Stop ROC and reopen Start ROC to load separate docket spending caps. No retrieval submitted.');
+  quote = {...result,runId:id};
   $('quote-text').textContent = `${quote.selectedCount} selected · ${quote.newReports} new reports · ${quote.cachedReports} saved or demo reports`;
   $('quote-cost').textContent = money(quote.maximumAdditionalCents);
-  $('quote-budget').textContent = `${money(quote.spentCents)} already spent of the ${money(quote.budgetCents)} cap. ${quote.fitsBudget ? 'This selection fits within the cap.' : 'This exceeds the cap. Close this preview and select fewer cases or change the cap.'}`;
+  $('docket-cap').value = quote.newReports ? '' : '0.00';
+  updateDocketCap();
   $('quote-cases').replaceChildren(...quote.cases.map(c=>node('p',`${c.caseNumber} · ${c.district}`))); $('quote-dialog').showModal();
-}));
+}
+bind('preview','click',() => action(()=>previewDockets([...selected])));
+bind('docket-cap','input',updateDocketCap);
+bind('revise-dockets','click',() => $('quote-dialog').close());
+$('quote-dialog').addEventListener('close',()=>{quote = null; setButtons();});
 bind('confirm-retrieve','click',async () => {
-  const id = currentId, keys = [...quote.keys], needsConnection = quote.newReports > 0; $('quote-dialog').close();
-  const proceed = () => action(async () => {await api(`/api/runs/${id}/retrieve`,{keys}); selected.clear(); tableStamp = '';});
+  if (!docketCapValid()) return;
+  const id = quote.runId, request = {keys:[...quote.keys],quoteId:quote.quoteId,docketBudgetCents:cents($('docket-cap').value)}, needsConnection = quote.newReports > 0; $('quote-dialog').close();
+  const proceed = () => action(async () => {await api(`/api/runs/${id}/retrieve`,request); if (currentId === id) {request.keys.forEach(k=>selected.delete(k)); tableStamp = '';}});
   if (needsConnection) await connectedAction('Connect to retrieve the dockets you just confirmed.', proceed); else await proceed();
 });
 for (const [id, command] of [['pause','pause'],['reconcile','reconcile'],['rebuild','export']]) bind(id,'click',() => action(() => api(`/api/runs/${currentId}/${command}`,{})));

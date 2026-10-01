@@ -302,7 +302,7 @@ class Workspace:
             jobs = [self.summary(p.parent.name) for p in self.root.glob("*/workspace.json")]
             return {"active": self.active, "jobs": sorted(jobs, key=lambda j: j["createdUtc"], reverse=True),
                     "connection": self.connection.status(), "stopping": self.stopping, "closed": self.closed,
-                    "nameRulesRevision": self.name_rules.public()["revision"]}
+                    "nameRulesRevision": self.name_rules.public()["revision"], "docketBudgetVersion": 1}
 
     def quote(self, identifier, keys):
         with self.lock:
@@ -326,11 +326,12 @@ class Workspace:
             cached = self.completed_reports(identifier)
             fresh = [] if m["demo"] else [c for c in selected if c["key"] not in cached]
             ceiling = len(fresh) * 300
-            return {"keys": keys, "selectedCount": len(keys), "newReports": len(fresh),
+            quote = {"keys": keys, "selectedCount": len(keys), "newReports": len(fresh),
                 "cachedReports": len(keys) - len(fresh), "maximumAdditionalCents": ceiling,
                 "spentCents": receipt["spentCents"], "budgetCents": m["config"]["budgetCents"],
-                "fitsBudget": receipt["spentCents"] + ceiling <= m["config"]["budgetCents"],
                 "cases": [{"caseNumber": c["caseNumber"], "district": c["district"]} for c in selected]}
+            quote["quoteId"] = fingerprint({"run": identifier, **quote})
+            return quote
 
     def act(self, identifier, action, values=None):
         values = values or {}
@@ -352,8 +353,21 @@ class Workspace:
                 return
             if action == "retrieve":
                 quote = self.quote(identifier, values.get("keys"))
-                if not quote["fitsBudget"]:
-                    raise RocError("The selection's maximum charge exceeds the remaining cap. Select fewer cases or explicitly change the cap.")
+                if values.get("quoteId") != quote["quoteId"]:
+                    raise RocError("Review this docket selection again before confirming. Its spending preview is missing or out of date.")
+                allowance = values.get("docketBudgetCents")
+                if type(allowance) is not int or allowance < 0:
+                    raise RocError("Enter a fresh spending cap for this docket selection.")
+                if allowance < quote["maximumAdditionalCents"]:
+                    raise RocError("This docket cap does not cover the selected reports. Select fewer cases or raise the docket cap.")
+                if m["demo"] and allowance != 0:
+                    raise RocError("The demo is free; its docket cap must be zero.")
+                # Approve additional spending once, atomically with the exact
+                # selection. Resume keeps this absolute limit; it never adds
+                # another allowance or resets the cumulative receipt ledger.
+                m["config"]["budgetCents"] = quote["spentCents"] + allowance
+                m["docketApproval"] = {"approvedUtc": now(), "spentBeforeCents": quote["spentCents"],
+                    "allowanceCents": allowance, "quoteId": quote["quoteId"], "keys": quote["keys"]}
                 m["selected"] = quote["keys"]
                 self.save(identifier, m)
             elif action == "resume":
