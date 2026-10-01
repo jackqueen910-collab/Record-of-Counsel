@@ -63,7 +63,9 @@ def build_party_reports(cases, aliases=()):
             if not name or p["role"] == "Mediator":
                 continue
             key = party_key(name)
-            identity = (case["key"], key, p["role"])
+            # Defendant numbers distinguish namesakes within one criminal case.
+            # Group name labels later, after preserving counsel associations.
+            identity = (case["key"], key, p["role"], p.get("defendantNumber"))
             if identity not in entries:
                 entries[identity] = {"nameKey": key, "name": name, "sourceNames": [], "partyRole": p["role"],
                     "caseKey": case["key"], **{field: case.get(field, "") for field in

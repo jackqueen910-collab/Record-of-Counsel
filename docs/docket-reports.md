@@ -23,7 +23,7 @@ The defendant summary also reports **Opposed as civil plaintiff counsel**. It co
 
 ## Names and coverage
 
-Party names are grouped only by Unicode presentation normalization, whitespace and capitalization. Punctuation, word order, initials, spelling and corporate suffix differences remain distinct. All original source spellings are retained. A name shared by different people is still one **name label**, not a verified identity. An explicit alias/merge editor is a possible future feature; no fuzzy identity or corporate-family inference runs automatically.
+Party names are grouped only by Unicode presentation normalization, whitespace and capitalization. Punctuation, word order, initials, spelling and corporate suffix differences remain distinct. All original source spellings are retained. A name shared by different people is still one **name label**, not a verified identity. Distinct defendant numbers keep namesakes' counsel associations separate in the underlying party records and client selection. A name label can therefore have more than one relationship in a case; relationship counts need not sum to its distinct-case total. An explicit alias/merge editor is a possible future feature; no fuzzy identity or corporate-family inference runs automatically.
 
 The coverage banner and export notes report indexed cases, parsed dockets, cases with matched clients, and party tables needing review. Zero results do not imply there were no parties in unexamined cases. Missing counts do not erase a supported client association. An unfamiliar table is visibly flagged and does not create inferred opposing-party associations.
 

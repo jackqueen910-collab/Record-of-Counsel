@@ -77,6 +77,18 @@ class PartyReportTests(unittest.TestCase):
         self.assertEqual(r["defendants"]["summary"][0]["unresolvedCaseCount"], 1)
         self.assertEqual(r["coverage"]["casesWithoutMatchedClients"], 1)
 
+    def test_defendant_numbers_preserve_namesake_client_boundaries(self):
+        c = case(party("Defendant", "Same Name", "Jordan Lawyer", count("CLIENT COUNT", "1"), "1") +
+                 party("Defendant", "Same Name", "Other Lawyer", count("OTHER COUNT", "2"), "2"), kind="CRIMINAL")
+        r = build_party_reports([c])
+        self.assertEqual(c["nature"], "CLIENT COUNT (1)")
+        self.assertEqual(len(r["parties"]), 2)
+        self.assertEqual(r["clients"]["cases"][0]["defendantNumbers"], ["1"])
+        self.assertEqual(r["defendants"]["cases"][0]["defendantNumbers"], ["1", "2"])
+        self.assertEqual(r["defendants"]["summary"][0]["caseCount"], 1)
+        self.assertEqual(r["defendants"]["summary"][0]["sameSideCaseCount"], 1)
+        self.assertEqual(r["defendants"]["summary"][0]["clientCaseCount"], 1)
+
     def test_legacy_evidence_requires_counsel_alias_not_same_party_name(self):
         c = case(party("Plaintiff", "Same Name", "Jordan Lawyer") + party("Defendant", "Same Name", "Other Lawyer"))
         del c["enrichment"]["partyDetails"]
