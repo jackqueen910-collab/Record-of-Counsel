@@ -51,7 +51,8 @@ def export_local(cases, folder, title, metadata):
         writer.writerows([csv_safe(x) for x in values(c)] for c in cases)
     lawyer = metadata.get("lawyer", {})
     aliases = [clean_name for clean_name in [" ".join([lawyer.get("firstName", ""), lawyer.get("lastName", "")]).strip(), *lawyer.get("aliases", [])] if clean_name]
-    reports = build_party_reports(cases, aliases)
+    reports = build_party_reports(cases, aliases, metadata.get("nameRules"))
+    metadata["nameRules"] = reports["nameRules"]
     metadata["partyCoverage"] = reports["coverage"]
     write_json(folder / "evidence.json", {"run": metadata, "cases": cases})
     write_json(folder / "party-reports.json", reports)
@@ -66,6 +67,7 @@ def export_local(cases, folder, title, metadata):
         for table in tables:
             archive.write(folder / table["file"], table["file"])
         archive.writestr("README.txt", report_note)
+        archive.writestr("name-rules.json", json.dumps(reports["nameRules"], indent=2, ensure_ascii=False))
     write_json(folder / "review.json", [{"caseNumber": c["caseNumber"], "court": c["courtId"],
                "issues": case_issues(c), "items": [issue_text(i) for i in case_issues(c)]}
                for c in cases if case_issues(c)])
@@ -144,6 +146,18 @@ def export_local(cases, folder, title, metadata):
             report_sheet.column_dimensions[get_column_letter(col)].width = (40 if header in ("Name", "Case title", "Nature of Case", "Source names") else 26)
         report_sheet.freeze_panes = "B4"
         report_sheet.auto_filter.ref = f"A3:{get_column_letter(len(table['headers']))}{max(3, report_sheet.max_row)}"
+    if reports["nameRules"]["rules"]:
+        rules_sheet = wb.create_sheet("Name rules")
+        rules_sheet.append(["Preferred name", "Grouping", "Source names", "Revision"])
+        for rule in reports["nameRules"]["rules"]:
+            rules_sheet.append([rule["label"], rule["kind"], "; ".join(rule["names"]), reports["nameRules"]["revision"]])
+        for row in rules_sheet:
+            for cell in row:
+                if isinstance(cell.value, str):
+                    cell.data_type = "s"
+        for col in ("A", "B", "C"):
+            rules_sheet.column_dimensions[col].width = 45
+        rules_sheet.freeze_panes = "A2"
     wb.save(folder / "case-index.xlsx")
     headings = "".join(f"<th>{escape(h)}</th>" for h in HEADERS)
     rows = "".join("<tr>" + "".join(f'<td title="{escape(str(v), quote=True)}">{escape(str(v))}</td>' for v in values(c)) + "</tr>" for c in cases)
@@ -180,10 +194,10 @@ def google_token(credentials):
         raise RocError("Google OAuth refresh failed. Reauthorize the standalone application.") from None
 
 
-def publish_google(cases, title, credentials, aliases=()):
+def publish_google(cases, title, credentials, aliases=(), name_rules=None):
     # Fresh workbook per publication. Never overwrite a user's live edits.
     token = google_token(credentials)
-    reports = build_party_reports(cases, aliases)
+    reports = build_party_reports(cases, aliases, name_rules)
     tables = report_tables(reports)
     sheets = [{"properties": {"sheetId": 0, "title": "Case index", "gridProperties": {"rowCount": max(1000, len(cases) + 7), "columnCount": 10, "frozenRowCount": 1, "frozenColumnCount": 2}}}]
     for i, table in enumerate(tables, 1):

@@ -185,6 +185,21 @@ class InterfaceBrowserTests(unittest.TestCase):
                     expect(page.locator("#run-status")).to_have_text("READY", timeout=15000)
                     expect(page.locator("#stat-dockets")).to_have_text("0")
                     expect(page.locator("#case-rows tr")).to_have_count(1)
+                    # The listing and detail are separate reads: an operation can
+                    # finish between them. A later idle listing must re-enable
+                    # selection even when the case/detail payload is unchanged.
+                    stale_listing = {'active':True}
+                    identifier = ws.list()['jobs'][0]['id']
+                    def race_reply(route):
+                        reply = route.fetch(); data = reply.json()
+                        if stale_listing['active']: data['active'] = identifier
+                        route.fulfill(response=reply,json=data)
+                    page.route('**/api/runs',race_reply)
+                    page.reload(); page.get_by_role('button',name='Jordan Lawyer').click()
+                    expect(page.get_by_role('checkbox',name='Select 1:24-cr-00001')).to_be_disabled()
+                    stale_listing['active'] = False
+                    expect(page.get_by_role('checkbox',name='Select 1:24-cr-00001')).to_be_enabled(timeout=10000)
+                    page.unroute('**/api/runs',race_reply)
                     page.locator('#view-clients').click()
                     expect(page.locator('#party-empty')).to_contain_text('Retrieve selected dockets')
                     expect(page.locator('#report-coverage')).to_contain_text('0 of 1')

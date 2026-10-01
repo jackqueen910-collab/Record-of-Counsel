@@ -8,6 +8,7 @@ let busyAction = false, refreshing = false, tableStamp = "", sidebarStamp = "", 
 let connection = {connected:false, connecting:false}, afterLogin = null, authSubmitted = false, authSending = false;
 let shuttingDown = false, stopped = false, pollTimer = null;
 let reportView = 'cases', partyPage = 0;
+let selectedNames = new Map(), rulesAvailable = false, ruleState = null, editingRule = null, pendingRule = null, rulesBusy = false;
 const pageSize = 50;
 const money = cents => new Intl.NumberFormat("en-US", {style:"currency", currency:"USD"}).format(cents / 100);
 const labels = {"missing-source":"Missing from source", "needs-review":"Needs review", "not-tested":"Not tested by sample"};
@@ -32,6 +33,13 @@ async function openRun(id) {
 }
 function setButtons() {
   const busy = Boolean(activeRun) || busyAction || connection.connecting || shuttingDown;
+  $('name-rules').disabled = busy || !rulesAvailable;
+  $('name-rules').title = rulesAvailable ? 'Saved name corrections and organization groups' : 'Restart ROC to load name rules';
+  $('group-names').disabled = busy || !rulesAvailable || selectedNames.size === 0;
+  $('refresh-reports').disabled = busy;
+  for (const id of ['rule-label','rule-kind','rule-names','preview-rule','new-rule','delete-rule']) $(id).disabled = busy || rulesBusy;
+  $('undo-rule').disabled = busy || rulesBusy || !ruleState?.canUndo;
+  $('apply-rule').disabled = busy || rulesBusy || !pendingRule;
   $('connect-pacer').disabled = busy; $('disconnect-pacer').disabled = busy;
   $('connect-pacer').hidden = connection.connected; $('disconnect-pacer').hidden = !connection.connected;
   $('connection-status').textContent = stopped ? 'ROC stopped' : shuttingDown ? 'Stopping ROC…' : connection.connecting ? 'Connecting…' : connection.connected ? 'PACER connected' : 'Sign-in required';
@@ -49,7 +57,7 @@ function setButtons() {
     $('signin').hidden = current.demo || !['stopped','interrupted'].includes(current.state);
     $('reconcile').hidden = !current.pendingCount && !current.stoppedReason;
     $('edit-cap').hidden = current.demo; $('rebuild').disabled = busy || !current.indexReady;
-    $('exports').querySelectorAll('button').forEach(b => b.disabled = current.busy);
+    $('exports').querySelectorAll('button').forEach(b => b.disabled = current.busy || current.exportsNeedRefresh);
   }
 }
 async function refresh() {
@@ -57,6 +65,10 @@ async function refresh() {
   let continuation = null;
   try {
     const listing = await api('/api/runs'); activeRun = listing.active; connection = listing.connection;
+    rulesAvailable = Number.isInteger(listing.nameRulesRevision);
+    if ($('rules-dialog').open && ruleState && rulesAvailable && listing.nameRulesRevision !== ruleState.revision && !rulesBusy) {
+      invalidateRulePreview(); $('rules-message').textContent = 'Name rules changed in another tab. Close and reopen Name rules to load the latest version.'; $('rules-message').hidden = false;
+    }
     shuttingDown = shuttingDown || listing.stopping;
     if (listing.closed) {
       stopped = true; clearInterval(pollTimer); $('notice').textContent = 'ROC has stopped. You can close this tab. Reopen Start ROC to return to your saved runs.'; $('notice').hidden = false;
@@ -99,9 +111,10 @@ function renderRun() {
   $('run-status').textContent = states[r.state] || r.state;
   $('progress-message').textContent = r.message;
   $('pending-message').textContent = r.pauseRequested ? 'Waiting for the current request to finish. No further purchases will begin after the pause checkpoint.' : r.pendingCount ? `${r.pendingCount} unresolved receipt(s): ${money(r.pendingCents)} reserved. Further purchases are blocked.` : r.stoppedReason || '';
-  const newStamp = JSON.stringify([r.cases,r.partyReports,r.busy]); if (tableStamp !== newStamp) {tableStamp = newStamp; renderTable(); renderParties();}
+  const newStamp = JSON.stringify([r.cases,r.partyReports,r.busy,activeRun,rulesAvailable]); if (tableStamp !== newStamp) {tableStamp = newStamp; renderTable(); renderParties();}
   const coverage = r.partyReports?.coverage;
   $('report-coverage').textContent = coverage ? `${coverage.parsedDockets} of ${coverage.indexedCases} indexed cases have parsed dockets · ${coverage.indexOnlyCases} index only · Counsel matched in ${coverage.casesWithMatchedClients} cases${coverage.partyTablesNeedingReview ? ` · ${coverage.partyTablesNeedingReview} party tables need review` : ''}. Party summaries cover saved dockets only.` : 'An update is ready. Use Stop ROC, then reopen Start ROC to load party reports. Saved work is retained; reconnect PACER when you next need access.';
+  $('exports-stale').hidden = !r.exportsNeedRefresh;
   $('exports').replaceChildren();
   const formats = {'case-index.xlsx':'Excel ↓','case-index.csv':'CSV ↓','party-reports.zip':'Party CSVs ↓','case-index.html':'HTML ↓','evidence.json':'Evidence ↓','review.json':'Findings ↓'};
   for (const [file, title] of Object.entries(formats)) if (r.downloads.includes(file)) {
@@ -115,6 +128,7 @@ function filteredRows() {
   const text = $('filter').value.trim().toLocaleLowerCase(), kind = $('type-filter').value, review = $('review-filter').value;
   const names = new Map();
   for (const p of current?.partyReports?.parties || []) names.set(p.caseKey, `${names.get(p.caseKey) || ''} ${p.name}`);
+  for (const group of ['clients','defendants','plaintiffs']) for (const p of current?.partyReports?.[group]?.cases || []) names.set(p.caseKey, `${names.get(p.caseKey) || ''} ${p.name}`);
   let rows = (current?.cases || []).filter(c => (!kind || c.caseType === kind) && (!review || (review === 'enriched' ? c.enriched : c.issues.some(i => i.category === review))) && (!text || [c.caseNumber,c.caseTitle,c.district,c.role || c.team,c.nature,names.get(c.key)].join(' ').toLocaleLowerCase().includes(text)));
   const sort = $('sort').value;
   rows.sort((a,b) => sort === 'court' ? a.district.localeCompare(b.district) || a.caseNumber.localeCompare(b.caseNumber) : (sort === 'oldest' ? 1 : -1) * a.dateFiled.localeCompare(b.dateFiled) || a.key.localeCompare(b.key));
@@ -162,6 +176,7 @@ function showCase(c) {
 }
 function setReportView(view) {
   reportView = view; partyPage = 0;
+  selectedNames.clear(); updateNameSelection();
   $('cases-panel').hidden = view !== 'cases'; $('parties-panel').hidden = view === 'cases';
   for (const name of ['cases','clients','defendants','plaintiffs']) {
     $('view-'+name).classList.toggle('active',view === name); $('view-'+name).setAttribute('aria-pressed',String(view === name));
@@ -176,14 +191,23 @@ function partyMatches(row) {
 }
 function renderParties() {
   if (reportView === 'cases' || !current?.partyReports) return;
+  const available = new Set(current.partyReports[reportView].summary.filter(s=>!s.groupId).map(s=>s.nameKey));
+  for (const key of selectedNames.keys()) if (!available.has(key)) selectedNames.delete(key);
   const text = $('party-filter').value.trim().toLocaleLowerCase(), relation = $('party-relation').value;
-  const rows = current.partyReports[reportView].summary.filter(s => (!text || s.sourceNames.join(' ').toLocaleLowerCase().includes(text)) && (!relation || s[relation] > 0));
+  const rows = current.partyReports[reportView].summary.filter(s => (!text || [s.name,...s.sourceNames].join(' ').toLocaleLowerCase().includes(text)) && (!relation || s[relation] > 0));
   rows.sort((a,b) => (b[relation || 'caseCount']-a[relation || 'caseCount']) || a.name.localeCompare(b.name));
   partyPage = Math.min(partyPage,Math.max(0,Math.ceil(rows.length/pageSize)-1));
   $('party-rows').replaceChildren();
   for (const s of rows.slice(partyPage*pageSize,(partyPage+1)*pageSize)) {
     const tr = node('tr'), cell = node('td'), b = node('button',s.name);
+    const cb = node('input'); cb.type = 'checkbox'; cb.className = 'name-checkbox'; cb.checked = selectedNames.has(s.nameKey); cb.disabled = !rulesAvailable || Boolean(s.groupId) || Boolean(activeRun);
+    cb.setAttribute('aria-label','Group '+s.name); cb.title = s.groupId ? 'Edit this existing group in Name rules' : 'Select a name to group';
+    cb.addEventListener('change',() => {cb.checked ? selectedNames.set(s.nameKey,s) : selectedNames.delete(s.nameKey); updateNameSelection();}); cell.append(cb);
     b.addEventListener('click',() => showParty(s)); cell.append(b); cell.title = s.sourceNames.join('; '); tr.append(cell);
+    if (s.groupId) {
+      const badge = node('button',s.groupKind === 'organization-group' ? 'Organization group' : 'Name correction','group-badge');
+      badge.disabled = !rulesAvailable || Boolean(activeRun); badge.addEventListener('click',() => openRules(s.groupId).catch(error)); cell.append(badge);
+    }
     for (const value of [s[relation || 'caseCount'],s.clientCaseCount,s.opposingCaseCount,s.civilPlaintiffCaseCount,s.sameSideCaseCount,s.unresolvedCaseCount,s.roles.join('; ')]) {const td = node('td',String(value)); td.title = String(value); tr.append(td);}
     $('party-rows').append(tr);
   }
@@ -192,11 +216,18 @@ function renderParties() {
   $('result-count').textContent = `${rows.length.toLocaleString()} names`;
   $('party-page-summary').textContent = rows.length ? `${partyPage*pageSize+1}–${Math.min((partyPage+1)*pageSize,rows.length)} of ${rows.length} names${relation ? ' · Filtered distinct-case count; relationship columns show full totals' : ''}` : '0 names';
   $('party-previous').disabled = partyPage === 0; $('party-next').disabled = (partyPage+1)*pageSize >= rows.length;
+  updateNameSelection();
+}
+function updateNameSelection() {
+  const relation = $('party-relation').value;
+  const visible = new Set((current?.partyReports?.[reportView]?.summary || []).filter(s => (!relation || s[relation]>0) && [s.name,...s.sourceNames].join(' ').toLocaleLowerCase().includes($('party-filter').value.trim().toLocaleLowerCase())).map(s=>s.nameKey));
+  const hidden = [...selectedNames.keys()].filter(k=>!visible.has(k)).length;
+  $('name-selection-count').textContent = `${selectedNames.size} names selected${hidden ? ` (${hidden} outside these filters)` : ''}`; setButtons();
 }
 function showParty(summary) {
   const appearances = current.partyReports[reportView].cases.filter(p => p.nameKey === summary.nameKey && partyMatches(p));
   const byCase = new Map(); appearances.forEach(p => {if (!byCase.has(p.caseKey)) byCase.set(p.caseKey,[]); byCase.get(p.caseKey).push(p);});
-  $('party-name').textContent = summary.name; $('party-source-names').textContent = 'Source names: '+summary.sourceNames.join('; ');
+  $('party-name').textContent = summary.name; $('party-source-names').textContent = (summary.groupKind === 'organization-group' ? 'Organization group — separate legal entities. ' : '')+'Source names: '+summary.sourceNames.join('; ');
   $('party-case-count').textContent = `${byCase.size} distinct cases in this view. Counts reflect saved docket coverage.`;
   $('party-case-list').replaceChildren();
   const caseMap = new Map(current.cases.map(c => [c.key,c]));
@@ -205,6 +236,7 @@ function showParty(summary) {
     const c = caseMap.get(key), block = node('div',undefined,'party-appearance'), b = node('button',c.caseNumber,'text-button');
     b.addEventListener('click',() => showCase(c)); block.append(b,node('strong',c.caseTitle),node('p',`${c.district} · ${c.dateFiled} · ${c.status} · ${c.role || 'Unresolved'}`));
     block.append(node('p',parties.map(p => `${p.partyRole}: ${p.relationship}`).join('; '),'help'));
+    for (const p of parties) for (const source of p.sourceParties || []) if (p.groupId) block.append(node('p',`${source.name} · ${source.partyRole} · ${source.relationship}${source.matchedCounsel.length ? ' · Matched counsel: '+source.matchedCounsel.join('; ') : ''}`,'help'));
     $('party-case-list').append(block);
   }
   $('party-dialog').showModal();
@@ -224,6 +256,10 @@ bind('demo','click',() => action(async () => {const result = await api('/api/dem
 for (const view of ['cases','clients','defendants','plaintiffs']) bind('view-'+view,'click',() => setReportView(view));
 bind('party-filter','input',() => {partyPage = 0; renderParties();}); bind('party-relation','change',() => {partyPage = 0; renderParties();});
 bind('party-previous','click',() => {partyPage--; renderParties();}); bind('party-next','click',() => {partyPage++; renderParties();});
+bind('clear-names','click',() => {selectedNames.clear(); renderParties();});
+bind('name-rules','click',() => openRules());
+bind('group-names','click',() => openRules(null,[...selectedNames.values()].flatMap(s=>s.sourceNames)));
+bind('refresh-reports','click',() => action(() => api(`/api/runs/${currentId}/refresh-reports`,{})));
 for (const id of ['filter','type-filter','review-filter','sort']) bind(id,id === 'filter' ? 'input' : 'change',() => {page = 0; renderTable();});
 bind('previous','click',() => {page--; renderTable();}); bind('next','click',() => {page++; renderTable();});
 bind('select-visible','click',() => {pageRows.filter(c=>c.eligible).forEach(c=>selected.add(c.key)); renderTable();});
@@ -279,3 +315,66 @@ bind('confirm-stop','click',async () => {
   $('notice').textContent = 'Stopping ROC after the current request settles. No new requests will start.'; $('notice').hidden = false; setButtons(); await refresh();
 });
 start().catch(error);
+
+function invalidateRulePreview() {pendingRule = null; $('rule-preview').hidden = true; setButtons();}
+function editRule(rule=null, names=[]) {
+  editingRule = rule?.id || null; invalidateRulePreview(); $('rules-message').hidden = true;
+  $('rule-editor-heading').textContent = rule ? 'Edit rule' : 'New rule';
+  $('rule-label').value = rule?.label || names[0] || ''; $('rule-kind').value = rule?.kind || 'name-correction';
+  $('rule-names').value = (rule?.names || [...new Set(names)]).join('\n'); $('delete-rule').hidden = !rule;
+}
+function renderRules() {
+  $('rules-list').replaceChildren();
+  if (!ruleState.rules.length) $('rules-list').append(node('p','No saved rules yet.','help'));
+  for (const rule of ruleState.rules) {
+    const row = node('div',undefined,'rule-item'), b = node('button','Edit '+rule.label,'text-button');
+    b.addEventListener('click',() => editRule(rule)); row.append(b,node('small',`${rule.kind === 'organization-group' ? 'Organization group' : 'Name correction'} · ${rule.names.length} source spellings`)); $('rules-list').append(row);
+  }
+}
+async function openRules(id=null,names=[]) {
+  ruleState = await api('/api/name-rules'); renderRules();
+  editRule(id ? ruleState.rules.find(r=>r.id === id) : null,names); $('rules-dialog').showModal(); setButtons();
+}
+async function ruleAction(fn) {
+  if (rulesBusy) return; rulesBusy = true; $('rules-message').hidden = true; setButtons();
+  try {await fn();}
+  catch(e) {invalidateRulePreview(); $('rules-message').textContent = e.message; $('rules-message').hidden = false;}
+  finally {rulesBusy = false; await refresh(); setButtons();}
+}
+async function previewRule(operation,rule) {
+  invalidateRulePreview();
+  const request = {revision:ruleState.revision,operation,runId:currentId,...(rule ? {rule} : {})};
+  const result = await api('/api/name-rules/preview',request);
+  pendingRule = {...request,previewId:result.previewId};
+  $('rule-impact').textContent = `${result.affectedRuns} saved runs contain matching names (${result.affectedCasesAcrossRuns} case appearances across runs). This rule set also applies to future searches. ${currentId ? 'The open run’s exports will be rebuilt automatically.' : 'Existing runs can update their exports for free.'}`;
+  $('rule-preview-heading').textContent = operation === 'undo' ? 'Undo the last saved change' : operation === 'delete' ? 'Remove this rule' : 'Preview name grouping';
+  $('rule-comparisons').replaceChildren();
+  for (const comparison of result.comparisons) {
+    if (!comparison.before.length && !comparison.after.length) continue;
+    const section = node('div',undefined,'rule-comparison'); section.append(node('h3',comparison.report[0].toUpperCase()+comparison.report.slice(1)));
+    const columns = node('div',undefined,'two-columns');
+    for (const side of ['before','after']) {
+      const col = node('div'); col.append(node('strong',side === 'before' ? 'Before' : 'After'));
+      for (const s of comparison[side].slice(0,30)) col.append(node('p',`${s.name} — ${s.caseCount} distinct case${s.caseCount === 1 ? '' : 's'}${s.groupKind === 'organization-group' ? ' (organization group)' : ''}`));
+      if (comparison[side].length>30) col.append(node('p',`…and ${comparison[side].length-30} more names`,'help'));
+      if (!comparison[side].length) col.append(node('p','None','help'));
+      columns.append(col);
+    }
+    section.append(columns); $('rule-comparisons').append(section);
+  }
+  if (!$('rule-comparisons').children.length) $('rule-comparisons').append(node('p',currentId ? 'No report names in the open run change. The saved rule will still apply wherever its source names occur.' : 'Open a saved run to preview its before/after case totals.','help'));
+  $('apply-rule').textContent = operation === 'undo' ? 'Confirm undo' : operation === 'delete' ? 'Confirm removal' : 'Save rule';
+  $('rule-preview').hidden = false; setButtons(); $('rule-preview').scrollIntoView({block:'start'});
+}
+for (const id of ['rule-label','rule-kind','rule-names']) bind(id,'input',invalidateRulePreview);
+bind('new-rule','click',() => editRule());
+bind('rule-form','submit',e => {e.preventDefault(); return ruleAction(() => previewRule('save',{
+  ...(editingRule ? {id:editingRule} : {}),label:$('rule-label').value,kind:$('rule-kind').value,
+  names:$('rule-names').value.split('\n').map(s=>s.trim()).filter(Boolean)}));});
+bind('delete-rule','click',() => ruleAction(() => previewRule('delete',{id:editingRule})));
+bind('undo-rule','click',() => ruleAction(() => previewRule('undo')));
+bind('apply-rule','click',() => ruleAction(async () => {
+  const request = pendingRule; if (!request) return;
+  ruleState = await api('/api/name-rules/apply',request); selectedNames.clear(); tableStamp = ''; renderRules(); editRule();
+  $('rules-message').textContent = 'Saved. Original source names and counsel associations are preserved. No PACER requests.'; $('rules-message').hidden = false;
+}));

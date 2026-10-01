@@ -13,7 +13,9 @@ from .common import RocError, case_key, now, read_json, write_json
 from .connection import BrowserConnection
 from .courts import DISTRICT_COURTS, profile_for_case, require_enabled
 from .index import build_index, records_from
-from .parties import build_party_reports, case_role
+from .parties import build_party_reports, case_role, details
+from .name_rules import NameRules, fingerprint, party_key, snapshot
+from .output import export_local
 from .review import case_issues
 from .store import RunStore
 
@@ -78,6 +80,72 @@ class Workspace:
         self.closed = False
         self.lock_released = False
         self.close_lock = threading.Lock()
+        self.name_rules = NameRules(self.root / "name-rules.json")
+
+    def party_reports(self, identifier, cases=None, rules=None):
+        lawyer = self.manifest(identifier)["config"]["lawyer"]
+        return build_party_reports(self.cases(identifier) if cases is None else cases,
+            [lawyer["firstName"] + " " + lawyer["lastName"], *lawyer.get("aliases", [])],
+            self.name_rules.public() if rules is None else rules)
+
+    def preview_name_rule(self, request):
+        with self.lock:
+            self.idle()
+            state, proposed = self.name_rules.propose(request)
+            def members(rules):
+                return {party_key(n): (r["label"], r["kind"], r["id"]) for r in rules for n in r["names"]}
+            before_members, after_members = members(state["rules"]), members(proposed["rules"])
+            changed = {k for k in before_members.keys() | after_members.keys() if before_members.get(k) != after_members.get(k)}
+            affected = []
+            for manifest in sorted(self.root.glob("*/workspace.json")):
+                identifier = manifest.parent.name
+                matches = [(c["key"], sorted({p["name"] for p in details(c) if party_key(p.get("name", "")) in changed}))
+                           for c in self.cases(identifier)]
+                matches = [(key, names) for key, names in matches if names]
+                if matches:
+                    affected.append({"runId": identifier, "matches": matches})
+            comparisons = []
+            identifier = request.get("runId")
+            if identifier is not None:
+                before = self.party_reports(identifier, rules=snapshot(state))
+                after = self.party_reports(identifier, rules=proposed)
+                fields = ("name", "caseCount", "caseKeys", "sourceNames", "groupKind", "groupId")
+                for group in ("clients", "defendants", "plaintiffs"):
+                    old = {s["nameKey"]: {k: s[k] for k in fields} for s in before[group]["summary"]}
+                    new = {s["nameKey"]: {k: s[k] for k in fields} for s in after[group]["summary"]}
+                    keys = {k for k in old.keys() | new.keys() if old.get(k) != new.get(k)}
+                    comparisons.append({"report": group, "before": [old[k] for k in sorted(keys) if k in old],
+                                        "after": [new[k] for k in sorted(keys) if k in new]})
+            return {"previewId": fingerprint({"proposed": proposed, "affected": affected, "comparisons": comparisons, "runId": identifier, "operation": request["operation"]}),
+                    "revision": state["revision"], "proposed": proposed, "comparisons": comparisons,
+                    "affectedRuns": len(affected), "affectedCasesAcrossRuns": sum(len(a["matches"]) for a in affected),
+                    "runId": identifier, "operation": request["operation"]}
+
+    def apply_name_rule(self, request):
+        with self.lock:
+            preview = self.preview_name_rule(request)
+            if request.get("previewId") != preview["previewId"]:
+                raise RocError("Preview this change again before saving; rules or saved cases may have changed.")
+            result = self.name_rules.commit(request, preview["proposed"])
+            identifier = request.get("runId")
+            # This path only renders saved evidence. It never signs in, changes
+            # the receipt ledger, reparses/retrieves a docket or calls PACER.
+            if identifier and self.summary(identifier)["indexReady"]:
+                self._start(identifier, "refresh-reports")
+            return result
+
+    def _refresh_reports(self, identifier, config):
+        folder = self.folder(identifier)
+        # Take the normal run lock without reconciling or changing any receipts.
+        with RunStore(folder, config["budgetCents"]) as store:
+            evidence_file = folder / "output/evidence.json"
+            metadata = read_json(evidence_file).get("run", {}) if evidence_file.exists() else {}
+            cases = self.cases(identifier)
+            metadata.update(generatedUtc=now(), nameRules=config["nameRules"], lawyer=config["lawyer"], caseCount=len(cases),
+                            enrichedCases=sum(bool(c.get("enrichment")) for c in cases), chargedCentsThisRunFolder=store.spent)
+            lawyer = config["lawyer"]
+            path = export_local(cases, folder / "output", f"Record of Counsel (ROC): {lawyer['firstName']} {lawyer['lastName']}", metadata)
+            write_json(folder / "result.json", metadata | {"workbook": str(path)})
 
     def close(self, release_lock=True):
         with self.close_lock:
@@ -200,6 +268,7 @@ class Workspace:
         cases = self.cases(identifier) if detail else []
         result_path = folder / "result.json"
         metadata = read_json(result_path) if result_path.exists() else {}
+        rules = self.name_rules.public()
         result = {"id": identifier, "createdUtc": m["createdUtc"], "updatedUtc": m["updatedUtc"],
             "lawyer": m["config"]["lawyer"], "search": m["config"].get("search", {}), "demo": m["demo"],
             "budgetCents": m["config"]["budgetCents"], "state": state, "busy": busy,
@@ -208,6 +277,7 @@ class Workspace:
             "lastAction": m["lastAction"], "caseCount": len(cases) if detail else metadata.get("caseCount", 0),
             "enrichedCount": sum(bool(c.get("enrichment")) for c in cases) if detail else metadata.get("enrichedCases", 0), **receipt,
             "downloads": [n for n in sorted(DOWNLOADS) if (folder / "output" / n).is_file()],
+            "exportsNeedRefresh": (folder / "output/evidence.json").exists() and snapshot(metadata.get("nameRules")) != snapshot(rules),
             "indexReady": (folder / "pcl-records.json").exists() or m["demo"] and (folder / "output/evidence.json").exists()}
         if state == "interrupted":
             result["message"] = "The previous process ended. Resume explicitly to reuse saved work; pending receipts still block purchases."
@@ -224,15 +294,15 @@ class Workspace:
                     "role": case_role(c), "enriched": bool(c.get("enrichment")), "issues": case_issues(c),
                     "representedParties": c.get("enrichment", {}).get("representedParties", [])})
             result["cases"] = rows
-            lawyer = m["config"]["lawyer"]
-            result["partyReports"] = build_party_reports(cases, [lawyer["firstName"] + " " + lawyer["lastName"], *lawyer.get("aliases", [])])
+            result["partyReports"] = self.party_reports(identifier, cases, rules)
         return result
 
     def list(self):
         with self.lock:
             jobs = [self.summary(p.parent.name) for p in self.root.glob("*/workspace.json")]
             return {"active": self.active, "jobs": sorted(jobs, key=lambda j: j["createdUtc"], reverse=True),
-                    "connection": self.connection.status(), "stopping": self.stopping, "closed": self.closed}
+                    "connection": self.connection.status(), "stopping": self.stopping, "closed": self.closed,
+                    "nameRulesRevision": self.name_rules.public()["revision"]}
 
     def quote(self, identifier, keys):
         with self.lock:
@@ -290,7 +360,7 @@ class Workspace:
                 if m["state"] not in ("stopped", "running"):
                     raise RocError("Only a stopped or interrupted operation can be resumed.")
                 action = m["lastAction"]
-            elif action == "export":
+            elif action in ("export", "refresh-reports"):
                 if not self.summary(identifier)["indexReady"]:
                     raise RocError("Finish the search before exporting.")
             elif action == "signin":
@@ -321,7 +391,11 @@ class Workspace:
         try:
             m = self.manifest(identifier)
             config = dict(m["config"])
-            if action == "reconcile":
+            config["nameRules"] = snapshot(self.name_rules.public())
+            if action == "refresh-reports":
+                self._refresh_reports(identifier, config)
+                code, message = 0, "Reports updated from saved evidence using the current name rules. No PACER requests."
+            elif action == "reconcile":
                 with RunStore(folder, config["budgetCents"]) as store:
                     store.reconcile()
                 code, message = 0, "Saved receipts checked. No network requests; choose Resume to continue."
@@ -342,7 +416,7 @@ class Workspace:
             with self.lock:
                 m = self.manifest(identifier)
                 # Auxiliary actions never erase an interrupted search/retrieval's Resume control.
-                auxiliary = action in ("reconcile", "export")
+                auxiliary = action in ("reconcile", "export", "refresh-reports")
                 m.update(state="stopped" if code or auxiliary and m.get("needsResume") else "ready", message=message)
                 if not auxiliary:
                     m["needsResume"] = bool(code)
@@ -367,6 +441,8 @@ class Workspace:
             raise RocError("Unknown export.")
         if self.active == identifier:
             raise RocError("Wait for this operation to finish before downloading its outputs.")
+        if self.summary(identifier)["exportsNeedRefresh"]:
+            raise RocError("Name rules changed. Use Update exports to rebuild this run's reports from saved evidence for free.")
         path = (self.folder(identifier) / "output" / name).resolve()
         if not path.is_relative_to(self.folder(identifier)) or not path.is_file():
             raise RocError("This export is not available yet.")

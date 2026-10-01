@@ -4,13 +4,8 @@ Names are grouped by Unicode-normalized spelling, case and whitespace only.
 Never infer that similar people or related legal entities are the same party.
 """
 from collections import defaultdict
-import unicodedata
-
 from .common import clean, name_key
-
-
-def party_key(name):
-    return clean(unicodedata.normalize("NFKC", name)).casefold()
+from .name_rules import party_key, snapshot
 
 
 def case_role(case):
@@ -43,7 +38,9 @@ def relationship(party, lawyer_role):
     return "Unresolved"
 
 
-def build_party_reports(cases, aliases=()):
+def build_party_reports(cases, aliases=(), name_rules=None):
+    rules = snapshot(name_rules)
+    lookup = {party_key(name): rule for rule in rules["rules"] for name in rule["names"]}
     entries = {}
     coverage = {"indexedCases": len(cases), "parsedDockets": 0, "partyTablesNeedingReview": 0,
                 "casesWithMatchedClients": 0, "casesWithPlaintiffs": 0, "casesWithDefendants": 0}
@@ -96,6 +93,13 @@ def build_party_reports(cases, aliases=()):
         for r in rows:
             if not predicate(r):
                 continue
+            # Match counsel and select clients BEFORE grouping names. A family
+            # group must never turn an opponent into a represented client.
+            source = {k: r[k] for k in ("name", "sourceNames", "partyRole", "defendantNumbers", "matchedCounsel", "relationship")}
+            rule = lookup.get(r["nameKey"])
+            r = dict(r, sourceParties=[source], groupId=rule["id"] if rule else "", groupKind=rule["kind"] if rule else "")
+            if rule:
+                r.update(name=rule["label"], nameKey=party_key(rule["label"]))
             identity = (r["nameKey"], r["caseKey"])
             if identity not in selected_by_case:
                 selected_by_case[identity] = dict(r, partyRoles=[r["partyRole"]])
@@ -104,6 +108,7 @@ def build_party_reports(cases, aliases=()):
             for field in ("sourceNames", "matchedCounsel", "defendantNumbers", "relationships"):
                 merged[field] = sorted(set(merged[field]) | set(r[field]))
             merged["partyRoles"] = sorted(set(merged["partyRoles"]) | {r["partyRole"]})
+            merged["sourceParties"] = [*merged["sourceParties"], *r["sourceParties"]]
             merged["partyRole"] = "; ".join(merged["partyRoles"])
             merged["relationship"] = "; ".join(merged["relationships"])
         selected = list(selected_by_case.values())
@@ -114,7 +119,9 @@ def build_party_reports(cases, aliases=()):
         for key, appearances in grouped.items():
             keys = sorted({r["caseKey"] for r in appearances})
             names = sorted({n for r in appearances for n in r["sourceNames"]}, key=lambda n: (n.casefold(), n))
-            summary = {"nameKey": key, "name": names[0], "sourceNames": names, "caseCount": len(keys), "caseKeys": keys,
+            summary = {"nameKey": key, "name": appearances[0]["name"] if appearances[0]["groupId"] else names[0],
+                       "groupId": appearances[0]["groupId"], "groupKind": appearances[0]["groupKind"],
+                       "sourceNames": names, "caseCount": len(keys), "caseKeys": keys,
                        "roles": sorted({r["role"] or "Unresolved" for r in appearances})}
             for label, relation in (("client", "Client"), ("opposing", "Opposing party"),
                                     ("sameSide", "Other party on same side"), ("unresolved", "Unresolved")):
@@ -123,9 +130,9 @@ def build_party_reports(cases, aliases=()):
                 if r["role"] == "Civil Plaintiff" and "Opposing party" in r["relationships"]})
             summaries.append(summary)
         groups[group] = {"summary": sorted(summaries, key=lambda s: (-s["caseCount"], s["nameKey"])), "cases": selected}
-    return {"version": 1, "coverage": coverage,
+    return {"version": 2, "coverage": coverage, "nameRules": rules,
             "countPolicy": "Distinct court/case pairs in parsed dockets; repeated parties and counts do not inflate totals.",
-            "namePolicy": "Same spelling ignoring case, Unicode presentation and whitespace only; source names retained. Similar names and related companies remain separate.",
+            "namePolicy": "Same spelling ignoring case, Unicode presentation and whitespace, plus explicitly saved name rules (revision " + str(rules["revision"]) + "). Source names retained. Organization groups are reporting groups, not assertions that members are one legal entity.",
             "relationshipPolicy": "Clients require an exact configured counsel alias. Opposing parties use the listed plaintiff/defendant side and resolved lawyer role; this does not establish who filed a claim or current representation.",
             **groups, "parties": rows}
 
@@ -141,16 +148,18 @@ def report_tables(reports):
     """Shared rows for CSV, Excel, HTML and Google Sheets."""
     tables = []
     for group in ("clients", "defendants", "plaintiffs"):
-        headers = ["Name", "Distinct cases", "As client", "Opposing party", "Other on same side", "Unresolved", "Lawyer roles", "Source names"]
+        headers = ["Name", "Distinct cases", "As client", "Opposing party", "Other on same side", "Unresolved", "Lawyer roles", "Source names", "Grouping"]
         rows = [[s["name"], s["caseCount"], s["clientCaseCount"], s["opposingCaseCount"], s["sameSideCaseCount"],
-                 s["unresolvedCaseCount"], "; ".join(s["roles"]), "; ".join(s["sourceNames"])] for s in reports[group]["summary"]]
+                 s["unresolvedCaseCount"], "; ".join(s["roles"]), "; ".join(s["sourceNames"]), s["groupKind"]] for s in reports[group]["summary"]]
         if group == "defendants":
             headers.insert(4, "Opposed as civil plaintiff counsel")
             for row, summary in zip(rows, reports[group]["summary"]):
                 row.insert(4, summary["civilPlaintiffCaseCount"])
         tables.append({"name": group.title(), "file": group + "-summary.csv", "headers": headers, "rows": rows})
         fields = ["name", "caseNumber", "caseTitle", "caseType", "role", "partyRole", "relationship", "court", "district", "dateFiled", "nature", "status", "pacerLink"]
-        headers = ["Name", "Case number", "Case title", "Case Type", "Role", "Party role", "Relationship", "Court", "District", "Date filed", "Nature of Case", "Status (PACER)", "PACER link", "Matched counsel", "Source names", "Party table"]
-        rows = [[r[f] for f in fields] + ["; ".join(r["matchedCounsel"]), "; ".join(r["sourceNames"]), r["partyTableStatus"]] for r in reports[group]["cases"]]
+        headers = ["Name", "Case number", "Case title", "Case Type", "Role", "Party role", "Relationship", "Court", "District", "Date filed", "Nature of Case", "Status (PACER)", "PACER link", "Matched counsel", "Source names", "Party table", "Grouping", "Source associations"]
+        rows = [[r[f] for f in fields] + ["; ".join(r["matchedCounsel"]), "; ".join(r["sourceNames"]), r["partyTableStatus"], r["groupKind"],
+                "; ".join(p["name"] + " [" + p["partyRole"] + "]: " + p["relationship"] +
+                          (" (" + ", ".join(p["matchedCounsel"]) + ")" if p["matchedCounsel"] else "") for p in r["sourceParties"])] for r in reports[group]["cases"]]
         tables.append({"name": group.title() + " cases", "file": group + "-cases.csv", "headers": headers, "rows": rows})
     return tables

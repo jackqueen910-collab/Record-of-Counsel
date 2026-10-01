@@ -7,6 +7,7 @@ from .common import RocError, case_key, now, read_json, write_json
 from .courts import DISTRICT_COURTS, registry_summary
 from .docket import enrich, parse_report
 from .index import build_index, records_from
+from .name_rules import snapshot
 from .output import export_local, publish_google
 from .pacer import Session, collect_index
 from .progress import Progress
@@ -25,6 +26,9 @@ def run(config_path, live=False, publish=False, session_provider=None, checkpoin
     config = read_json(config_path)
     validate_options(config)
     base = config_path.parent
+    if "nameRulesFile" in config and "nameRules" in config:
+        raise RocError("Use nameRules or nameRulesFile, not both.")
+    name_rules = snapshot(read_json(resolve(base, config["nameRulesFile"])) if config.get("nameRulesFile") else config.get("nameRules"))
     lawyer = config["lawyer"]
     first, last = lawyer["firstName"].strip(), lawyer["lastName"].strip()
     aliases = [first + " " + last] + lawyer.get("aliases", [])
@@ -34,7 +38,7 @@ def run(config_path, live=False, publish=False, session_provider=None, checkpoin
     output_dir = run_dir / "output"
     budget = config.get("budgetCents", 0)
     metadata = {"generatedUtc": now(), "lawyer": lawyer, "mode": "live" if live else "offline",
-                "countPolicy": "all-listed-source-rows",
+                "countPolicy": "all-listed-source-rows", "nameRules": name_rules,
                 "methods": {"index": "saved records" if config.get("indexFile") else "official PCL API",
                             "dockets": "court web reports" if live else "saved reports"}}
     session = None
@@ -135,7 +139,7 @@ def run(config_path, live=False, publish=False, session_provider=None, checkpoin
         if publish:
             if not config.get("googleOAuthFile"):
                 raise RocError("Local outputs saved. Standalone Sheets publishing needs googleOAuthFile; this program does not use the chat connector.")
-            metadata["spreadsheetUrl"] = publish_google(cases, title, resolve(base, config["googleOAuthFile"]), aliases)
+            metadata["spreadsheetUrl"] = publish_google(cases, title, resolve(base, config["googleOAuthFile"]), aliases, name_rules)
         write_json(run_dir / "result.json", metadata | {"workbook": str(path)})
         progress(metadata["status"], f"Saved {len(cases)} cases, enriched {metadata['enrichedCases']} dockets. "
                  f"PACER receipts: ${store.spent / 100:.2f}." + (" Stopped: " + stop_reason if stop_reason else ""),

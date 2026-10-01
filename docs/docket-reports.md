@@ -23,17 +23,17 @@ The defendant summary also reports **Opposed as civil plaintiff counsel**. It co
 
 ## Names and coverage
 
-Party names are grouped only by Unicode presentation normalization, whitespace and capitalization. Punctuation, word order, initials, spelling and corporate suffix differences remain distinct. All original source spellings are retained. A name shared by different people is still one **name label**, not a verified identity. Distinct defendant numbers keep namesakes' counsel associations separate in the underlying party records and client selection. A name label can therefore have more than one relationship in a case; relationship counts need not sum to its distinct-case total. An explicit alias/merge editor is a possible future feature; no fuzzy identity or corporate-family inference runs automatically.
+Automatic party-name grouping uses Unicode presentation normalization, whitespace and capitalization. Further punctuation, word order, initials, spelling and corporate suffix differences remain distinct unless covered by an [explicit saved name rule](name-rules.md). All original source spellings are retained. A name shared by different people is still one **name label**, not a verified identity. Distinct defendant numbers keep namesakes' counsel associations separate in the underlying party records and client selection. A name label can therefore have more than one relationship in a case; relationship counts need not sum to its distinct-case total. Organization groups explicitly label related-entity reporting groups. No fuzzy identity or corporate-family inference runs automatically.
 
 The coverage banner and export notes report indexed cases, parsed dockets, cases with matched clients, and party tables needing review. Zero results do not imply there were no parties in unexamined cases. Missing counts do not erase a supported client association. An unfamiliar table is visibly flagged and does not create inferred opposing-party associations.
 
 ## Files and reuse
 
-- `case-index.xlsx`: Case index, Coverage, Clients, Clients cases, Defendants, Defendants cases, Plaintiffs, Plaintiffs cases. Counts are numeric; source strings are literal text. Long nature fields remain unwrapped.
+- `case-index.xlsx`: Case index, Coverage, Clients, Clients cases, Defendants, Defendants cases, Plaintiffs, Plaintiffs cases, plus Name rules when configured. Counts are numeric; source strings are literal text. Long nature fields remain unwrapped.
 - `case-index.csv`: the original ten-column case index with Role.
-- `party-reports.zip`: six summary/case CSVs plus coverage and methodology notes. The six CSVs also exist individually in the run's output folder.
+- `party-reports.zip`: six summary/case CSVs, coverage/methodology notes and the name-rule snapshot. The six CSVs also exist individually in the run's output folder.
 - `case-index.html`: the case index and all six party reports with navigation and clipped cells.
-- `party-reports.json`: versioned coverage, policies, ranked summaries, case rows, all parsed parties, matched counsel, source file references and hashes.
+- `party-reports.json`: versioned coverage, policies, ranked summaries, case rows, all parsed parties, matched counsel, source file references and hashes. Version 2 adds the name-rule snapshot, group identifiers/kinds and original per-party associations inside grouped case rows. The full `parties` array retains ungrouped source identities.
 - `evidence.json`: case-level enrichment, original parsed blocks, counts and counsel matches. `review.json` retains categorized findings.
 
 **Rebuild exports from saved data** reparses purchased reports without PACER authentication, searches or charges. Opening earlier evidence can derive party reports in memory from the saved counsel blocks and that run's configured attorney aliases; it never guesses from the old represented-name list. The optional CLI Google Sheets publisher generates the case index and six party tabs with clipped cells and coverage notes. No live Sheets publication was performed for this change.

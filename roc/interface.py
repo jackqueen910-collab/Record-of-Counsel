@@ -64,6 +64,9 @@ def make_server(workspace, port=0):
                 parts = path.strip("/").split("/")
                 if path == "/api/runs":
                     return self.send(200, workspace.list())
+                if path == "/api/name-rules":
+                    with workspace.lock:
+                        return self.send(200, workspace.name_rules.public())
                 if path == "/api/connection":
                     return self.send(200, {"app": "ROC", **workspace.connection.status(), "stopping": workspace.stopping, "closed": workspace.closed})
                 if path == "/api/courts":
@@ -78,7 +81,7 @@ def make_server(workspace, port=0):
                 self.send(404, {"error": "Not found."})
             except RocError as exc:
                 self.send(400, {"error": str(exc)})
-            except (BrokenPipeError, ConnectionResetError):
+            except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
                 pass
             except Exception:
                 self.send(500, {"error": "Local read failed. Refresh after the current operation finishes."})
@@ -112,6 +115,10 @@ def make_server(workspace, port=0):
                     return self.send(200, {"id": workspace.new(value)})
                 if parts == ["api", "demo"]:
                     return self.send(200, {"id": workspace.new(demo=True)})
+                if parts == ["api", "name-rules", "preview"]:
+                    return self.send(200, workspace.preview_name_rule(value))
+                if parts == ["api", "name-rules", "apply"]:
+                    return self.send(200, workspace.apply_name_rule(value))
                 if len(parts) == 4 and parts[:2] == ["api", "runs"]:
                     if parts[3] == "quote":
                         return self.send(200, workspace.quote(parts[2], value.get("keys")))
@@ -120,7 +127,7 @@ def make_server(workspace, port=0):
                 self.send(404, {"error": "Not found."})
             except (RocError, ValueError) as exc:
                 self.send(400, {"error": str(exc) if isinstance(exc, RocError) else "Invalid request."})
-            except (BrokenPipeError, ConnectionResetError):
+            except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
                 pass
             except Exception:
                 self.send(500, {"error": "Local operation failed. Inspect saved status before trying again."})

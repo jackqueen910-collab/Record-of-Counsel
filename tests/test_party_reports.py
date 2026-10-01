@@ -132,7 +132,7 @@ class PartyReportTests(unittest.TestCase):
             self.assertIn("1 of 1", book["Coverage"]["A2"].value)
             self.assertEqual(set(book.sheetnames), {"Case index","Coverage","Clients","Clients cases","Defendants","Defendants cases","Plaintiffs","Plaintiffs cases"})
             with zipfile.ZipFile(Path(folder)/"party-reports.zip") as archive:
-                self.assertEqual(len(archive.namelist()), 7)
+                self.assertEqual(len(archive.namelist()), 8)
                 rows = list(csv.reader(io.StringIO(archive.read("clients-cases.csv").decode("utf-8-sig"))))
                 self.assertEqual(rows[1][0], "'=DANGEROUS()")
                 self.assertIn("summaries", archive.read("README.txt").decode().lower())
