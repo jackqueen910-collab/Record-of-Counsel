@@ -116,7 +116,7 @@ async function refresh() {
     const requested = currentId;
     if (requested) {const data = await api(`/api/runs/${requested}`); if (requested === currentId) {current = data; renderRun();}}
     setButtons();
-    if (window.rocDocumentsUpdate) await window.rocDocumentsUpdate(listing.documentGrabberVersion === 2);
+    if (window.rocDocumentsUpdate) await window.rocDocumentsUpdate(listing.documentGrabberVersion === 3);
   } finally {refreshing = false;}
   if (continuation && !shuttingDown) await continuation();
 }

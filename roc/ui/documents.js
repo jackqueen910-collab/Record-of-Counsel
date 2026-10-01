@@ -34,9 +34,11 @@ async function loadDocuments() {
     const list = $('document-candidates'); list.replaceChildren();
     for (const result of Object.values(state.results.cases)) {
       const source = result.source;
+      const entryLabel = id => {const entry=source.entries.find(e=>e.id===id);return entry ? `entry ${entry.number || 'unnumbered'} (${entry.date})` : 'unresolved entry';};
       const section = node('section',undefined,'candidate-case');
       section.append(node('h4',`${source.caseNumber} · ${source.district}`));
       section.append(node('p',`${result.model} · ${source.entries.length} docket entries examined · ${result.candidates.length} candidates`,'help'));
+      if ((source.policyVersion || 1) < 2) section.append(node('p','Saved under the earlier “as to” attribution policy. A new analysis requires a new preview and cap.','help'));
       for (const warning of source.warnings) section.append(node('p',warning,'cost-warning'));
       for (const c of result.candidates) {
         const row = node('div',undefined,'document-candidate'), label = node('label',undefined,'checkbox-label');
@@ -45,7 +47,11 @@ async function loadDocuments() {
         box.addEventListener('change',()=>{box.checked ? docSelected.add(c.candidateId) : docSelected.delete(c.candidateId); purchaseQuote=null; $('purchase-preview').hidden=true;docControls();});
         label.append(box,node('strong',`Entry ${c.number || 'unnumbered'} · ${c.kind} · ${c.status === 'matched' ? c.url ? 'Candidate' : 'Text-only / unsupported link' : 'Needs review'}`)); row.append(label);
         const detail = node('details'), summary = node('summary',`${c.date} · ${c.client || 'Client unresolved'} · Show evidence`);
-        detail.append(summary,node('p',c.reason),node('p',`Evidence: ${c.evidenceQuote}`),node('p',`As to: ${c.asToQuote || 'See linked motion / unresolved'}`),node('p',`Linked motion entry IDs: ${c.motionIds.join(', ') || 'None'}`),node('pre',c.text));
+        detail.append(summary,node('p',c.reason),node('p',`Classification evidence: ${c.evidenceQuote}`));
+        for (const q of c.attributionEvidence || []) detail.append(node('p',`Client attribution · ${entryLabel(q.entryId)}: ${q.quote}`));
+        if (c.asToQuote) detail.append(node('p',`Earlier “as to” evidence: ${c.asToQuote}`));
+        for (const q of c.linkEvidence || []) detail.append(node('p',`Order link · ${entryLabel(q.motionId)}: ${q.quote}`));
+        detail.append(node('p',`Linked motions: ${c.motionIds.map(entryLabel).join('; ') || 'None'}`),node('pre',c.text));
         row.append(detail); section.append(row);
       }
       if (!result.candidates.length) section.append(node('p','No candidates returned. This is not a completeness guarantee.','help'));

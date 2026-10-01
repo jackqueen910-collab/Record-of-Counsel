@@ -79,7 +79,7 @@ class DocumentGrabber:
                 raise RocError('Candidate list changed. Review it again.')
             source, c, analysis_id = all_candidates[ident]
             if c['status'] != 'matched' or not c['url']:
-                raise RocError('Only source-verified candidates with supported document links can be downloaded. Review-only/text-only rows remain in the export.')
+                raise RocError('Only candidates with supporting source evidence and supported document links can be downloaded. Review-only/text-only rows remain in the export.')
             key = document_key(c['url'])
             if key in seen:
                 continue
@@ -162,7 +162,7 @@ class DocumentGrabber:
         root.mkdir(parents=True, exist_ok=True)
         stream = io.StringIO(newline='')
         writer = csv.writer(stream)
-        writer.writerow(['Court', 'Case number', 'Entry', 'Date', 'Kind', 'Client proxy', 'Status', 'Evidence', 'Docket text', 'PDF file'])
+        writer.writerow(['Court', 'Case number', 'Entry', 'Date', 'Kind', 'Client (docket attribution)', 'Status', 'Evidence', 'Docket text', 'PDF file'])
         pdfs, included = {}, set()
         for r in state['results']['cases'].values():
             source = r['source']
@@ -196,7 +196,10 @@ class DocumentGrabber:
         temp = out.with_suffix('.tmp')
         with zipfile.ZipFile(temp, 'w', zipfile.ZIP_DEFLATED) as z:
             z.writestr('index.csv', '\ufeff' + stream.getvalue())
-            z.writestr('methodology.txt', DISCLAIMER + '\n\nCandidates may be incomplete or misclassified. Review the saved docket. PDF adapter has offline tests only; no live acceptance yet.\n')
+            z.writestr('methodology.txt', DISCLAIMER + '\n\nCandidates may be incomplete or misclassified. Review the saved docket. '
+                       'Archived analyses with source.policyVersion 1 used the earlier literal as-to rule and explicit motion-number linkage. '
+                       'Their evidence is retained without reinterpreting or re-running those analyses. '
+                       'PDF adapter has offline tests only; no live acceptance yet.\n')
             z.writestr('evidence.json', json.dumps(state['results'], indent=2))
             z.writestr('spending.json', json.dumps({'ai': state['ai'], 'documents': state['documents']}, indent=2))
             for archive in sorted((root / 'analyses').glob('*.json')):

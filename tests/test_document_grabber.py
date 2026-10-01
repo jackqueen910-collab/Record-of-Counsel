@@ -1,5 +1,6 @@
 """No external calls: source attribution, budgets, recovery and saved PDF workflow."""
 import contextlib
+import copy
 import io
 import json
 from pathlib import Path
@@ -39,8 +40,11 @@ def source():
     return read_entries(fixture(), CASE, ['Jordan Lawyer'])
 
 
-def candidate(ident='e1', kind='motion', client='Example Client', quote='as to Example Client (1)', motions=None, evidence='MOTION to dismiss indictment'):
-    return {'entryId': ident, 'kind': kind, 'client': client, 'asToQuote': quote, 'motionIds': motions or [],
+def candidate(ident='e1', kind='motion', client='Example Client', quote='as to Example Client (1)', motions=None, evidence='MOTION to dismiss indictment', attribution=None, links=None):
+    return {'entryId': ident, 'kind': kind, 'client': client,
+            'attributionEvidence': attribution if attribution is not None else ([{'entryId':ident,'quote':quote}] if quote else []),
+            'motionIds': motions or [],
+            'linkEvidence': links if links is not None else [{'motionId':m,'quote':evidence} for m in (motions or [])],
             'evidenceQuote': evidence, 'reason': 'Fictional manually reviewed example.'}
 
 
@@ -94,11 +98,11 @@ class DocumentTests(unittest.TestCase):
         self.assertEqual(result[1]['client'], 'Example Client')
         bad = candidate('e2',client='Another Defendant',quote='as to Another Defendant (2)',evidence='MOTION to dismiss')
         self.assertEqual(classify_result({'candidates':[bad]}, source())[0]['status'],'needs-review')
-        bad = candidate('e4',quote='filed by Example Client',evidence='MOTION for summary judgment')
-        self.assertEqual(classify_result({'candidates':[bad]}, source())[0]['status'],'needs-review')
+        filed_by = candidate('e4',quote='filed by Example Client',evidence='MOTION for summary judgment')
+        self.assertEqual(classify_result({'candidates':[filed_by]}, source())[0]['status'],'matched')
         bad = candidate('e5','order',quote='',motions=['e2'],evidence='ORDER denying motion 11')
         self.assertEqual(classify_result({'candidates':[candidate(),bad]},source())[1]['status'],'needs-review')
-        bad = candidate('e6','order',quote='',motions=['e1'],evidence='ORDER concerning motions')
+        bad = candidate('e6','order',quote='',motions=['e1'],evidence='ORDER concerning motions',links=[])
         self.assertEqual(classify_result({'candidates':[candidate(),bad]},source())[1]['status'],'needs-review')
         for c in [candidate('invented'), candidate(evidence='not on the docket')]:
             with self.assertRaises(RocError): classify_result({'candidates':[c]},source())
@@ -130,6 +134,64 @@ class DocumentTests(unittest.TestCase):
             with self.assertRaises(RocError): analyze(root,s,model,'key',requester=failed)
             with self.assertRaises(RocError): ExpenseLedger(root,'ai').approve(10000)
             with self.assertRaises(RocError): analyze(root,s,model,'key',requester=lambda *a:self.fail('unknown request replay'))
+
+    def test_semantic_attribution_accepts_varied_language_and_cited_context(self):
+        # These are stipulated model judgments, not claims of live model accuracy.
+        for text in ('MOTION to dismiss. Document filed by Example Client.',
+                     'Through counsel, Example Client asks the Court to dismiss Counts Three and Four.',
+                     'The joint request of Example Client and Another Defendant seeks dismissal.'):
+            s=copy.deepcopy(source());s['entries'][0]['text']=text
+            c=candidate(quote=text,evidence=text)
+            self.assertEqual(classify_result({'candidates':[c]},s)[0]['status'],'matched')
+        s=copy.deepcopy(source())
+        s['entries'][0]['text']='Defendant 1 moves to dismiss the indictment.'
+        s['entries'][1]['text']='Example Client is designated as defendant 1.'
+        c=candidate(quote='',evidence=s['entries'][0]['text'],attribution=[
+            {'entryId':'e1','quote':s['entries'][0]['text']},
+            {'entryId':'e2','quote':s['entries'][1]['text']}])
+        self.assertEqual(classify_result({'candidates':[c]},s)[0]['status'],'matched')
+        c['attributionEvidence']=c['attributionEvidence'][1:]
+        self.assertEqual(classify_result({'candidates':[c]},s)[0]['status'],'needs-review')
+
+    def test_semantic_attribution_still_rejects_fabricated_evidence_and_unknown_clients(self):
+        for item in ({'entryId':'invented','quote':'as to Example Client (1)'},
+                     {'entryId':'e2','quote':'as to Example Client (1)'},
+                     {'entryId':'e1','quote':'This quote is not in the docket.'}):
+            with self.assertRaises(RocError):
+                classify_result({'candidates':[candidate(attribution=[item])]},source())
+        for c in (candidate(client='Example Clien'),candidate(attribution=[]),candidate()|{'reason':''}):
+            self.assertEqual(classify_result({'candidates':[c]},source())[0]['status'],'needs-review')
+        # A client name in an opposing filing is not automatically a match.
+        s=copy.deepcopy(source());s['entries'][0]['text']='Government motion to dismiss as to Example Client.'
+        c=candidate(kind='uncertain',quote=s['entries'][0]['text'],evidence=s['entries'][0]['text'])
+        c['reason']='The named client is affected; the Government filed the motion.'
+        self.assertEqual(classify_result({'candidates':[c]},s)[0]['status'],'needs-review')
+
+    def test_semantic_order_link_without_docket_number_requires_grounded_link_evidence(self):
+        s=copy.deepcopy(source())
+        s['entries'][2]['text']='The defendant’s request to dismiss the indictment is GRANTED.'
+        order=candidate('e3','order',quote='',motions=['e1'],evidence=s['entries'][2]['text'])
+        order['reason']='This ruling grants the only supplied request to dismiss this indictment.'
+        rows=classify_result({'candidates':[candidate(),order]},s)
+        self.assertEqual(rows[1]['status'],'matched')
+        self.assertEqual(rows[1]['client'],'Example Client')
+        missing=copy.deepcopy(order);missing['linkEvidence']=[]
+        self.assertEqual(classify_result({'candidates':[candidate(),missing]},s)[1]['status'],'needs-review')
+        for link in ({'motionId':'invented','quote':order['evidenceQuote']},
+                     {'motionId':'e1','quote':'MOTION to dismiss indictment'}):
+            with self.assertRaises(RocError):
+                classify_result({'candidates':[candidate(),order|{'linkEvidence':[link]}]},s)
+        ambiguous=order|{'kind':'uncertain','reason':'Several requests could fit this ruling.'}
+        self.assertEqual(classify_result({'candidates':[candidate(),ambiguous]},s)[1]['status'],'needs-review')
+
+    def test_policy_change_does_not_silently_reuse_or_resubmit_old_analysis(self):
+        from roc.claude import analysis_key
+        s=source();current=analysis_key(s,'claude-sonnet-5-5')
+        with patch('roc.claude.POLICY_VERSION',1):
+            self.assertNotEqual(current,analysis_key(s,'claude-sonnet-5-5'))
+        legacy=candidate();legacy.pop('attributionEvidence');legacy.pop('linkEvidence')
+        legacy['asToQuote']='as to Example Client (1)'
+        with self.assertRaises(RocError): classify_result({'candidates':[legacy]},s)
 
     def test_cost_form_rejects_wrong_case_attachments_transcripts_and_unsafe_targets(self):
         url=ORIGIN+'/doc1/123456'

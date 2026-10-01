@@ -75,7 +75,7 @@
   <dialog id="documents-dialog" aria-labelledby="documents-heading">
     <form method="dialog"><button class="dialog-close" aria-label="Close Document Grabber">×</button></form>
     <div class="eyebrow">FROM THE DOCKET TO THE DOCUMENT</div><h2 id="documents-heading">Document Grabber</h2>
-    <p class="help">Civil and criminal dispositive motions and their orders. Suppression, sentencing, discovery, supporting briefs and attachments are outside this first version.</p>
+    <p class="help">Civil and criminal dispositive motions filed by or on behalf of this lawyer’s clients, and orders deciding them. Standalone suppression, sentencing, discovery, supporting briefs and attachments are outside this first version.</p>
     <p id="documents-method" class="coverage-note"></p>
     <p class="cost-warning">Pilot feature: model accuracy and court PDF downloads await a live acceptance test. Review every candidate. Docket coverage does not establish document-download coverage.</p>
     <p id="documents-message" class="auth-message" role="status" aria-live="polite"></p>
@@ -85,7 +85,7 @@
       <button id="preview-analysis" class="secondary">Preview analysis cost</button>
       <div id="analysis-preview" hidden><div id="analysis-cases"></div><p id="analysis-price"></p><label>Fresh AI spending cap ($)<input id="ai-cap" type="number" min="0" step="0.01" placeholder="Enter cap"></label><p class="help">Separate from PACER. This is a conservative reservation; actual token usage usually costs less. Saved analyses for the same source and model are reused. No automatic model upgrades or retries.</p><button id="confirm-analysis" class="primary" disabled>Send selected docket text to Claude</button></div>
     </section>
-    <section class="document-step"><h3>2. Review candidates</h3><p class="help">Nothing is preselected. Open an entry to see the complete docket text, exact evidence, client match and linked motion IDs. “Needs review” entries cannot be purchased here; text-only entries remain in the export. Absence of a candidate does not establish that no motion exists.</p><div id="document-candidates"></div></section>
+    <section class="document-step"><h3>2. Review candidates</h3><p class="help">Nothing is preselected. Open an entry to review Claude’s interpretation, quoted evidence, client attribution and motion/order links. Source checks verify the quotes, not the model’s judgment. “Needs review” entries cannot be purchased here; text-only entries remain in the export. Absence of a candidate does not establish that no motion exists.</p><div id="document-candidates"></div></section>
     <section class="document-step"><h3>3. Download selected PDFs</h3><p class="help">Downloads use court websites with your official PACER API session. Up to $3 per new document; attachments are not included. Large selections can get expensive. Reuse saved PDFs free.</p><button id="preview-documents" class="secondary" disabled>Preview selected PDFs</button>
       <div id="purchase-preview" hidden><div id="purchase-items"></div><p id="purchase-price"></p><label>Fresh PACER document cap ($)<input id="document-cap" type="number" min="0" step="0.01" placeholder="Enter cap"></label><button id="confirm-documents" class="primary" disabled>Buy and download these PDFs</button></div>
     </section>

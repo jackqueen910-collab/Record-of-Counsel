@@ -308,7 +308,7 @@ class Workspace:
             jobs = [self.summary(p.parent.name) for p in self.root.glob("*/workspace.json")]
             return {"active": self.active, "jobs": sorted(jobs, key=lambda j: j["createdUtc"], reverse=True),
                     "connection": self.connection.status(), "stopping": self.stopping, "closed": self.closed,
-                    "nameRulesRevision": self.name_rules.public()["revision"], "docketBudgetVersion": 2, "documentGrabberVersion": 2,
+                    "nameRulesRevision": self.name_rules.public()["revision"], "docketBudgetVersion": 2, "documentGrabberVersion": 3,
                     "clientReportVersion": CLIENT_REPORT_VERSION}
 
     def quote(self, identifier, keys):
