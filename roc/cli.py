@@ -114,6 +114,7 @@ def run(config_path, live=False, publish=False, session_provider=None, checkpoin
                     evidence["courtCoverage"] = profile.summary()
                 case["enrichment"] = evidence
                 case["team"] = evidence["team"]
+                case["role"] = evidence["role"]
                 case["nature"] = evidence["nature"] or ("Unresolved — see review" if parsed["caseType"] == "Criminal" else case["nature"])
                 case["issues"] = evidence["issues"]
                 case["fieldStatus"] = evidence["fieldStatus"]
@@ -127,12 +128,14 @@ def run(config_path, live=False, publish=False, session_provider=None, checkpoin
                         chargedCentsThisRunFolder=store.spent, status="stopped" if stop_reason else "complete", stopReason=stop_reason)
         metadata["casesByIssueCategory"] = {category: sum(any(i["category"] == category for i in case_issues(c)) for c in cases)
                                             for category in ("missing-source", "not-tested", "needs-review")}
+        metadata["resolvedRoleCases"] = metadata["resolvedTeamCases"]
+        metadata["unresolvedRoleCases"] = metadata["unresolvedTeamCases"]
         title = f"Record of Counsel (ROC): {first} {last}"
         path = export_local(cases, output_dir, title, metadata)
         if publish:
             if not config.get("googleOAuthFile"):
                 raise RocError("Local outputs saved. Standalone Sheets publishing needs googleOAuthFile; this program does not use the chat connector.")
-            metadata["spreadsheetUrl"] = publish_google(cases, title, resolve(base, config["googleOAuthFile"]))
+            metadata["spreadsheetUrl"] = publish_google(cases, title, resolve(base, config["googleOAuthFile"]), aliases)
         write_json(run_dir / "result.json", metadata | {"workbook": str(path)})
         progress(metadata["status"], f"Saved {len(cases)} cases, enriched {metadata['enrichedCases']} dockets. "
                  f"PACER receipts: ${store.spent / 100:.2f}." + (" Stopped: " + stop_reason if stop_reason else ""),

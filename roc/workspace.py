@@ -13,10 +13,11 @@ from .common import RocError, case_key, now, read_json, write_json
 from .connection import BrowserConnection
 from .courts import DISTRICT_COURTS, profile_for_case, require_enabled
 from .index import build_index, records_from
+from .parties import build_party_reports, case_role
 from .review import case_issues
 from .store import RunStore
 
-DOWNLOADS = {"case-index.xlsx", "case-index.csv", "case-index.html", "evidence.json", "review.json"}
+DOWNLOADS = {"case-index.xlsx", "case-index.csv", "case-index.html", "evidence.json", "review.json", "party-reports.zip", "party-reports.json"}
 
 
 def search_config(values):
@@ -220,9 +221,11 @@ class Workspace:
                     reason = str(exc)
                 rows.append({k: c.get(k, "") for k in ("key", "caseNumber", "caseTitle", "caseType", "team", "court",
                     "district", "dateFiled", "nature", "status")} | {"eligible": not reason, "ineligibleReason": reason,
-                    "enriched": bool(c.get("enrichment")), "issues": case_issues(c),
+                    "role": case_role(c), "enriched": bool(c.get("enrichment")), "issues": case_issues(c),
                     "representedParties": c.get("enrichment", {}).get("representedParties", [])})
             result["cases"] = rows
+            lawyer = m["config"]["lawyer"]
+            result["partyReports"] = build_party_reports(cases, [lawyer["firstName"] + " " + lawyer["lastName"], *lawyer.get("aliases", [])])
         return result
 
     def list(self):

@@ -14,7 +14,7 @@ The evidence's legacy `selectedCounts` key now contains **all listed source rows
 
 ## Roles
 
-The standard Team values remain Prosecution, Criminal Defense, Civil Plaintiff and Civil Defense. Civil Petitioner, Respondent, Claimant, Amicus, Intervenor, Movant, Interested Party, Notice Party, Debtor and Creditor roles use their source role name as the Team value. `Multiple roles` covers a lawyer appearing in more than one supported civil role; evidence and cell notes identify each party and role. Conflicting prosecution/defense associations or an unsupported criminal role remain items needing review.
+The standard Role values are Prosecution, Criminal Defense, Civil Plaintiff and Civil Defense. Civil Petitioner, Respondent, Claimant, Amicus, Intervenor, Movant, Interested Party, Notice Party, Debtor and Creditor roles use their source role name as the Role value. `Multiple roles` covers a lawyer appearing in more than one supported civil role; evidence and cell notes identify each party and role. Conflicting prosecution/defense associations or an unsupported criminal role remain items needing review. Older integrations can continue to read the `team` JSON alias.
 
 Self-represented parties, mediators and identified court-notification staff remain separate from counsel. An amicus is not relabeled as a plaintiff or defendant. Civil Nature of Suit can still be copied when counsel has an additional role.
 

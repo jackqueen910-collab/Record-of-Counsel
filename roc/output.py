@@ -6,18 +6,20 @@ import json
 from pathlib import Path
 import urllib.parse
 import urllib.request
+import zipfile
 
 from .common import RocError, write_json
-from .docket import TEAM_VALUES
+from .docket import ROLE_VALUES
+from .parties import build_party_reports, case_role, coverage_text, report_tables
 from .review import case_issues, issue_text
 
-HEADERS = ["Case number", "Case title", "Case Type", "Team", "Court", "District", "Date filed", "Nature of Case", "Status (PACER)", "PACER link"]
-FIELDS = ["caseNumber", "caseTitle", "caseType", "team", "court", "district", "dateFiled", "nature", "status", "pacerLink"]
+HEADERS = ["Case number", "Case title", "Case Type", "Role", "Court", "District", "Date filed", "Nature of Case", "Status (PACER)", "PACER link"]
+FIELDS = ["caseNumber", "caseTitle", "caseType", "role", "court", "district", "dateFiled", "nature", "status", "pacerLink"]
 WIDTHS = [20, 38, 14, 21, 24, 30, 15, 40, 18, 22]
 
 
 def values(case):
-    return [case.get(field, "") for field in FIELDS]
+    return [case_role(case) if field == "role" else case.get(field, "") for field in FIELDS]
 
 
 def csv_safe(value):
@@ -47,7 +49,23 @@ def export_local(cases, folder, title, metadata):
         writer = csv.writer(stream)
         writer.writerow(HEADERS)
         writer.writerows([csv_safe(x) for x in values(c)] for c in cases)
+    lawyer = metadata.get("lawyer", {})
+    aliases = [clean_name for clean_name in [" ".join([lawyer.get("firstName", ""), lawyer.get("lastName", "")]).strip(), *lawyer.get("aliases", [])] if clean_name]
+    reports = build_party_reports(cases, aliases)
+    metadata["partyCoverage"] = reports["coverage"]
     write_json(folder / "evidence.json", {"run": metadata, "cases": cases})
+    write_json(folder / "party-reports.json", reports)
+    tables = report_tables(reports)
+    report_note = coverage_text(reports) + "\n" + "\n".join(reports[k] for k in ("countPolicy", "namePolicy", "relationshipPolicy"))
+    for table in tables:
+        with (folder / table["file"]).open("w", encoding="utf-8-sig", newline="") as stream:
+            writer = csv.writer(stream)
+            writer.writerow(table["headers"])
+            writer.writerows([csv_safe(x) for x in row] for row in table["rows"])
+    with zipfile.ZipFile(folder / "party-reports.zip", "w", zipfile.ZIP_DEFLATED) as archive:
+        for table in tables:
+            archive.write(folder / table["file"], table["file"])
+        archive.writestr("README.txt", report_note)
     write_json(folder / "review.json", [{"caseNumber": c["caseNumber"], "court": c["courtId"],
                "issues": case_issues(c), "items": [issue_text(i) for i in case_issues(c)]}
                for c in cases if case_issues(c)])
@@ -93,13 +111,48 @@ def export_local(cases, folder, title, metadata):
     end = max(7, len(cases) + 6)
     sheet.freeze_panes = "C7"
     sheet.auto_filter.ref = f"A6:J{end}"
-    dv = DataValidation(type="list", formula1='"' + ','.join(TEAM_VALUES) + '"', allow_blank=True)
+    dv = DataValidation(type="list", formula1='"' + ','.join(ROLE_VALUES) + '"', allow_blank=True)
     sheet.add_data_validation(dv)
     dv.add(f"D7:D{end}")
+    coverage = wb.create_sheet("Coverage")
+    for line in [title, *report_note.splitlines(), "Names are labels, not verified unique identities. Former counsel and terminated parties may be included.",
+                 "Case index retains every indexed case. Party sheets include parsed docket appearances only.",
+                 "Opposed as civil plaintiff counsel counts defendants on the other side when Role is Civil Plaintiff; it does not establish original filing counsel."]:
+        coverage.append([line])
+        coverage.cell(coverage.max_row, 1).data_type = "s"
+        coverage.cell(coverage.max_row, 1).alignment = Alignment(wrap_text=True, vertical="top")
+        coverage.row_dimensions[coverage.max_row].height = 45
+    coverage.column_dimensions["A"].width = 110
+    for table in tables:
+        report_sheet = wb.create_sheet(table["name"])
+        report_sheet.sheet_view.showGridLines = False
+        report_sheet.append([coverage_text(reports)])
+        report_sheet.append(["Distinct court/case counts. See Coverage for name and relationship rules."])
+        report_sheet.append(table["headers"])
+        for row in table["rows"]:
+            report_sheet.append(row)
+        for row in report_sheet:
+            for cell in row:
+                if isinstance(cell.value, str):
+                    cell.data_type = "s"
+                cell.font = Font(name="Arial", size=10, bold=cell.row == 3)
+                cell.alignment = Alignment(vertical="center", wrap_text=False)
+                if cell.row == 3:
+                    cell.fill = PatternFill("solid", fgColor="F1F3F4")
+            report_sheet.row_dimensions[row[0].row].height = 25
+        for col, header in enumerate(table["headers"], 1):
+            report_sheet.column_dimensions[get_column_letter(col)].width = (40 if header in ("Name", "Case title", "Nature of Case", "Source names") else 26)
+        report_sheet.freeze_panes = "B4"
+        report_sheet.auto_filter.ref = f"A3:{get_column_letter(len(table['headers']))}{max(3, report_sheet.max_row)}"
     wb.save(folder / "case-index.xlsx")
     headings = "".join(f"<th>{escape(h)}</th>" for h in HEADERS)
     rows = "".join("<tr>" + "".join(f'<td title="{escape(str(v), quote=True)}">{escape(str(v))}</td>' for v in values(c)) + "</tr>" for c in cases)
-    (folder / "case-index.html").write_text("<!doctype html><meta charset=utf-8><title>ROC case index</title><style>body{font:14px Arial;margin:28px;color:#202124}table{border-collapse:collapse;table-layout:fixed;width:1900px}th,td{border-bottom:1px solid #ddd;text-align:left;padding:9px;overflow:hidden;white-space:nowrap}th{background:#f1f3f4;position:sticky;top:0}th:nth-child(8){width:300px}h1{font-size:24px}</style><h1>" + escape(title) + "</h1><p>" + str(len(cases)) + " cases. Hover a clipped cell to read its contents.</p><table><thead><tr>" + headings + "</tr></thead><tbody>" + rows + "</tbody></table>", encoding="utf-8")
+    navigation = '<nav><a href="#cases">Case index</a> · ' + " · ".join(f'<a href="#report-{i}">{escape(t["name"])}</a>' for i, t in enumerate(tables)) + '</nav>'
+    party_html = ""
+    for i, table in enumerate(tables):
+        party_html += f'<h2 id="report-{i}">{escape(table["name"])}</h2><p>{escape(coverage_text(reports))}</p><table><thead><tr>' + "".join(f'<th>{escape(h)}</th>' for h in table["headers"]) + '</tr></thead><tbody>'
+        party_html += "".join('<tr>' + "".join(f'<td title="{escape(str(v), quote=True)}">{escape(str(v))}</td>' for v in row) + '</tr>' for row in table["rows"]) + '</tbody></table>'
+    (folder / "case-index.html").write_text("<!doctype html><meta charset=utf-8><title>ROC reports</title><style>body{font:14px Arial;margin:28px;color:#202124}table{border-collapse:collapse;table-layout:fixed;width:2400px}th,td{border-bottom:1px solid #ddd;text-align:left;padding:9px;overflow:hidden;white-space:nowrap}th{background:#f1f3f4;position:sticky;top:0}th:nth-child(8){width:300px}h1{font-size:24px}h2{margin-top:40px}</style><h1>" + escape(title) + "</h1>" + navigation + '<p>' + escape(report_note).replace('\n', '<br>') + "</p><h2 id=cases>Case index</h2><p>" + str(len(cases)) + " cases. Hover a clipped cell to read its contents.</p><table><thead><tr>" + headings + "</tr></thead><tbody>" + rows + "</tbody></table>" + party_html, encoding="utf-8")
     return folder / "case-index.xlsx"
 
 
@@ -127,10 +180,15 @@ def google_token(credentials):
         raise RocError("Google OAuth refresh failed. Reauthorize the standalone application.") from None
 
 
-def publish_google(cases, title, credentials):
+def publish_google(cases, title, credentials, aliases=()):
     # Fresh workbook per publication. Never overwrite a user's live edits.
     token = google_token(credentials)
-    workbook = google_request("https://sheets.googleapis.com/v4/spreadsheets", {"properties": {"title": title}, "sheets": [{"properties": {"sheetId": 0, "title": "Case index", "gridProperties": {"rowCount": max(1000, len(cases) + 7), "columnCount": 10, "frozenRowCount": 1, "frozenColumnCount": 2}}}]}, token)
+    reports = build_party_reports(cases, aliases)
+    tables = report_tables(reports)
+    sheets = [{"properties": {"sheetId": 0, "title": "Case index", "gridProperties": {"rowCount": max(1000, len(cases) + 7), "columnCount": 10, "frozenRowCount": 1, "frozenColumnCount": 2}}}]
+    for i, table in enumerate(tables, 1):
+        sheets.append({"properties": {"sheetId": i, "title": table["name"], "gridProperties": {"rowCount": max(1000, len(table["rows"]) + 1), "columnCount": len(table["headers"]), "frozenRowCount": 1}}})
+    workbook = google_request("https://sheets.googleapis.com/v4/spreadsheets", {"properties": {"title": title}, "sheets": sheets}, token)
     identifier = workbook["spreadsheetId"]
     rows = [{"values": [{"userEnteredValue": {"stringValue": v}} for v in HEADERS]}]
     for case in cases:
@@ -143,5 +201,13 @@ def publish_google(cases, title, credentials):
                 {"setBasicFilter": {"filter": {"range": {"sheetId": 0, "startRowIndex": 0, "endRowIndex": len(cases) + 1, "startColumnIndex": 0, "endColumnIndex": 10}}}}]
     for i, width in enumerate(WIDTHS):
         requests.append({"updateDimensionProperties": {"range": {"sheetId": 0, "dimension": "COLUMNS", "startIndex": i, "endIndex": i + 1}, "properties": {"pixelSize": width * 7}, "fields": "pixelSize"}})
+    for i, table in enumerate(tables, 1):
+        note = coverage_text(reports) + '\n' + '\n'.join(reports[k] for k in ("namePolicy", "relationshipPolicy"))
+        report_rows = [{"values": [{"userEnteredValue": {"stringValue": h}, "note": note} for h in table["headers"]]}]
+        report_rows += [{"values": [{"userEnteredValue": {"numberValue" if isinstance(v, int) else "stringValue": v}} for v in row]} for row in table["rows"]]
+        area = {"sheetId": i, "startRowIndex": 0, "endRowIndex": len(report_rows), "startColumnIndex": 0, "endColumnIndex": len(table["headers"])}
+        requests.extend([{"updateCells": {"start": {"sheetId": i}, "rows": report_rows, "fields": "userEnteredValue,note"}},
+                         {"repeatCell": {"range": area, "cell": {"userEnteredFormat": {"wrapStrategy": "CLIP"}}, "fields": "userEnteredFormat.wrapStrategy"}},
+                         {"setBasicFilter": {"filter": {"range": area}}}])
     google_request(f"https://sheets.googleapis.com/v4/spreadsheets/{identifier}:batchUpdate", {"requests": requests}, token)
     return workbook["spreadsheetUrl"]

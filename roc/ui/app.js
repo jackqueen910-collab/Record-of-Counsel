@@ -7,6 +7,7 @@ let currentId = null, current = null, selected = new Set(), page = 0, pageRows =
 let busyAction = false, refreshing = false, tableStamp = "", sidebarStamp = "", activeRun = null;
 let connection = {connected:false, connecting:false}, afterLogin = null, authSubmitted = false, authSending = false;
 let shuttingDown = false, stopped = false, pollTimer = null;
+let reportView = 'cases', partyPage = 0;
 const pageSize = 50;
 const money = cents => new Intl.NumberFormat("en-US", {style:"currency", currency:"USD"}).format(cents / 100);
 const labels = {"missing-source":"Missing from source", "needs-review":"Needs review", "not-tested":"Not tested by sample"};
@@ -26,6 +27,7 @@ function showSearch() {currentId = null; current = null; selected.clear(); $('se
 async function openRun(id) {
   currentId = id; current = null; selected.clear(); page = 0; tableStamp = ""; sidebarStamp = "";
   $('filter').value = ""; $('type-filter').value = ""; $('review-filter').value = ""; $('sort').value = "newest";
+  $('party-filter').value = ''; $('party-relation').value = ''; setReportView('cases');
   $('search-view').hidden = true; $('run-view').hidden = false; await refresh();
 }
 function setButtons() {
@@ -40,6 +42,7 @@ function setButtons() {
   for (const id of ['resume','signin','reconcile','edit-cap','rebuild','select-visible']) $(id).disabled = busy;
   $('confirm-retrieve').disabled = busy || !quote?.fitsBudget;
   if (current) {
+    for (const view of ['clients','defendants','plaintiffs']) $('view-'+view).disabled = !current.partyReports;
     $('pause').hidden = !current.busy; $('pause').disabled = busyAction || current.pauseRequested;
     $('pause').textContent = current.pauseRequested ? "Pause requested…" : "Pause after current request";
     $('resume').hidden = !['stopped','interrupted'].includes(current.state);
@@ -96,9 +99,11 @@ function renderRun() {
   $('run-status').textContent = states[r.state] || r.state;
   $('progress-message').textContent = r.message;
   $('pending-message').textContent = r.pauseRequested ? 'Waiting for the current request to finish. No further purchases will begin after the pause checkpoint.' : r.pendingCount ? `${r.pendingCount} unresolved receipt(s): ${money(r.pendingCents)} reserved. Further purchases are blocked.` : r.stoppedReason || '';
-  const newStamp = JSON.stringify([r.cases,r.busy]); if (tableStamp !== newStamp) {tableStamp = newStamp; renderTable();}
+  const newStamp = JSON.stringify([r.cases,r.partyReports,r.busy]); if (tableStamp !== newStamp) {tableStamp = newStamp; renderTable(); renderParties();}
+  const coverage = r.partyReports?.coverage;
+  $('report-coverage').textContent = coverage ? `${coverage.parsedDockets} of ${coverage.indexedCases} indexed cases have parsed dockets · ${coverage.indexOnlyCases} index only · Counsel matched in ${coverage.casesWithMatchedClients} cases${coverage.partyTablesNeedingReview ? ` · ${coverage.partyTablesNeedingReview} party tables need review` : ''}. Party summaries cover saved dockets only.` : 'An update is ready. Use Stop ROC, then reopen Start ROC to load party reports. Saved work is retained; reconnect PACER when you next need access.';
   $('exports').replaceChildren();
-  const formats = {'case-index.xlsx':'Excel ↓','case-index.csv':'CSV ↓','case-index.html':'HTML ↓','evidence.json':'Evidence ↓','review.json':'Findings ↓'};
+  const formats = {'case-index.xlsx':'Excel ↓','case-index.csv':'CSV ↓','party-reports.zip':'Party CSVs ↓','case-index.html':'HTML ↓','evidence.json':'Evidence ↓','review.json':'Findings ↓'};
   for (const [file, title] of Object.entries(formats)) if (r.downloads.includes(file)) {
     const b = node('button', title, 'secondary'); b.addEventListener('click', () => download(file).catch(error)); $('exports').append(b);
   }
@@ -108,7 +113,9 @@ function renderRun() {
 }
 function filteredRows() {
   const text = $('filter').value.trim().toLocaleLowerCase(), kind = $('type-filter').value, review = $('review-filter').value;
-  let rows = (current?.cases || []).filter(c => (!kind || c.caseType === kind) && (!review || (review === 'enriched' ? c.enriched : c.issues.some(i => i.category === review))) && (!text || [c.caseNumber,c.caseTitle,c.district,c.team,c.nature].join(' ').toLocaleLowerCase().includes(text)));
+  const names = new Map();
+  for (const p of current?.partyReports?.parties || []) names.set(p.caseKey, `${names.get(p.caseKey) || ''} ${p.name}`);
+  let rows = (current?.cases || []).filter(c => (!kind || c.caseType === kind) && (!review || (review === 'enriched' ? c.enriched : c.issues.some(i => i.category === review))) && (!text || [c.caseNumber,c.caseTitle,c.district,c.role || c.team,c.nature,names.get(c.key)].join(' ').toLocaleLowerCase().includes(text)));
   const sort = $('sort').value;
   rows.sort((a,b) => sort === 'court' ? a.district.localeCompare(b.district) || a.caseNumber.localeCompare(b.caseNumber) : (sort === 'oldest' ? 1 : -1) * a.dateFiled.localeCompare(b.dateFiled) || a.key.localeCompare(b.key));
   return rows;
@@ -128,23 +135,79 @@ function renderTable() {
     const checkCell = node('td'); checkCell.append(cb); tr.append(checkCell);
     const titleCell = node('td'), b = node('button',c.caseNumber); b.addEventListener('click', () => showCase(c));
     titleCell.append(b, node('span',c.caseTitle,'case-title')); titleCell.title = c.caseTitle; tr.append(titleCell);
-    for (const value of [c.caseType,c.district,c.dateFiled,c.team || 'Unresolved',c.nature,c.status]) {const td = node('td',value); td.title = value; tr.append(td);}
+    for (const value of [c.caseType,c.district,c.dateFiled,c.role || c.team || 'Unresolved',c.nature,c.status]) {const td = node('td',value); td.title = value; tr.append(td);}
     const findings = node('td'), review = c.issues.some(i => i.category === 'needs-review'), missing = c.issues.some(i => i.category === 'missing-source');
     findings.append(node('span',review ? 'Review' : missing ? 'Source gap' : c.enriched ? 'Enriched' : 'Index only',`pill${review || missing ? ' warn' : c.enriched ? ' good' : ''}`)); tr.append(findings); $('case-rows').append(tr);
   }
-  $('result-count').textContent = `${rows.length.toLocaleString()} shown`;
+  if (reportView === 'cases') $('result-count').textContent = `${rows.length.toLocaleString()} shown`;
   $('page-summary').textContent = rows.length ? `${page*pageSize+1}–${Math.min((page+1)*pageSize,rows.length)} of ${rows.length.toLocaleString()} cases` : '0 cases';
   $('previous').disabled = page === 0; $('next').disabled = (page+1)*pageSize >= rows.length; selectionLabel(rows);
 }
 function showCase(c) {
   $('detail-number').textContent = c.caseNumber; $('detail-title').textContent = c.caseTitle; $('detail-nature').textContent = c.nature;
   $('detail-fields').replaceChildren();
-  for (const [key,value] of [['District',c.district],['Filed',c.dateFiled],['Team',c.team || 'Unresolved — select this docket to investigate'],['Status',c.status],['Represented parties',c.representedParties.join('; ') || 'Not established from the case index']]) $('detail-fields').append(node('p',`${key}: ${value}`));
+  for (const [key,value] of [['District',c.district],['Filed',c.dateFiled],['Role',c.role || c.team || 'Unresolved — select this docket to investigate'],['Status',c.status],['Represented parties',c.representedParties.join('; ') || 'Not established from the case index']]) $('detail-fields').append(node('p',`${key}: ${value}`));
+  $('detail-parties').replaceChildren();
+  for (const p of (current.partyReports?.parties || []).filter(p => p.caseKey === c.key)) {
+    const block = node('div',undefined,'party-appearance');
+    block.append(node('strong',p.name),node('p',`${p.partyRole} · ${p.relationship}${p.defendantNumbers.length ? ' · Defendant '+p.defendantNumbers.join(', ') : ''}`));
+    if (p.matchedCounsel.length) block.append(node('p','Matched counsel: '+p.matchedCounsel.join('; '),'help'));
+    $('detail-parties').append(block);
+  }
   $('detail-issues').replaceChildren();
   if (!c.enriched) $('detail-issues').append(node('p','This is index information. Counsel roles and client-specific criminal counts require the selected docket.', 'help'));
   if (!c.issues.length) $('detail-issues').append(node('p','No flagged findings in the available data.', 'help'));
   for (const i of c.issues) {const block = node('div',undefined,'issue'); block.append(node('strong',labels[i.category] || i.category),node('span',i.message)); $('detail-issues').append(block);}
   $('case-dialog').showModal();
+}
+function setReportView(view) {
+  reportView = view; partyPage = 0;
+  $('cases-panel').hidden = view !== 'cases'; $('parties-panel').hidden = view === 'cases';
+  for (const name of ['cases','clients','defendants','plaintiffs']) {
+    $('view-'+name).classList.toggle('active',view === name); $('view-'+name).setAttribute('aria-pressed',String(view === name));
+  }
+  renderTable(); renderParties();
+}
+function partyMatches(row) {
+  const relation = $('party-relation').value;
+  if (relation === 'civilPlaintiffCaseCount') return row.role === 'Civil Plaintiff' && row.relationships.includes('Opposing party');
+  const target = {clientCaseCount:'Client',opposingCaseCount:'Opposing party',sameSideCaseCount:'Other party on same side',unresolvedCaseCount:'Unresolved'}[relation];
+  return !target || row.relationships.includes(target);
+}
+function renderParties() {
+  if (reportView === 'cases' || !current?.partyReports) return;
+  const text = $('party-filter').value.trim().toLocaleLowerCase(), relation = $('party-relation').value;
+  const rows = current.partyReports[reportView].summary.filter(s => (!text || s.sourceNames.join(' ').toLocaleLowerCase().includes(text)) && (!relation || s[relation] > 0));
+  rows.sort((a,b) => (b[relation || 'caseCount']-a[relation || 'caseCount']) || a.name.localeCompare(b.name));
+  partyPage = Math.min(partyPage,Math.max(0,Math.ceil(rows.length/pageSize)-1));
+  $('party-rows').replaceChildren();
+  for (const s of rows.slice(partyPage*pageSize,(partyPage+1)*pageSize)) {
+    const tr = node('tr'), cell = node('td'), b = node('button',s.name);
+    b.addEventListener('click',() => showParty(s)); cell.append(b); cell.title = s.sourceNames.join('; '); tr.append(cell);
+    for (const value of [s[relation || 'caseCount'],s.clientCaseCount,s.opposingCaseCount,s.civilPlaintiffCaseCount,s.sameSideCaseCount,s.unresolvedCaseCount,s.roles.join('; ')]) {const td = node('td',String(value)); td.title = String(value); tr.append(td);}
+    $('party-rows').append(tr);
+  }
+  $('party-empty').hidden = Boolean(rows.length);
+  $('party-empty').textContent = current.partyReports.coverage.parsedDockets ? 'No names match this view. Check the docket coverage and counsel matches.' : 'Retrieve selected dockets from the Case index to build these reports.';
+  $('result-count').textContent = `${rows.length.toLocaleString()} names`;
+  $('party-page-summary').textContent = rows.length ? `${partyPage*pageSize+1}–${Math.min((partyPage+1)*pageSize,rows.length)} of ${rows.length} names${relation ? ' · Filtered distinct-case count; relationship columns show full totals' : ''}` : '0 names';
+  $('party-previous').disabled = partyPage === 0; $('party-next').disabled = (partyPage+1)*pageSize >= rows.length;
+}
+function showParty(summary) {
+  const appearances = current.partyReports[reportView].cases.filter(p => p.nameKey === summary.nameKey && partyMatches(p));
+  const byCase = new Map(); appearances.forEach(p => {if (!byCase.has(p.caseKey)) byCase.set(p.caseKey,[]); byCase.get(p.caseKey).push(p);});
+  $('party-name').textContent = summary.name; $('party-source-names').textContent = 'Source names: '+summary.sourceNames.join('; ');
+  $('party-case-count').textContent = `${byCase.size} distinct cases in this view. Counts reflect saved docket coverage.`;
+  $('party-case-list').replaceChildren();
+  const caseMap = new Map(current.cases.map(c => [c.key,c]));
+  const rows = [...byCase.entries()].sort((a,b) => b[1][0].dateFiled.localeCompare(a[1][0].dateFiled) || a[0].localeCompare(b[0]));
+  for (const [key, parties] of rows) {
+    const c = caseMap.get(key), block = node('div',undefined,'party-appearance'), b = node('button',c.caseNumber,'text-button');
+    b.addEventListener('click',() => showCase(c)); block.append(b,node('strong',c.caseTitle),node('p',`${c.district} · ${c.dateFiled} · ${c.status} · ${c.role || 'Unresolved'}`));
+    block.append(node('p',parties.map(p => `${p.partyRole}: ${p.relationship}`).join('; '),'help'));
+    $('party-case-list').append(block);
+  }
+  $('party-dialog').showModal();
 }
 async function download(file) {
   const response = await fetch(`/api/runs/${currentId}/download/${file}`,{headers:{'X-ROC-Token':token}});
@@ -158,6 +221,9 @@ bind('search-form','submit',async e => {
   await connectedAction('Connect to run the case search you just requested.', () => action(async () => {const result = await api('/api/runs', values); await openRun(result.id);}));
 });
 bind('demo','click',() => action(async () => {const result = await api('/api/demo',{}); await openRun(result.id);}));
+for (const view of ['cases','clients','defendants','plaintiffs']) bind('view-'+view,'click',() => setReportView(view));
+bind('party-filter','input',() => {partyPage = 0; renderParties();}); bind('party-relation','change',() => {partyPage = 0; renderParties();});
+bind('party-previous','click',() => {partyPage--; renderParties();}); bind('party-next','click',() => {partyPage++; renderParties();});
 for (const id of ['filter','type-filter','review-filter','sort']) bind(id,id === 'filter' ? 'input' : 'change',() => {page = 0; renderTable();});
 bind('previous','click',() => {page--; renderTable();}); bind('next','click',() => {page++; renderTable();});
 bind('select-visible','click',() => {pageRows.filter(c=>c.eligible).forEach(c=>selected.add(c.key)); renderTable();});

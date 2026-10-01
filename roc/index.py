@@ -71,7 +71,7 @@ def build_index(records, court_labels=None):
                       "U.S. Bankruptcy Court" if court.endswith("bk") else
                       "U.S. Court of Appeals" if court.startswith("ca") and court[2:].isdigit() else "Other federal court")
         result.append({"key": key, "courtId": court, "caseNumber": number, "caseTitle": sorted(captions)[0],
-                       "caseType": kind, "team": "", "court": court_type,
+                       "caseType": kind, "role": "", "team": "", "court": court_type,
                        "district": courts.get(court, court), "dateFiled": dates[0] if dates else "", "nature": nature,
                        "status": status, "pacerLink": link, "allCaseLinks": links,
                        "warnings": warnings, "sourceRows": entries})

@@ -18,6 +18,7 @@ CIVIL_TEAMS = {"Plaintiff": "Civil Plaintiff", "Defendant": "Civil Defense", **{
     role: role for role in ("Petitioner", "Respondent", "Claimant", "Amicus", "Intervenor",
                            "Movant", "Interested Party", "Notice Party", "Debtor", "Creditor")}}
 TEAM_VALUES = ["Prosecution", "Criminal Defense", *CIVIL_TEAMS.values(), "Multiple roles"]
+ROLE_VALUES = TEAM_VALUES  # Keep the old import for saved integrations.
 NOT_LISTED = "Not listed in source"
 
 
@@ -223,6 +224,13 @@ def enrich(report, aliases):
               "sourceSha256": report["sha256"], "caseNumber": report["caseNumber"]}
 
     def finish():
+        # "team" remains a compatibility alias for older saved runs and clients.
+        result["role"] = result["team"]
+        result["roles"] = result.get("teams", [])
+        result["fieldStatus"]["role"] = result["fieldStatus"].get("team", "needs-review")
+        result["partyDetails"] = [{k: p.get(k) for k in ("name", "role", "defendantNumber", "counsel", "warnings")} |
+                                  {"matchedCounsel": [n for n in p["counsel"] if name_key(n) in keys]}
+                                  for p in report["parties"]]
         result["warnings"] = review_warnings(items)
         return result
 
