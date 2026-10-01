@@ -135,7 +135,7 @@ class InterfaceBrowserTests(unittest.TestCase):
                     expect(page.locator('#docket-guidance')).to_contain_text('Many reports can get expensive fast')
                     expect(page.locator('#case-rows .docket-field')).to_have_count(4)
                     page.locator('#choose-dockets').click()
-                    expect(page.locator('#review-filter')).to_have_value('needs-docket')
+                    expect(page.locator('#active-filters')).to_contain_text('Without docket report')
                     expect(page.locator('#selection-count')).to_have_text('0')
                     capture = os.environ.get('ROC_UI_SCREENSHOTS')
                     if capture:
@@ -180,7 +180,7 @@ class InterfaceBrowserTests(unittest.TestCase):
                     self.assertEqual(FakeCourt.bought, ["nysdc|1:24-cr-00002"])
                     self.assertEqual(len(requests), 1)
                     expect(page.locator('#selection-count')).to_have_text('1')
-                    page.locator('#review-filter').select_option('')
+                    page.get_by_role('button',name='Remove Docket coverage: Without docket report',exact=True).click()
                     expect(page.locator('#case-rows')).to_contain_text('Criminal Defense')
                     expect(page.locator('#case-rows .docket-field')).to_have_count(2)
                     # Re-selecting the saved report needs no new allowance.

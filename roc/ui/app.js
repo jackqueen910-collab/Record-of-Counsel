@@ -10,6 +10,13 @@ let shuttingDown = false, stopped = false, pollTimer = null;
 let reportView = 'cases', partyPage = 0;
 let selectedNames = new Map(), rulesAvailable = false, ruleState = null, editingRule = null, pendingRule = null, rulesBusy = false;
 let docketBudgetsAvailable = false;
+let caseRows = [], facetChoices = {};
+const alphabet = new Intl.Collator('en', {sensitivity:'base', numeric:true});
+const facetDefinitions = [
+  ['court','Court'],['type','Case type'],['status','Case status'],['role','Role'],['year','Filing year'],
+  ['docket','Docket coverage'],['review','Source findings'],['party','Party name'],['title','Case title'],['nature','Nature of Case']
+];
+const unavailable = value => !value || /^(charges )?not supplied by PCL$|^N\/A$|^unresolved\b/i.test(value);
 const pageSize = 50;
 const money = cents => new Intl.NumberFormat("en-US", {style:"currency", currency:"USD"}).format(cents / 100);
 const labels = {"missing-source":"Missing from source", "needs-review":"Needs review", "not-tested":"Not tested by sample"};
@@ -28,8 +35,8 @@ async function action(fn) {
 function showSearch() {currentId = null; current = null; selected.clear(); $('search-view').hidden = false; $('run-view').hidden = true; $('breadcrumb').textContent = "Workspace / New search"; sidebarStamp = ""; refresh().catch(error);}
 async function openRun(id) {
   currentId = id; current = null; selected.clear(); page = 0; tableStamp = ""; sidebarStamp = "";
-  $('filter').value = ""; $('type-filter').value = ""; $('review-filter').value = ""; $('sort').value = "newest";
-  $('party-filter').value = ''; $('party-relation').value = ''; setReportView('cases');
+  $('filter').value = ''; $('sort').value = 'newest'; facetChoices = {}; caseRows = []; $('result-filters').open = false; renderFacetGroups();
+  $('party-filter').value = ''; $('party-relation').value = ''; $('party-sort').value = 'count-desc'; setReportView('cases');
   $('search-view').hidden = true; $('run-view').hidden = false; await refresh();
 }
 function setButtons() {
@@ -118,7 +125,7 @@ function renderRun() {
   $('run-status').textContent = states[r.state] || r.state;
   $('progress-message').textContent = r.message;
   $('pending-message').textContent = r.pauseRequested ? 'Waiting for the current request to finish. No further purchases will begin after the pause checkpoint.' : r.pendingCount ? `${r.pendingCount} unresolved receipt(s): ${money(r.pendingCents)} reserved. Further purchases are blocked.` : r.stoppedReason || '';
-  const newStamp = JSON.stringify([r.cases,r.partyReports,r.busy,activeRun,rulesAvailable,docketBudgetsAvailable]); if (tableStamp !== newStamp) {tableStamp = newStamp; renderTable(); renderParties();}
+  const newStamp = JSON.stringify([r.cases,r.partyReports,r.busy,activeRun,rulesAvailable,docketBudgetsAvailable]); if (tableStamp !== newStamp) {tableStamp = newStamp; caseRows = buildCaseRows(r.cases,r.partyReports); renderFacetGroups(); renderTable(); renderParties();}
   $('docket-guidance').hidden = !r.indexReady || !r.cases.some(c=>!c.enriched);
   const coverage = r.partyReports?.coverage;
   $('report-coverage').textContent = coverage ? `${coverage.parsedDockets} of ${coverage.indexedCases} indexed cases have parsed dockets · ${coverage.indexOnlyCases} index only · Counsel matched in ${coverage.casesWithMatchedClients} cases${coverage.partyTablesNeedingReview ? ` · ${coverage.partyTablesNeedingReview} party tables need review` : ''}. Party summaries cover saved dockets only.` : 'An update is ready. Use Stop ROC, then reopen Start ROC to load party reports. Saved work is retained; reconnect PACER when you next need access.';
@@ -132,15 +139,96 @@ function renderRun() {
   if (!r.transactions.length) $('receipt-list').append(node('p', 'No PACER transactions in this run.', 'help'));
   r.transactions.forEach(t => $('receipt-list').append(node('div', `${t.startedUtc.slice(0,19).replace('T',' ')} UTC · ${t.kind === 'docket' ? 'Court docket report' : 'PCL API page'} · ${t.state === 'complete' ? money(t.chargedCents) + ' confirmed' : money(t.reservedCents) + ' reserved; receipt unresolved'}`, 'receipt')));
 }
+function buildCaseRows(cases, reports) {
+  const names = new Map(), sourceNames = new Map(), replacements = new Map();
+  const add = (map,key,value) => {if (!value) return; if (!map.has(key)) map.set(key,new Set()); map.get(key).add(value);};
+  for (const view of ['clients','defendants','plaintiffs']) for (const row of reports?.[view]?.cases || []) {
+    add(names,row.caseKey,row.name);
+    if (row.groupId) {
+      if (!replacements.has(row.caseKey)) replacements.set(row.caseKey,new Map());
+      for (const p of row.sourceParties || []) replacements.get(row.caseKey).set(p.name,row.name);
+    }
+  }
+  for (const p of reports?.parties || []) {
+    add(sourceNames,p.caseKey,p.name); add(names,p.caseKey,replacements.get(p.caseKey)?.get(p.name) || p.name);
+  }
+  return cases.map(c => {
+    const savedPartyNames = [...(names.get(c.key) || [])].sort(alphabet.compare);
+    const court = c.district ? c.district + (c.court && c.court !== 'U.S. District Court' ? ` · ${c.court}` : '') : c.court || null;
+    const nature = unavailable(c.nature) ? null : c.nature, role = unavailable(c.role || c.team) ? null : c.role || c.team;
+    const findings = [...new Set(c.issues.map(i=>labels[i.category] || i.category))];
+    return {...c,savedPartyNames,facetValues:{court:[court],type:[c.caseType || null],status:[c.status || null],role:[role],
+      year:[c.dateFiled?.slice(0,4) || null],docket:[c.enriched ? 'Report retrieved' : 'Without docket report'],
+      review:findings.length ? findings : ['No flagged findings'],party:savedPartyNames.length ? savedPartyNames : [null],
+      title:[c.caseTitle || null],nature:[nature]},
+      sortValues:{date:c.dateFiled || null,party:savedPartyNames[0] || null,title:c.caseTitle || null,court,nature},
+      searchText:[c.caseNumber,c.caseTitle,c.caseType,c.district,c.court,c.role || c.team,c.nature,c.status,...savedPartyNames,...(sourceNames.get(c.key) || [])].join(' ').toLocaleLowerCase()};
+  });
+}
+function matchesCaseFilters(c, choices, text='') {
+  return (!text || c.searchText.includes(text)) && Object.entries(choices).every(([key,values])=>!values.size || c.facetValues[key].some(v=>values.has(v)));
+}
+function compareCases(a,b,sort) {
+  const field = sort === 'newest' || sort === 'oldest' ? 'date' : sort.split('-')[0];
+  const direction = sort === 'newest' || sort.endsWith('-desc') ? -1 : 1;
+  const left = a.sortValues[field], right = b.sortValues[field];
+  // Missing values remain last in either direction; case key breaks ties.
+  if (left === null && right !== null) return 1;
+  if (right === null && left !== null) return -1;
+  return (left !== null && right !== null ? direction * alphabet.compare(left,right) : 0) || alphabet.compare(a.key,b.key);
+}
 function filteredRows() {
-  const text = $('filter').value.trim().toLocaleLowerCase(), kind = $('type-filter').value, review = $('review-filter').value;
-  const names = new Map();
-  for (const p of current?.partyReports?.parties || []) names.set(p.caseKey, `${names.get(p.caseKey) || ''} ${p.name}`);
-  for (const group of ['clients','defendants','plaintiffs']) for (const p of current?.partyReports?.[group]?.cases || []) names.set(p.caseKey, `${names.get(p.caseKey) || ''} ${p.name}`);
-  let rows = (current?.cases || []).filter(c => (!kind || c.caseType === kind) && (!review || (review === 'enriched' ? c.enriched : review === 'needs-docket' ? !c.enriched : c.issues.some(i => i.category === review))) && (!text || [c.caseNumber,c.caseTitle,c.district,c.role || c.team,c.nature,names.get(c.key)].join(' ').toLocaleLowerCase().includes(text)));
-  const sort = $('sort').value;
-  rows.sort((a,b) => sort === 'court' ? a.district.localeCompare(b.district) || a.caseNumber.localeCompare(b.caseNumber) : (sort === 'oldest' ? 1 : -1) * a.dateFiled.localeCompare(b.dateFiled) || a.key.localeCompare(b.key));
-  return rows;
+  const text = $('filter').value.trim().toLocaleLowerCase(), sort = $('sort').value;
+  return caseRows.filter(c=>matchesCaseFilters(c,facetChoices,text)).sort((a,b)=>compareCases(a,b,sort));
+}
+function facetLabel(key,value) {return value === null ? key === 'party' ? 'No saved party names' : 'Not available' : value;}
+function facetCounts(rows,key) {
+  const counts = new Map(); for (const row of rows) for (const value of new Set(row.facetValues[key])) counts.set(value,(counts.get(value) || 0)+1);
+  return counts;
+}
+function renderFacetGroups() {
+  const prior = new Map([...$('facet-groups').children].map(group=>[group.dataset.facet,{open:group.open,text:group.querySelector('input[type=search]').value}]));
+  $('facet-groups').replaceChildren();
+  for (const [key,label] of facetDefinitions) {
+    const counts = facetCounts(caseRows,key);
+    // Retain active values absent from updated evidence so a filter never
+    // silently broadens. They remain removable with a visible zero count.
+    for (const value of facetChoices[key] || []) if (!counts.has(value)) counts.set(value,0);
+    if (!counts.size) continue;
+    const group = node('details',undefined,'facet-group'); group.dataset.facet = key;
+    const heading = node('summary',label), badge = node('span',undefined,'facet-badge'); heading.append(badge); group.append(heading);
+    const search = node('input'); search.type = 'search'; search.placeholder = `Find ${label.toLowerCase()} options…`; search.setAttribute('aria-label',`Find ${label} options`); search.hidden = counts.size <= 8; search.value = search.hidden ? '' : prior.get(key)?.text || '';
+    const options = node('div',undefined,'facet-options'), hint = node('p',undefined,'help'); let limit = 100;
+    const draw = () => {
+      const text = search.value.trim().toLocaleLowerCase();
+      const values = [...counts.keys()].filter(v=>facetLabel(key,v).toLocaleLowerCase().includes(text)).sort((a,b)=>a === b ? 0 : a === null ? 1 : b === null ? -1 : alphabet.compare(a,b));
+      options.replaceChildren();
+      for (const value of values.slice(0,limit)) {
+        const row = node('label',undefined,'facet-option'), cb = node('input'); cb.type = 'checkbox'; cb.checked = facetChoices[key]?.has(value) || false;
+        const caption = facetLabel(key,value); cb.setAttribute('aria-label',`${label}: ${caption}`);
+        cb.addEventListener('change',()=>{if (!facetChoices[key]) facetChoices[key] = new Set(); cb.checked ? facetChoices[key].add(value) : facetChoices[key].delete(value); page = 0; renderTable();});
+        const text = node('span',caption); text.title = caption; row.append(cb,text,node('small',String(counts.get(value)))); options.append(row);
+      }
+      hint.textContent = values.length ? `${Math.min(limit,values.length)} of ${values.length} options` : 'No matching options.';
+      if (values.length > limit) {const more = node('button','Show more options','text-button'); more.addEventListener('click',()=>{limit += 100; draw();}); options.append(more);}
+    };
+    search.addEventListener('input',()=>{limit = 100; draw();}); group.append(search,options,hint);
+    group.addEventListener('toggle',()=>{if (group.open) draw();}); group.open = prior.get(key)?.open || false;
+    $('facet-groups').append(group); if (group.open) draw();
+  }
+  renderFilterState();
+}
+function renderFilterState() {
+  const active = facetDefinitions.flatMap(([key,label])=>[...(facetChoices[key] || [])].map(value=>({key,label,value})));
+  $('facet-count').textContent = active.length ? `${active.length} checked` : 'All results';
+  $('active-filters').replaceChildren();
+  for (const {key,label,value} of active) {
+    const caption = `${label}: ${facetLabel(key,value)}`, chip = node('button',caption+' ×','filter-chip'); chip.title = caption; chip.setAttribute('aria-label',`Remove ${caption}`);
+    chip.addEventListener('click',()=>{facetChoices[key].delete(value); page = 0; renderFacetGroups(); renderTable();}); $('active-filters').append(chip);
+  }
+  for (const group of $('facet-groups').children) {const size = facetChoices[group.dataset.facet]?.size || 0; group.querySelector('.facet-badge').textContent = size ? `${size} checked` : '';}
+  $('filter-state').hidden = !active.length && !$('filter').value;
+  $('sort-help').hidden = !$('sort').value.startsWith('party-');
 }
 function selectionLabel(rows) {
   const shown = new Set(rows.map(r => r.key)), hidden = [...selected].filter(k => !shown.has(k)).length;
@@ -167,7 +255,9 @@ function renderTable() {
     cb.addEventListener('change', () => {cb.checked ? selected.add(c.key) : selected.delete(c.key); selectionLabel(rows);});
     const checkCell = node('td'); checkCell.append(cb); tr.append(checkCell);
     const titleCell = node('td'), b = node('button',c.caseNumber); b.addEventListener('click', () => showCase(c));
-    titleCell.append(b, node('span',c.caseTitle,'case-title')); titleCell.title = c.caseTitle; tr.append(titleCell);
+    titleCell.append(b, node('span',c.caseTitle,'case-title')); titleCell.title = c.caseTitle;
+    if (c.savedPartyNames.length || $('sort').value.startsWith('party-')) {const names = node('span',c.savedPartyNames.length ? 'Parties: '+c.savedPartyNames.join('; ') : 'No saved party names','case-parties'); names.title = names.textContent; titleCell.append(names);}
+    tr.append(titleCell);
     for (const value of [c.caseType,c.district,c.dateFiled]) {const td = node('td',value); td.title = value; tr.append(td);}
     tr.append(docketField(c,'Role',c.role || c.team),docketField(c,'Nature of Case',c.nature),node('td',c.status));
     const findings = node('td'), review = c.issues.some(i => i.category === 'needs-review'), missing = c.issues.some(i => i.category === 'missing-source');
@@ -175,7 +265,7 @@ function renderTable() {
   }
   if (reportView === 'cases') $('result-count').textContent = `${rows.length.toLocaleString()} shown`;
   $('page-summary').textContent = rows.length ? `${page*pageSize+1}–${Math.min((page+1)*pageSize,rows.length)} of ${rows.length.toLocaleString()} cases` : '0 cases';
-  $('previous').disabled = page === 0; $('next').disabled = (page+1)*pageSize >= rows.length; selectionLabel(rows);
+  $('previous').disabled = page === 0; $('next').disabled = (page+1)*pageSize >= rows.length; selectionLabel(rows); renderFilterState();
 }
 function showCase(c) {
   $('detail-number').textContent = c.caseNumber; $('detail-title').textContent = c.caseTitle; $('detail-nature').textContent = c.nature;
@@ -215,7 +305,8 @@ function renderParties() {
   for (const key of selectedNames.keys()) if (!available.has(key)) selectedNames.delete(key);
   const text = $('party-filter').value.trim().toLocaleLowerCase(), relation = $('party-relation').value;
   const rows = current.partyReports[reportView].summary.filter(s => (!text || [s.name,...s.sourceNames].join(' ').toLocaleLowerCase().includes(text)) && (!relation || s[relation] > 0));
-  rows.sort((a,b) => (b[relation || 'caseCount']-a[relation || 'caseCount']) || a.name.localeCompare(b.name));
+  const order = $('party-sort').value;
+  rows.sort((a,b) => (order.startsWith('name-') ? (order === 'name-desc' ? -1 : 1) * alphabet.compare(a.name,b.name) : (order === 'count-asc' ? 1 : -1) * (a[relation || 'caseCount']-b[relation || 'caseCount'])) || alphabet.compare(a.name,b.name) || alphabet.compare(a.nameKey,b.nameKey));
   partyPage = Math.min(partyPage,Math.max(0,Math.ceil(rows.length/pageSize)-1));
   $('party-rows').replaceChildren();
   for (const s of rows.slice(partyPage*pageSize,(partyPage+1)*pageSize)) {
@@ -275,17 +366,19 @@ bind('search-form','submit',async e => {
 bind('demo','click',() => action(async () => {const result = await api('/api/demo',{}); await openRun(result.id);}));
 for (const view of ['cases','clients','defendants','plaintiffs']) bind('view-'+view,'click',() => setReportView(view));
 bind('party-filter','input',() => {partyPage = 0; renderParties();}); bind('party-relation','change',() => {partyPage = 0; renderParties();});
+bind('party-sort','change',() => {partyPage = 0; renderParties();});
 bind('party-previous','click',() => {partyPage--; renderParties();}); bind('party-next','click',() => {partyPage++; renderParties();});
 bind('clear-names','click',() => {selectedNames.clear(); renderParties();});
 bind('name-rules','click',() => openRules());
 bind('group-names','click',() => openRules(null,[...selectedNames.values()].flatMap(s=>s.sourceNames)));
 bind('refresh-reports','click',() => action(() => api(`/api/runs/${currentId}/refresh-reports`,{})));
-for (const id of ['filter','type-filter','review-filter','sort']) bind(id,id === 'filter' ? 'input' : 'change',() => {page = 0; renderTable();});
+for (const id of ['filter','sort']) bind(id,id === 'filter' ? 'input' : 'change',() => {page = 0; renderTable();});
+bind('clear-filters','click',()=>{facetChoices = {}; $('filter').value = ''; page = 0; renderFacetGroups(); renderTable();});
 bind('previous','click',() => {page--; renderTable();}); bind('next','click',() => {page++; renderTable();});
 bind('select-visible','click',() => {pageRows.filter(c=>c.eligible).forEach(c=>selected.add(c.key)); renderTable();});
 bind('clear-selection','click',() => {selected.clear(); renderTable();});
 bind('choose-dockets','click',() => {
-  $('review-filter').value = 'needs-docket'; page = 0; renderTable();
+  facetChoices.docket = new Set(['Without docket report']); page = 0; renderFacetGroups(); renderTable();
   $('filter').scrollIntoView({block:'center'}); $('filter').focus();
 });
 function docketCapValid() {
