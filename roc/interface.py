@@ -56,10 +56,10 @@ def make_server(workspace, port=0):
         def do_GET(self):
             try:
                 path = urlsplit(self.path).path
-                asset = {"/": "index.html", "/app.js": "app.js", "/style.css": "style.css"}.get(path)
+                asset = {"/": "index.html", "/app.js": "app.js", "/documents.js": "documents.js", "/style.css": "style.css"}.get(path)
                 self.guard(authenticated=asset is None)
                 if asset:
-                    kind = {"index.html": "text/html; charset=utf-8", "app.js": "text/javascript; charset=utf-8", "style.css": "text/css; charset=utf-8"}[asset]
+                    kind = 'text/javascript; charset=utf-8' if asset.endswith('.js') else {"index.html": "text/html; charset=utf-8", "style.css": "text/css; charset=utf-8"}[asset]
                     return self.send(200, files("roc").joinpath("ui", asset).read_bytes(), kind)
                 parts = path.strip("/").split("/")
                 if path == "/api/runs":
@@ -74,6 +74,13 @@ def make_server(workspace, port=0):
                 if len(parts) == 3 and parts[:2] == ["api", "runs"]:
                     with workspace.lock:
                         return self.send(200, workspace.summary(parts[2], detail=True))
+                if len(parts) == 4 and parts[:2] == ['api', 'runs'] and parts[3] == 'documents':
+                    with workspace.lock:
+                        return self.send(200, workspace.grabber.state(parts[2]))
+                if len(parts) == 4 and parts[:2] == ['api', 'runs'] and parts[3] == 'document-bundle':
+                    with workspace.lock:
+                        bundle = workspace.grabber.bundle(parts[2])
+                        return self.send(200, bundle.read_bytes(), 'application/zip', bundle.name)
                 if len(parts) == 5 and parts[:2] == ["api", "runs"] and parts[3] == "download":
                     with workspace.lock:
                         file = workspace.download(parts[2], parts[4])
@@ -88,14 +95,20 @@ def make_server(workspace, port=0):
 
         def do_POST(self):
             value = None
+            raw = None
             try:
-                self.guard()
-                if self.headers.get("Content-Type") != "application/json":
-                    raise RocError("JSON required.")
                 size = int(self.headers.get("Content-Length", "0"))
                 if size < 2 or size > 2_000_000 or self.headers.get("Transfer-Encoding"):
                     raise RocError("Invalid request size.")
-                value = json.loads(self.rfile.read(size))
+                # Consume the bounded body before closing a rejected connection.
+                # Windows may otherwise reset it before the client sees our 400.
+                # Host/origin/token checks still precede parsing and all dispatch.
+                self.connection.settimeout(10)
+                raw = self.rfile.read(size)
+                self.guard()
+                if self.headers.get("Content-Type") != "application/json":
+                    raise RocError("JSON required.")
+                value = json.loads(raw)
                 if not isinstance(value, dict):
                     raise RocError("Expected a JSON object.")
                 parts = urlsplit(self.path).path.strip("/").split("/")
@@ -105,6 +118,10 @@ def make_server(workspace, port=0):
                 if parts == ["api", "connection", "disconnect"]:
                     workspace.disconnect()
                     return self.send(200, {"ok": True})
+                if parts == ['api', 'claude']:
+                    with workspace.lock:
+                        workspace.grabber.configure(value)
+                    return self.send(200, {'ok': True})
                 if parts == ["api", "stop"]:
                     if not stopping.is_set():
                         stopping.set()
@@ -120,6 +137,10 @@ def make_server(workspace, port=0):
                 if parts == ["api", "name-rules", "apply"]:
                     return self.send(200, workspace.apply_name_rule(value))
                 if len(parts) == 4 and parts[:2] == ["api", "runs"]:
+                    if parts[3] in ('documents-analysis-quote', 'documents-purchase-quote'):
+                        with workspace.lock:
+                            fn = workspace.grabber.analysis_quote if parts[3] == 'documents-analysis-quote' else workspace.grabber.purchase_quote
+                            return self.send(200, fn(parts[2], value))
                     if parts[3] == "quote":
                         return self.send(200, workspace.quote(parts[2], value.get("keys")))
                     workspace.act(parts[2], parts[3], value)
@@ -132,6 +153,7 @@ def make_server(workspace, port=0):
             except Exception:
                 self.send(500, {"error": "Local operation failed. Inspect saved status before trying again."})
             finally:
+                raw = None
                 if isinstance(value, dict):
                     value.clear()  # In particular, discard the HTTP credential body.
 

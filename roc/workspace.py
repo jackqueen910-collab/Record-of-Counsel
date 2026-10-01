@@ -18,6 +18,7 @@ from .name_rules import NameRules, fingerprint, party_key, snapshot
 from .output import export_local
 from .review import case_issues
 from .store import RunStore
+from .grabber import DocumentGrabber
 
 DOWNLOADS = {"case-index.xlsx", "case-index.csv", "case-index.html", "evidence.json", "review.json", "party-reports.zip", "party-reports.json"}
 
@@ -81,6 +82,7 @@ class Workspace:
         self.lock_released = False
         self.close_lock = threading.Lock()
         self.name_rules = NameRules(self.root / "name-rules.json")
+        self.grabber = DocumentGrabber(self)
 
     def party_reports(self, identifier, cases=None, rules=None):
         lawyer = self.manifest(identifier)["config"]["lawyer"]
@@ -162,6 +164,7 @@ class Workspace:
             self.stopping = True
             self.pause_event.set()
             self.connection.stop()
+            self.grabber.api_key = ''
 
     def sign_in(self, values):
         with self.lock:
@@ -265,6 +268,8 @@ class Workspace:
         folder = self.folder(identifier)
         progress_path = folder / "status.json"
         progress = read_json(progress_path) if progress_path.exists() else {}
+        if busy and m.get('lastAction', '').startswith('documents-'):
+            progress = {}  # Do not display an older search/docket operation's progress.
         cases = self.cases(identifier) if detail else []
         result_path = folder / "result.json"
         metadata = read_json(result_path) if result_path.exists() else {}
@@ -302,7 +307,7 @@ class Workspace:
             jobs = [self.summary(p.parent.name) for p in self.root.glob("*/workspace.json")]
             return {"active": self.active, "jobs": sorted(jobs, key=lambda j: j["createdUtc"], reverse=True),
                     "connection": self.connection.status(), "stopping": self.stopping, "closed": self.closed,
-                    "nameRulesRevision": self.name_rules.public()["revision"], "docketBudgetVersion": 1}
+                    "nameRulesRevision": self.name_rules.public()["revision"], "docketBudgetVersion": 1, "documentGrabberVersion": 1}
 
     def quote(self, identifier, keys):
         with self.lock:
@@ -343,6 +348,9 @@ class Workspace:
                 return
             self.idle()
             m = self.manifest(identifier)
+            if action in ('documents-analyze', 'documents-download'):
+                self.grabber.approve(identifier, action, values)
+                return
             if action == "budget":
                 cap = values.get("budgetCents")
                 r = self.receipts(identifier)
@@ -388,9 +396,11 @@ class Workspace:
         m = self.manifest(identifier)
         if m["state"] == "running":
             m["needsResume"] = True  # Prior process interruption, not automatic completion.
-        if action in ("search", "retrieve"):
+        if action in ("search", "retrieve", "documents-analyze", "documents-download"):
             m["lastAction"] = action
-        m.update(state="running", message="Starting " + action + ".")
+        message = {'documents-analyze': 'Analyzing selected docket entries with Claude. No document purchases.',
+                   'documents-download': 'Retrieving selected PDFs under the approved document spending cap.'}.get(action, 'Starting ' + action + '.')
+        m.update(state="running", message=message)
         self.save(identifier, m)
         self.active = identifier
         self.pause_event.clear()
@@ -406,7 +416,10 @@ class Workspace:
             m = self.manifest(identifier)
             config = dict(m["config"])
             config["nameRules"] = snapshot(self.name_rules.public())
-            if action == "refresh-reports":
+            if action in ('documents-analyze', 'documents-download'):
+                message = self.grabber.work(identifier, action)
+                code = 0
+            elif action == "refresh-reports":
                 self._refresh_reports(identifier, config)
                 code, message = 0, "Reports updated from saved evidence using the current name rules. No PACER requests."
             elif action == "reconcile":

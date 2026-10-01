@@ -109,6 +109,7 @@ async function refresh() {
     const requested = currentId;
     if (requested) {const data = await api(`/api/runs/${requested}`); if (requested === currentId) {current = data; renderRun();}}
     setButtons();
+    if (window.rocDocumentsUpdate) await window.rocDocumentsUpdate(listing.documentGrabberVersion === 1);
   } finally {refreshing = false;}
   if (continuation && !shuttingDown) await continuation();
 }
@@ -414,7 +415,7 @@ bind('confirm-retrieve','click',async () => {
   if (needsConnection) await connectedAction('Connect to retrieve the dockets you just confirmed.', proceed); else await proceed();
 });
 for (const [id, command] of [['pause','pause'],['reconcile','reconcile'],['rebuild','export']]) bind(id,'click',() => action(() => api(`/api/runs/${currentId}/${command}`,{})));
-bind('resume','click',async () => {const id = currentId; const proceed = () => action(() => api(`/api/runs/${id}/resume`,{})); if (current.demo) await proceed(); else await connectedAction('Connect to resume this saved operation. Existing receipts and selections are retained.', proceed);});
+bind('resume','click',async () => {const id = currentId; const proceed = () => action(() => api(`/api/runs/${id}/resume`,{})); if (current.demo || current.lastAction === 'documents-analyze') await proceed(); else await connectedAction('Connect to resume this saved operation. Existing receipts and selections are retained.', proceed);});
 bind('signin','click',() => openAuth('Reconnect PACER. After connecting, use Resume saved operation to continue.', null));
 bind('edit-cap','click',() => {$('cap-input').value = (current.budgetCents/100).toFixed(2); $('cap-dialog').showModal();});
 bind('close-cap','click',() => $('cap-dialog').close());

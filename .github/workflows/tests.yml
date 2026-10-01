@@ -20,4 +20,4 @@ jobs:
       - name: Verify packaged court registry
         run: |
           python -I -c 'from pathlib import Path; import sys; sys.path.insert(0, str(next(Path("dist").glob("*.whl")).resolve())); from roc.courts import registry_summary; assert registry_summary()["registeredDistrictCourts"] == 94'
-          python -I -c 'from pathlib import Path; from importlib.resources import files; import sys; sys.path.insert(0, str(next(Path("dist").glob("*.whl")).resolve())); assert all(files("roc").joinpath("ui", name).is_file() for name in ("index.html", "app.js", "style.css", "demo-index.json", "demo-docket.html"))'
+          python -I -c 'from pathlib import Path; from importlib.resources import files; import sys; sys.path.insert(0, str(next(Path("dist").glob("*.whl")).resolve())); assert all(files("roc").joinpath("ui", name).is_file() for name in ("index.html", "app.js", "documents.js", "style.css", "demo-index.json", "demo-docket.html"))'

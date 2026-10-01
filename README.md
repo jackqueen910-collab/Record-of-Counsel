@@ -1,6 +1,6 @@
 # Record of Counsel (ROC)
 
-An on-demand, deterministic PACER workflow. No AI model, Codex session, chat connector, or web host is required to run the program.
+An on-demand PACER workflow. Case searching, docket enrichment and party reports remain deterministic and require no AI model, Codex session, chat connector or web host. The optional Document Grabber uses the operator’s Anthropic API key to classify saved docket entries.
 
 **Current release: 0.1 prototype.** The standalone workflow has completed live API search, court-web docket retrieval, client/counsel matching and local export. All **90 district courts in the states and D.C. have reviewed live samples** and are eligible for bounded retrieval. The latest batch completed 148 civil/criminal reports across the remaining 74 districts for $81.00, including earlier territory charges, under a $150 cap. The [coverage report](docs/district-validation-remaining-2026-09-30.md) records the sample limits. The four territorial districts remain registered but excluded from ordinary retrieval. Sampled tests do not establish universal layout or field coverage. Google Sheets publication still needs its own live acceptance test.
 
@@ -17,6 +17,14 @@ An on-demand, deterministic PACER workflow. No AI model, Codex session, chat con
 The main output columns are Case number, Case title, Case Type, Role, Court, District, Date filed, Nature of Case, Status (PACER), and PACER link. For one defendant, Nature of Case contains the source's listed charges/count labels with no name prefix. For multiple defendants, names and defendant numbers label the separate lists. Terminated rows are marked; sentencing/disposition text stays in evidence. Long charge cells stay on one line; HTML and Google Sheets clip them. Role also supports explicit source roles such as Petitioner, Respondent, Claimant and Amicus. See [counts and findings](docs/counts-and-findings.md) and [docket party reports](docs/docket-reports.md).
 
 ## Run the free offline demo
+
+### Document Grabber (pilot)
+
+Select cases with saved dockets in the case index, then open **Document Grabber**. Preview the exact cases and AI reservation, enter your Anthropic API key in the local interface, and set a fresh AI cap before sending any text. **Claude Sonnet 5.5** is the default; **Opus 5.5** is an explicit alternative. ROC never switches models or retries automatically. The key stays in memory until forgotten or ROC stops.
+
+Review the candidate motions and orders, their source evidence and the attorney-client “as to” proxy. Nothing is preselected. Choose supported PDF candidates, preview the exact documents and set a **separate PACER document cap** before purchasing. Prior case-search/docket allowances do not authorize document spending. Saved analyses/PDFs are reused. Download a ZIP with the index, evidence, spending records and any purchased PDFs. Text-only orders remain in the index. No dockets are bought automatically by this feature.
+
+**This feature has offline integration tests, not live acceptance.** Sonnet accuracy and court document-price/viewer layouts still need a small, separately approved live pilot. Docket validation in 90 districts does not validate PDF downloads. The first adapter accepts only recognized single-document price forms returning a direct PDF; attachment menus, JavaScript-only forms and unknown viewers stop for review. See [Document Grabber scope, recovery and test plan](docs/document-grabber.md).
 
 ### Browser workspace
 
@@ -86,7 +94,7 @@ Live access is opt-in. A normal `run` cannot submit a PACER search or report.
 - Set `budgetCents` to the maximum total PACER spending for that run folder. The ledger persists across reruns. Each PCL page reserves 10 cents; each court docket report reserves 300 cents.
 - Set `dockets` to select reports automatically from the search results; an explicit positive `limit` is required. Alternatively, use `retrieveDockets` with `courtId` and `caseNumber` for specific cases. Do not combine these two options. No reports are fetched if neither is configured.
 - Sign-in prompts for PACER username, password, optional client code and MFA. Password and MFA entry are visible in the operator's terminal. ROC does not write them or tokens to its files. An invalid-credentials/MFA response offers an explicit `y` to re-enter the fields in the same terminal; it never retries automatically. Connection failures and account notices stop. There is no browser-login fallback.
-- The program purchases no underlying filings. It selects full-case docket reports with parties/counsel and terminated parties included.
+- The command-line docket workflow purchases no underlying filings. It selects full-case docket reports with parties/counsel and terminated parties included. Document Grabber’s separate browser-interface workflow can purchase explicitly selected PDFs under its own approval and cap.
 
 Install the optional court-browser dependency only on a machine where that installation is permitted:
 
