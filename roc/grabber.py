@@ -7,6 +7,7 @@ import re
 import zipfile
 
 from .common import RocError, fingerprint, now, read_json, write_json
+from .ai_credentials import ProjectAIKey
 from .claude import MODELS, analyze, analysis_key, estimate, payload
 from .document_download import document_key, download_document
 from .document_ledger import ExpenseLedger
@@ -14,24 +15,17 @@ from .documents import DISCLAIMER, read_entries
 
 
 class DocumentGrabber:
-    def __init__(self, workspace):
+    def __init__(self, workspace, credentials=None):
         self.ws = workspace
-        self.api_key = ''  # Never persisted or returned to the browser.
+        self.credentials = credentials if credentials is not None else ProjectAIKey()
 
     def root(self, identifier):
         return self.ws.folder(identifier) / 'documents'
 
-    def configure(self, values):
-        self.ws.idle()
-        key = values.get('apiKey', '')
-        if not isinstance(key, str) or len(key) > 2048 or any(c.isspace() for c in key):
-            raise RocError('Enter a valid Anthropic API key, or leave it blank to disconnect.')
-        self.api_key = key
-
     def state(self, identifier):
         root = self.root(identifier)
         path = root / 'results.json'
-        return {'configured': bool(self.api_key), 'models': MODELS, 'disclaimer': DISCLAIMER,
+        return {**self.credentials.status(), 'models': MODELS, 'disclaimer': DISCLAIMER,
                 'ai': ExpenseLedger(root, 'ai').public(), 'documents': ExpenseLedger(root, 'documents').public(),
                 'results': read_json(path) if path.exists() else {'cases': {}}, 'liveValidated': False}
 
@@ -111,8 +105,8 @@ class DocumentGrabber:
             raise RocError('The fresh cap must cover this selection’s displayed reservation. Narrow the selection or raise the cap.')
         if self.ws.manifest(identifier)['demo']:
             raise RocError('The free demo never calls Claude or purchases documents. Use a real saved run for a live pilot.')
-        if action == 'documents-analyze' and quote['maximumCents'] and not self.api_key:
-            raise RocError('Add an Anthropic API key before analyzing. Nothing was submitted.')
+        if action == 'documents-analyze' and quote['maximumCents']:
+            self.credentials.require()  # Owner setup, never browser-supplied keys.
         if action == 'documents-download' and quote['maximumCents']:
             self.ws.provider()  # Check the API session before saving this operation.
         ledger = ExpenseLedger(self.root(identifier), 'ai' if action == 'documents-analyze' else 'documents')
@@ -136,9 +130,12 @@ class DocumentGrabber:
             expected = {c['key']: c['analysisId'] for c in quote['cases']}
             if any(expected[s['caseKey']] != analysis_key(s, quote['model']) for s in sources):
                 raise RocError('Saved docket or analysis policy changed since approval; make a new analysis preview.')
+            ledger = ExpenseLedger(root, 'ai')
+            needs_key = any(not ledger.find(analysis_key(s, quote['model'])) for s in sources)
+            api_key = self.credentials.require() if needs_key else ''
             for source in sources:
                 self.ws.checkpoint()
-                result = analyze(root, source, quote['model'], self.api_key, self.ws.checkpoint)
+                result = analyze(root, source, quote['model'], api_key, self.ws.checkpoint)
                 result['analyzedUtc'] = now()
                 write_json(root / 'analyses' / (result['analysisId'] + '.json'), result)
                 results['cases'][source['caseKey']] = result

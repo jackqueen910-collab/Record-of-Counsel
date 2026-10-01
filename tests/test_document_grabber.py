@@ -10,6 +10,8 @@ import zipfile
 
 from roc.common import RocError, read_json, write_json
 from roc.claude import analyze, estimate, payload
+from roc.ai_credentials import ProjectAIKey
+from tests.test_ai_credentials import MemoryCredentialStore
 from roc.document_download import download_document, purchase_form
 from roc.document_ledger import ExpenseLedger
 from roc.documents import read_entries, classify_result, document_url
@@ -165,7 +167,7 @@ class DocumentTests(unittest.TestCase):
 
     def test_workspace_analysis_download_bundle_exact_quotes_and_no_research_side_effects(self):
         with tempfile.TemporaryDirectory() as folder, contextlib.redirect_stdout(io.StringIO()):
-            ws=Workspace(folder,lambda:Session('fictional-token'))
+            ws=Workspace(folder,lambda:Session('fictional-token'),ai_credentials=ProjectAIKey(MemoryCredentialStore('test-key'),{}))
             try:
                 ident=ws.new(demo=True);ws.future.result(10)
                 path=ws.folder(ident)/'demo-docket.html';path.write_text(fixture(),encoding='utf-8')
@@ -173,7 +175,6 @@ class DocumentTests(unittest.TestCase):
                 m=ws.manifest(ident);m['demo']=False;ws.save(ident,m)
                 with patch.object(ws,'completed_reports',return_value=reports), patch.object(ws,'cases',return_value=[CASE]), \
                      patch('roc.claude.request_claude',return_value=reply()) as ai, patch('roc.grabber.download_document') as dl:
-                    ws.grabber.configure({'apiKey':'test-key'})
                     q=ws.grabber.analysis_quote(ident,{'keys':[CASE['key']],'model':'claude-sonnet-5-5'})
                     self.assertEqual(ai.call_count,0)
                     with self.assertRaises(RocError): ws.act(ident,'documents-analyze',q|{'quoteId':'stale','budgetCents':100})
@@ -202,9 +203,39 @@ class DocumentTests(unittest.TestCase):
                     self.assertFalse(ws.ledger(ident)['transactions'])
             finally: ws.close()
 
+    def test_owner_key_required_before_approval_and_cached_analysis_survives_its_removal(self):
+        with tempfile.TemporaryDirectory() as folder, contextlib.redirect_stdout(io.StringIO()):
+            store=MemoryCredentialStore()
+            ws=Workspace(folder,ai_credentials=ProjectAIKey(store,{}))
+            try:
+                ident=ws.new(demo=True);ws.future.result(10)
+                raw=ws.folder(ident)/'demo-docket.html';raw.write_text(fixture(),encoding='utf-8')
+                m=ws.manifest(ident);m['demo']=False;ws.save(ident,m)
+                with patch.object(ws,'completed_reports',return_value={CASE['key']:{'path':str(raw)}}), \
+                     patch.object(ws,'cases',return_value=[CASE]),patch('roc.claude.request_claude',return_value=reply()) as ai:
+                    q=ws.grabber.analysis_quote(ident,{'keys':[CASE['key']]})
+                    with self.assertRaisesRegex(RocError,'owner'):
+                        ws.act(ident,'documents-analyze',q|{'budgetCents':100})
+                    self.assertFalse(ai.called)
+                    self.assertNotIn('documentOperation',ws.manifest(ident))
+                    self.assertFalse((ws.grabber.root(ident)/'ai-ledger.json').exists())
+                    store.key='fictional-owner-key'
+                    ws.act(ident,'documents-analyze',q|{'budgetCents':100});ws.future.result(10)
+                    self.assertEqual(ai.call_count,1)
+                    self.assertEqual(ai.call_args.args[0],'fictional-owner-key')
+                    store.key=''
+                    self.assertFalse(ws.grabber.state(ident)['configured'])
+                    cached=ws.grabber.analysis_quote(ident,{'keys':[CASE['key']]})
+                    self.assertEqual(cached['maximumCents'],0)
+                    ws.act(ident,'documents-analyze',cached|{'budgetCents':0});ws.future.result(10)
+                    self.assertEqual(ws.manifest(ident)['state'],'ready')
+                    self.assertEqual(ai.call_count,1)
+                    self.assertEqual(len(ws.grabber.state(ident)['results']['cases']),1)
+            finally: ws.close()
+
     def test_purchased_pdf_remains_in_bundle_after_reanalysis_and_missing_files_block(self):
         with tempfile.TemporaryDirectory() as folder, contextlib.redirect_stdout(io.StringIO()):
-            ws=Workspace(folder)
+            ws=Workspace(folder,ai_credentials=ProjectAIKey(MemoryCredentialStore('test-key'),{}))
             try:
                 ident=ws.new(demo=True);ws.future.result(10)
                 root=ws.grabber.root(ident);s=source();c=classify_result(candidates(),s)[0]
@@ -222,14 +253,13 @@ class DocumentTests(unittest.TestCase):
 
     def test_resume_does_not_reapprove_budget_or_accept_changed_analysis_policy(self):
         with tempfile.TemporaryDirectory() as folder, contextlib.redirect_stdout(io.StringIO()):
-            ws=Workspace(folder)
+            ws=Workspace(folder,ai_credentials=ProjectAIKey(MemoryCredentialStore('test-key'),{}))
             try:
                 ident=ws.new(demo=True);ws.future.result(10)
                 raw=ws.folder(ident)/'demo-docket.html';raw.write_text(fixture(),encoding='utf-8')
                 m=ws.manifest(ident);m['demo']=False;ws.save(ident,m)
                 reports={CASE['key']:{'path':str(raw)}}
                 with patch.object(ws,'completed_reports',return_value=reports),patch.object(ws,'cases',return_value=[CASE]),patch('roc.claude.request_claude',return_value=reply()) as ai:
-                    ws.grabber.configure({'apiKey':'test-key'})
                     q=ws.grabber.analysis_quote(ident,{'keys':[CASE['key']]})
                     with patch.object(ws,'checkpoint',side_effect=RocError('Paused')):
                         ws.act(ident,'documents-analyze',q|{'budgetCents':100});ws.future.result(10)

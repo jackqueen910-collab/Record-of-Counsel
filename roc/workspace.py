@@ -60,7 +60,7 @@ def search_config(values):
 
 
 class Workspace:
-    def __init__(self, root, session_provider=None):
+    def __init__(self, root, session_provider=None, ai_credentials=None):
         self.root = Path(root).resolve()
         self.root.mkdir(parents=True, exist_ok=True)
         self.process_lock = self.root / ".workspace.lock"
@@ -82,7 +82,7 @@ class Workspace:
         self.lock_released = False
         self.close_lock = threading.Lock()
         self.name_rules = NameRules(self.root / "name-rules.json")
-        self.grabber = DocumentGrabber(self)
+        self.grabber = DocumentGrabber(self, ai_credentials)
 
     def party_reports(self, identifier, cases=None, rules=None):
         lawyer = self.manifest(identifier)["config"]["lawyer"]
@@ -164,7 +164,6 @@ class Workspace:
             self.stopping = True
             self.pause_event.set()
             self.connection.stop()
-            self.grabber.api_key = ''
 
     def sign_in(self, values):
         with self.lock:
@@ -309,7 +308,7 @@ class Workspace:
             jobs = [self.summary(p.parent.name) for p in self.root.glob("*/workspace.json")]
             return {"active": self.active, "jobs": sorted(jobs, key=lambda j: j["createdUtc"], reverse=True),
                     "connection": self.connection.status(), "stopping": self.stopping, "closed": self.closed,
-                    "nameRulesRevision": self.name_rules.public()["revision"], "docketBudgetVersion": 2, "documentGrabberVersion": 1,
+                    "nameRulesRevision": self.name_rules.public()["revision"], "docketBudgetVersion": 2, "documentGrabberVersion": 2,
                     "clientReportVersion": CLIENT_REPORT_VERSION}
 
     def quote(self, identifier, keys):

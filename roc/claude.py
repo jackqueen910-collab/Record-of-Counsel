@@ -68,7 +68,7 @@ def analyze(root, source, model, api_key, checkpoint=lambda: None, requester=Non
         response = read_json(path)
     else:
         if not api_key:
-            raise RocError('Add your Anthropic API key in Document Grabber. No request submitted.')
+            raise RocError('The ROC account needs owner AI setup. No request submitted.')
         request = payload(source, model)
         checkpoint()
         t = ledger.reserve(key, estimate(request), {'model': model, 'caseKey': source['caseKey'],

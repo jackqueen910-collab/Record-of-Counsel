@@ -7,7 +7,7 @@ function docControls() {
   const busy = docBusy || !!activeRun || busyAction || shuttingDown;
   $('open-documents').disabled = !current || !docAvailable || shuttingDown;
   $('open-documents').title = docAvailable ? 'Analyze saved dockets and choose PDFs' : 'Stop ROC and reopen Start ROC to load Document Grabber';
-  for (const id of ['preview-analysis','document-model','claude-key','claude-disconnect','document-bundle']) $(id).disabled = busy;
+  for (const id of ['preview-analysis','document-model','document-bundle']) $(id).disabled = busy;
   $('preview-analysis').disabled = busy || !docKeys.length;
   $('preview-documents').disabled = busy || !docSelected.size;
   const valid = (quote,id) => {try {return quote && cents($(id).value) >= quote.maximumCents;} catch {return false;}};
@@ -26,7 +26,7 @@ async function loadDocuments() {
   if (run !== docRun) return;
   docState = state;
   $('documents-method').textContent = state.disclaimer;
-  $('claude-status').textContent = state.configured ? 'Key in memory · validated on first analysis' : 'API key needed for new analysis';
+  $('claude-status').textContent = state.connectionMessage || 'AI setup needed. Contact the ROC owner.';
   $('document-spending').textContent = `AI usage estimate: ${money(state.ai.spentCents)} · Documents: ${money(state.documents.spentCents)} · Pending: ${state.ai.pendingCount + state.documents.pendingCount}. Separate from case-search and docket spending.`;
   const stamp = JSON.stringify([state.results,state.documents]);
   if (stamp !== docStamp) {
@@ -57,16 +57,11 @@ async function loadDocuments() {
 }
 bind('open-documents','click',()=>docTask(async()=>{
   docRun=currentId;docKeys=[...selected];docSelected.clear();docStamp='';docStatusStamp='';analysisQuote=null;purchaseQuote=null;
-  $('analysis-preview').hidden=true;$('purchase-preview').hidden=true;$('claude-key').value='';
+  $('analysis-preview').hidden=true;$('purchase-preview').hidden=true;
   $('documents-selection').textContent=`${docKeys.length} cases selected in the case index, including any hidden by filters. Close this panel to change the selection. Existing candidates from this run appear below.`;
   docMessage(current.demo ? 'The demo never sends AI requests or buys PDFs. Use a real saved run for a live pilot.' : 'Previewing analysis costs uses saved data only.');
   $('documents-dialog').showModal(); await loadDocuments();
 }));
-bind('claude-form','submit',e=>{e.preventDefault();return docTask(async()=>{
-  const key=$('claude-key').value.trim();$('claude-key').value='';await api('/api/claude',{apiKey:key});
-  docMessage('Key updated in memory. No model call has been submitted.');await loadDocuments();
-});});
-bind('claude-disconnect','click',()=>docTask(async()=>{await api('/api/claude',{apiKey:''});await loadDocuments();}));
 bind('document-model','change',()=>{analysisQuote=null;$('analysis-preview').hidden=true;docControls();});
 bind('preview-analysis','click',()=>docTask(async()=>{
   analysisQuote=await api(`/api/runs/${docRun}/documents-analysis-quote`,{keys:docKeys,model:$('document-model').value});
@@ -99,7 +94,6 @@ bind('document-bundle','click',()=>docTask(async()=>{
   if (!response.ok) throw new Error((await response.json()).error);
   const url=URL.createObjectURL(await response.blob()),a=node('a');a.href=url;a.download='roc-document-bundle.zip';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
 }));
-$('documents-dialog').addEventListener('close',()=>{$('claude-key').value='';});
 window.rocDocumentsUpdate=async available=>{
   docAvailable=available;docControls();
   if ($('documents-dialog').open && !docBusy) {

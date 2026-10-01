@@ -118,10 +118,6 @@ def make_server(workspace, port=0):
                 if parts == ["api", "connection", "disconnect"]:
                     workspace.disconnect()
                     return self.send(200, {"ok": True})
-                if parts == ['api', 'claude']:
-                    with workspace.lock:
-                        workspace.grabber.configure(value)
-                    return self.send(200, {'ok': True})
                 if parts == ["api", "stop"]:
                     if not stopping.is_set():
                         stopping.set()

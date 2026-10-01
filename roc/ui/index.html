@@ -79,9 +79,7 @@
     <p id="documents-method" class="coverage-note"></p>
     <p class="cost-warning">Pilot feature: model accuracy and court PDF downloads await a live acceptance test. Review every candidate. Docket coverage does not establish document-download coverage.</p>
     <p id="documents-message" class="auth-message" role="status" aria-live="polite"></p>
-    <details id="claude-settings"><summary>Anthropic connection <span id="claude-status"></span></summary>
-      <form id="claude-form" autocomplete="off"><label>Anthropic API key<input id="claude-key" type="password" autocomplete="off" maxlength="2048"></label><p class="help">Stored only in this running ROC process. The selected docket entries and matched client names will be sent to Anthropic when you confirm analysis. Your PACER credentials and PDFs are not sent to the model.</p><button class="secondary" type="submit">Use this key</button><button id="claude-disconnect" class="text-button" type="button">Forget key</button></form>
-    </details>
+    <div id="claude-settings" class="coverage-note"><strong>ROC AI account</strong><p id="claude-status" role="status"></p><p>Analysis uses the shared ROC account. No personal API key is required. Selected docket entries and client names go to Anthropic only after you confirm the analysis and cap.</p></div>
     <section class="document-step"><h3>1. Analyze the selected cases</h3><p id="documents-selection" class="help"></p>
       <label>Model<select id="document-model"><option value="claude-sonnet-5-5">Claude Sonnet 5.5 · default</option><option value="claude-opus-5-5">Claude Opus 5.5 · higher cost</option></select></label>
       <button id="preview-analysis" class="secondary">Preview analysis cost</button>

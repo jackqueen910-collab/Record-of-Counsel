@@ -1,6 +1,6 @@
 # Record of Counsel (ROC)
 
-An on-demand PACER workflow. Case searching, docket enrichment and party reports remain deterministic and require no AI model, Codex session, chat connector or web host. The optional Document Grabber uses the operator’s Anthropic API key to classify saved docket entries.
+An on-demand PACER workflow. Case searching, docket enrichment and party reports remain deterministic and require no AI model, Codex session, chat connector or web host. The optional Document Grabber uses a shared, owner-configured ROC Anthropic account to classify saved docket entries.
 
 **Current release: 0.1 prototype.** The standalone workflow has completed live API search, court-web docket retrieval, client/counsel matching and local export. All **90 district courts in the states and D.C. have reviewed live samples** and are eligible for bounded retrieval. The latest batch completed 148 civil/criminal reports across the remaining 74 districts for $81.00, including earlier territory charges, under a $150 cap. The [coverage report](docs/district-validation-remaining-2026-09-30.md) records the sample limits. The four territorial districts remain registered but excluded from ordinary retrieval. Sampled tests do not establish universal layout or field coverage. Google Sheets publication still needs its own live acceptance test.
 
@@ -20,7 +20,11 @@ The main output columns are Case number, Case title, Case Type, Role, Court, Dis
 
 ### Document Grabber (pilot)
 
-Select cases with saved dockets in the case index, then open **Document Grabber**. Preview the exact cases and AI reservation, enter your Anthropic API key in the local interface, and set a fresh AI cap before sending any text. **Claude Sonnet 5.5** is the default; **Opus 5.5** is an explicit alternative. ROC never switches models or retries automatically. The key stays in memory until forgotten or ROC stops.
+Select cases with saved dockets in the case index, then open **Document Grabber**. Preview the exact cases and AI reservation and set a fresh AI cap before sending any text. **Claude Sonnet 5.5** is the default; **Opus 5.5** is an explicit alternative. ROC never switches models or retries automatically. Regular users do not enter an API key; model usage is billed to the shared ROC account.
+
+**One-time owner setup:** create a Claude Console API key scoped to one workspace (a service account is appropriate for shared ROC usage), then open `Setup-ROC-AI.cmd`, paste the key, and choose **Save ROC account**. See [Anthropic's key setup](https://platform.claude.com/docs/en/manage-claude/authentication). Unscoped multi-workspace keys need an additional workspace header and are not supported by this version. The key is stored in Windows Credential Manager for this Windows user on this machine, survives restarts, and is loaded by the backend automatically. The setup window can replace or remove it. Saving makes no API request; the first approved analysis validates access. The key is never sent to ROC's browser UI, written into run files/exports, or included in the repository.
+
+For other backend deployments, explicitly configure `ROC_ANTHROPIC_API_KEY` in the host's secret environment. It overrides the Windows store; generic `ANTHROPIC_API_KEY` is intentionally ignored to avoid billing another project's account. This local version does not distribute credentials with copied code: another computer requires owner provisioning. A centrally shared hosted backend is outside this change.
 
 Review the candidate motions and orders, their source evidence and the attorney-client “as to” proxy. Nothing is preselected. Choose supported PDF candidates, preview the exact documents and set a **separate PACER document cap** before purchasing. Prior case-search/docket allowances do not authorize document spending. Saved analyses/PDFs are reused. Download a ZIP with the index, evidence, spending records and any purchased PDFs. Text-only orders remain in the index. No dockets are bought automatically by this feature.
 
