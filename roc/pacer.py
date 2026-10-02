@@ -160,7 +160,8 @@ def collect_index(session, criteria, store, delay=5, max_pages=1000, progress=No
         rows.extend(content)
         if progress:
             source = "Cached PCL page - no new charge" if session.last_page_cached else "Fresh PCL API response"
-            progress("searching", f"{source}: page {page + 1}; {len(rows)} of {total} attorney records collected. "
+            record_type = 'attorney' if criteria.get('partyType') == 'aty' else 'party'
+            progress("searching", f"{source}: page {page + 1}; {len(rows)} of {total} {record_type} records collected. "
                      f"New search charges this launch: ${(store.spent - spent_at_start) / 100:.2f}. "
                      f"Job total including earlier launches: ${store.spent / 100:.2f}.", recordsCollected=len(rows),
                      totalRecords=total, chargedCents=store.spent, newSearchChargesCents=store.spent - spent_at_start)

@@ -43,6 +43,7 @@ def source_note(case):
 
 
 def export_local(cases, folder, title, metadata):
+    litigant = metadata.get('searchType') == 'litigant'
     folder = Path(folder)
     folder.mkdir(parents=True, exist_ok=True)
     with (folder / "case-index.csv").open("w", encoding="utf-8-sig", newline="") as stream:
@@ -57,8 +58,14 @@ def export_local(cases, folder, title, metadata):
     metadata["clientReportVersion"] = CLIENT_REPORT_VERSION
     write_json(folder / "evidence.json", {"run": metadata, "cases": cases})
     write_json(folder / "party-reports.json", reports)
-    tables = report_tables(reports)
-    report_note = coverage_text(reports) + "\n" + "\n".join(reports[k] for k in ("countPolicy", "namePolicy", "relationshipPolicy"))
+    tables = ([{'name': 'Matched litigants', 'file': 'matched-litigants.csv',
+                'headers': ['Name in PCL', 'PCL party role', 'Case number', 'Case title', 'Court', 'District', 'Date filed'],
+                'rows': [[p['name'], p['role'], *[c.get(k, '') for k in ('caseNumber', 'caseTitle', 'court', 'district', 'dateFiled')]]
+                         for c in cases for p in c.get('indexedParties', [])]}] if litigant else report_tables(reports))
+    report_note = ('PCL party search: one case-index row per court/case; matched names and court-supplied role codes are preserved separately. '
+                   'Names match by prefix and may refer to different people or entities. Role codes are not interpreted as proof of who filed a claim. '
+                   'Docket enrichment, client reports and Document Grabber are not included for litigant searches in this first step.' if litigant else
+                   coverage_text(reports) + "\n" + "\n".join(reports[k] for k in ("countPolicy", "namePolicy", "relationshipPolicy")))
     for table in tables:
         with (folder / table["file"]).open("w", encoding="utf-8-sig", newline="") as stream:
             writer = csv.writer(stream)
@@ -86,7 +93,7 @@ def export_local(cases, folder, title, metadata):
     sheet.sheet_view.showGridLines = False
     for row in [[], [title], [f"{len(cases)} cases. Generated {metadata['generatedUtc'][:10]}."],
                 ["Official PCL API index; court-web docket enrichment where available. See cell notes and evidence.json."],
-                ["Nature of Case copies listed counts, including original and superseding entries. Source gaps and review items are categorized in review.json."], HEADERS]:
+                [report_note if litigant else "Nature of Case copies listed counts, including original and superseding entries. Source gaps and review items are categorized in review.json."], HEADERS]:
         sheet.append(row)
     for column, width in enumerate(WIDTHS, 1):
         sheet.column_dimensions[get_column_letter(column)].width = width
@@ -114,13 +121,14 @@ def export_local(cases, folder, title, metadata):
     end = max(7, len(cases) + 6)
     sheet.freeze_panes = "C7"
     sheet.auto_filter.ref = f"A6:J{end}"
-    dv = DataValidation(type="list", formula1='"' + ','.join(ROLE_VALUES) + '"', allow_blank=True)
-    sheet.add_data_validation(dv)
-    dv.add(f"D7:D{end}")
+    if not litigant:
+        dv = DataValidation(type="list", formula1='"' + ','.join(ROLE_VALUES) + '"', allow_blank=True)
+        sheet.add_data_validation(dv)
+        dv.add(f"D7:D{end}")
     coverage = wb.create_sheet("Coverage")
-    for line in [title, *report_note.splitlines(), "Names are labels, not verified unique identities. Former counsel and terminated parties may be included.",
+    for line in [title, *report_note.splitlines(), *([] if litigant else ["Names are labels, not verified unique identities. Former counsel and terminated parties may be included.",
                  "Case index retains every indexed case. Client sheets include counsel-matched appearances in saved dockets only.",
-                 "Client type is the listed party role for that case. A client can have different types in different cases; Role describes the lawyer's role in the case."]:
+                 "Client type is the listed party role for that case. A client can have different types in different cases; Role describes the lawyer's role in the case."])]:
         coverage.append([line])
         coverage.cell(coverage.max_row, 1).data_type = "s"
         coverage.cell(coverage.max_row, 1).alignment = Alignment(wrap_text=True, vertical="top")
@@ -129,8 +137,8 @@ def export_local(cases, folder, title, metadata):
     for table in tables:
         report_sheet = wb.create_sheet(table["name"])
         report_sheet.sheet_view.showGridLines = False
-        report_sheet.append([coverage_text(reports)])
-        report_sheet.append(["Distinct court/case counts. See Coverage for name and relationship rules."])
+        report_sheet.append([report_note if litigant else coverage_text(reports)])
+        report_sheet.append(["Matched source names and unmodified court role codes." if litigant else "Distinct court/case counts. See Coverage for name and relationship rules."])
         report_sheet.append(table["headers"])
         for row in table["rows"]:
             report_sheet.append(row)
@@ -147,7 +155,7 @@ def export_local(cases, folder, title, metadata):
             report_sheet.column_dimensions[get_column_letter(col)].width = (40 if header in ("Name", "Case title", "Nature of Case", "Source names") else 26)
         report_sheet.freeze_panes = "B4"
         report_sheet.auto_filter.ref = f"A3:{get_column_letter(len(table['headers']))}{max(3, report_sheet.max_row)}"
-    if reports["nameRules"]["rules"]:
+    if reports["nameRules"]["rules"] and not litigant:
         rules_sheet = wb.create_sheet("Name rules")
         rules_sheet.append(["Preferred name", "Grouping", "Source names", "Revision"])
         for rule in reports["nameRules"]["rules"]:
@@ -165,7 +173,7 @@ def export_local(cases, folder, title, metadata):
     navigation = '<nav><a href="#cases">Case index</a> · ' + " · ".join(f'<a href="#report-{i}">{escape(t["name"])}</a>' for i, t in enumerate(tables)) + '</nav>'
     party_html = ""
     for i, table in enumerate(tables):
-        party_html += f'<h2 id="report-{i}">{escape(table["name"])}</h2><p>{escape(coverage_text(reports))}</p><table><thead><tr>' + "".join(f'<th>{escape(h)}</th>' for h in table["headers"]) + '</tr></thead><tbody>'
+        party_html += f'<h2 id="report-{i}">{escape(table["name"])}</h2><p>{escape(report_note if litigant else coverage_text(reports))}</p><table><thead><tr>' + ''.join(f'<th>{escape(h)}</th>' for h in table["headers"]) + '</tr></thead><tbody>'
         party_html += "".join('<tr>' + "".join(f'<td title="{escape(str(v), quote=True)}">{escape(str(v))}</td>' for v in row) + '</tr>' for row in table["rows"]) + '</tbody></table>'
     (folder / "case-index.html").write_text("<!doctype html><meta charset=utf-8><title>ROC reports</title><style>body{font:14px Arial;margin:28px;color:#202124}table{border-collapse:collapse;table-layout:fixed;width:2400px}th,td{border-bottom:1px solid #ddd;text-align:left;padding:9px;overflow:hidden;white-space:nowrap}th{background:#f1f3f4;position:sticky;top:0}th:nth-child(8){width:300px}h1{font-size:24px}h2{margin-top:40px}</style><h1>" + escape(title) + "</h1>" + navigation + '<p>' + escape(report_note).replace('\n', '<br>') + "</p><h2 id=cases>Case index</h2><p>" + str(len(cases)) + " cases. Hover a clipped cell to read its contents.</p><table><thead><tr>" + headings + "</tr></thead><tbody>" + rows + "</tbody></table>" + party_html, encoding="utf-8")
     return folder / "case-index.xlsx"

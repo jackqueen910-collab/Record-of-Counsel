@@ -26,6 +26,9 @@ small{font-size:11px}
 .section-label{font-size:10px;letter-spacing:1.8px;color:#91a8b2;margin-bottom:12px}
 #runs{overflow:auto;flex:1;min-height:80px}
 #runs .help{color:#b0c3cb}
+.search-tabs{display:flex;gap:6px;margin:0 0 14px;max-width:840px;border-bottom:1px solid var(--line)}
+.search-tabs button{border-radius:6px 6px 0 0;background:transparent;color:var(--muted);padding:13px 22px;border-bottom:3px solid transparent}
+.search-tabs button[aria-selected="true"]{background:#e6efeb;color:var(--green);border-bottom-color:var(--green)}
 .run-link{display:block;width:100%;text-align:left;color:#d8e5e8;padding:12px 10px;background:transparent;border-radius:6px;margin-bottom:4px;font-weight:500}
 .run-link.active{background:#233e4b;border-left:2px solid #95c7b6}
 .run-link small{display:block;color:#a2b7bd;margin-top:5px;font-weight:400}

@@ -19,25 +19,19 @@ from .output import export_local
 from .review import case_issues
 from .store import RunStore
 from .grabber import DocumentGrabber
+from .search import search_type, subject, subject_name, counsel_aliases, require_attorney, indexed_parties
 
 DOWNLOADS = {"case-index.xlsx", "case-index.csv", "case-index.html", "evidence.json", "review.json", "party-reports.zip", "party-reports.json"}
 
 
 def search_config(values):
     """Accept only the form's documented fields, never arbitrary engine configuration."""
-    allowed = {"firstName", "lastName", "aliases", "courts", "dateFiledFrom", "dateFiledTo", "budgetCents"}
+    allowed = {"searchType", "firstName", "lastName", "aliases", "courts", "dateFiledFrom", "dateFiledTo", "budgetCents"}
     if not isinstance(values, dict) or set(values) - allowed:
         raise RocError("Unexpected search fields.")
-    names = {}
-    for field in ("firstName", "lastName"):
-        value = values.get(field)
-        if not isinstance(value, str) or not value.strip() or len(value) > 100:
-            raise RocError("Enter the lawyer's first and last names.")
-        names[field] = value.strip()
-    aliases = values.get("aliases", [])
-    if not isinstance(aliases, list) or len(aliases) > 30 or any(not isinstance(a, str) or not a.strip() or len(a) > 200 for a in aliases):
-        raise RocError("Aliases must be a list of full names.")
-    names["aliases"] = list(dict.fromkeys(a.strip() for a in aliases))
+    kind = search_type(values)
+    target_field = 'lawyer' if kind == 'attorney' else 'litigant'
+    names = subject({'searchType': kind, target_field: {key: values.get(key, [] if key == 'aliases' else '') for key in ('firstName', 'lastName', 'aliases')}})
     courts = values.get("courts", [])
     if not isinstance(courts, list) or any(not isinstance(c, str) or c not in DISTRICT_COURTS for c in courts):
         raise RocError("Choose courts from the district list.")
@@ -56,7 +50,7 @@ def search_config(values):
     cap = values.get("budgetCents")
     if type(cap) is not int or cap < 10:
         raise RocError("Set a run spending cap of at least $0.10.")
-    return {"lawyer": names, "search": criteria, "budgetCents": cap, "runDirectory": "."}
+    return {"searchType": kind, target_field: names, "search": criteria, "budgetCents": cap, "runDirectory": "."}
 
 
 class Workspace:
@@ -85,9 +79,9 @@ class Workspace:
         self.grabber = DocumentGrabber(self, ai_credentials)
 
     def party_reports(self, identifier, cases=None, rules=None):
-        lawyer = self.manifest(identifier)["config"]["lawyer"]
+        config = self.manifest(identifier)["config"]
         return build_party_reports(self.cases(identifier) if cases is None else cases,
-            [lawyer["firstName"] + " " + lawyer["lastName"], *lawyer.get("aliases", [])],
+            counsel_aliases(config),
             self.name_rules.public() if rules is None else rules)
 
     def preview_name_rule(self, request):
@@ -143,10 +137,11 @@ class Workspace:
             evidence_file = folder / "output/evidence.json"
             metadata = read_json(evidence_file).get("run", {}) if evidence_file.exists() else {}
             cases = self.cases(identifier)
-            metadata.update(generatedUtc=now(), nameRules=config["nameRules"], lawyer=config["lawyer"], caseCount=len(cases),
+            metadata.update(generatedUtc=now(), nameRules=config["nameRules"], caseCount=len(cases),
                             enrichedCases=sum(bool(c.get("enrichment")) for c in cases), chargedCentsThisRunFolder=store.spent)
-            lawyer = config["lawyer"]
-            path = export_local(cases, folder / "output", f"Record of Counsel (ROC): {lawyer['firstName']} {lawyer['lastName']}", metadata)
+            kind = search_type(config)
+            metadata.update(searchType=kind, **{('lawyer' if kind == 'attorney' else 'litigant'): subject(config)})
+            path = export_local(cases, folder / "output", f"Record of Counsel (ROC): {subject_name(config)}" + (' — Litigant search' if kind == 'litigant' else ''), metadata)
             write_json(folder / "result.json", metadata | {"workbook": str(path)})
 
     def close(self, release_lock=True):
@@ -255,7 +250,16 @@ class Workspace:
         if path.exists():
             return read_json(path)["cases"]
         path = folder / "pcl-records.json"
-        return build_index(records_from(read_json(path))) if path.exists() else []
+        cases = build_index(records_from(read_json(path))) if path.exists() else []
+        if search_type(self.manifest(identifier)['config']) == 'litigant':
+            try:
+                for case in cases:
+                    case['indexedParties'] = indexed_parties(case)
+            except RocError:
+                # The worker records the failed validation. Keep its error and
+                # receipts accessible without presenting invalid matches.
+                return []
+        return cases
 
     def summary(self, identifier, detail=False):
         m = self.manifest(identifier)
@@ -274,7 +278,9 @@ class Workspace:
         metadata = read_json(result_path) if result_path.exists() else {}
         rules = self.name_rules.public()
         result = {"id": identifier, "createdUtc": m["createdUtc"], "updatedUtc": m["updatedUtc"],
-            "lawyer": m["config"]["lawyer"], "search": m["config"].get("search", {}), "demo": m["demo"],
+            "searchType": search_type(m['config']), "subjectName": subject_name(m['config']),
+            **{key: m['config'][key] for key in ('lawyer', 'litigant') if key in m['config']},
+            "search": m["config"].get("search", {}), "demo": m["demo"],
             "budgetCents": m["config"]["budgetCents"], "state": state, "busy": busy,
             "message": (progress.get("message", m["message"]) if busy else m["message"]),
             "docketCapStopped": not busy and state == "stopped" and m.get("docketCapStopped", False),
@@ -291,6 +297,7 @@ class Workspace:
             rows = []
             for c in cases:
                 try:
+                    require_attorney(m['config'])
                     require_enabled(profile_for_case(c))
                     reason = ""
                 except RocError as exc:
@@ -298,7 +305,8 @@ class Workspace:
                 rows.append({k: c.get(k, "") for k in ("key", "caseNumber", "caseTitle", "caseType", "team", "court",
                     "district", "dateFiled", "nature", "status")} | {"eligible": not reason, "ineligibleReason": reason,
                     "role": case_role(c), "enriched": bool(c.get("enrichment")), "issues": case_issues(c),
-                    "representedParties": c.get("enrichment", {}).get("representedParties", [])})
+                    "representedParties": c.get("enrichment", {}).get("representedParties", []),
+                    "indexedParties": c.get('indexedParties', [])})
             result["cases"] = rows
             result["partyReports"] = self.party_reports(identifier, cases, rules)
         return result
@@ -309,12 +317,13 @@ class Workspace:
             return {"active": self.active, "jobs": sorted(jobs, key=lambda j: j["createdUtc"], reverse=True),
                     "connection": self.connection.status(), "stopping": self.stopping, "closed": self.closed,
                     "nameRulesRevision": self.name_rules.public()["revision"], "docketBudgetVersion": 2, "documentGrabberVersion": 3,
-                    "clientReportVersion": CLIENT_REPORT_VERSION}
+                    "clientReportVersion": CLIENT_REPORT_VERSION, "searchModesVersion": 1}
 
     def quote(self, identifier, keys):
         with self.lock:
             self.idle()
             m = self.manifest(identifier)
+            require_attorney(m['config'])
             if not self.summary(identifier)["indexReady"]:
                 raise RocError("Finish the case search before selecting dockets.")
             if not isinstance(keys, list) or not keys or any(not isinstance(k, str) for k in keys) or len(set(keys)) != len(keys):

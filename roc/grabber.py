@@ -12,6 +12,7 @@ from .claude import MODELS, analyze, analysis_key, estimate, payload
 from .document_download import document_key, download_document
 from .document_ledger import ExpenseLedger
 from .documents import DISCLAIMER, read_entries
+from .search import require_attorney
 
 
 class DocumentGrabber:
@@ -23,6 +24,7 @@ class DocumentGrabber:
         return self.ws.folder(identifier) / 'documents'
 
     def state(self, identifier):
+        require_attorney(self.ws.manifest(identifier)['config'])
         root = self.root(identifier)
         path = root / 'results.json'
         return {**self.credentials.status(), 'models': MODELS, 'disclaimer': DISCLAIMER,
@@ -30,6 +32,7 @@ class DocumentGrabber:
                 'results': read_json(path) if path.exists() else {'cases': {}}, 'liveValidated': False}
 
     def sources(self, identifier, keys):
+        require_attorney(self.ws.manifest(identifier)['config'])
         if not isinstance(keys, list) or not keys or any(not isinstance(k, str) for k in keys) or len(set(keys)) != len(keys):
             raise RocError('Select one or more distinct cases.')
         cases = {c['key']: c for c in self.ws.cases(identifier)}

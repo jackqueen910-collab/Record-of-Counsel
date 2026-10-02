@@ -167,7 +167,7 @@ class Accounts:
             state = ws.list() if ws else {'active': None, 'jobs': [], 'nameRulesRevision': None,
                 'docketBudgetVersion': 2, 'documentGrabberVersion': 3, 'clientReportVersion': 1}
             return state | {'connection': self.status(cookie), 'stopping': self.stopping, 'closed': self.closed,
-                            'accountWorkspaceVersion': 1}
+                            'accountWorkspaceVersion': 1, 'searchModesVersion': 1}
 
     @contextmanager
     def scope(self, cookie, mutating=False, require_account=False, expected_view=None):

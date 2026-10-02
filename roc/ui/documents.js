@@ -5,7 +5,7 @@ let docStatusStamp = '';
 const docMessage = text => $('documents-message').textContent = text;
 function docControls() {
   const busy = docBusy || !!activeRun || busyAction || shuttingDown;
-  $('open-documents').disabled = !current || !docAvailable || shuttingDown;
+  $('open-documents').disabled = !current || litigantRun() || !docAvailable || shuttingDown;
   $('open-documents').title = docAvailable ? 'Analyze saved dockets and choose PDFs' : 'Stop ROC and reopen Start ROC to load Document Grabber';
   for (const id of ['preview-analysis','document-model','document-bundle']) $(id).disabled = busy;
   $('preview-analysis').disabled = busy || !docKeys.length;

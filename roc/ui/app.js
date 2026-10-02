@@ -13,6 +13,27 @@ let selectedNames = new Map(), rulesAvailable = false, ruleState = null, editing
 let docketBudgetsAvailable = false, clientReportsAvailable = false;
 let caseRows = [], facetChoices = {};
 let accountView = 'signed-out', accountGeneration = 0, authTarget = '';
+let searchMode = 'attorney', searchDrafts = {}, searchModesAvailable = false;
+const litigantRun = () => current?.searchType === 'litigant';
+const runName = run => run.subjectName || [run.lawyer?.firstName,run.lawyer?.lastName].filter(Boolean).join(' ');
+function setSearchMode(mode, save=true) {
+  if (mode === 'litigant' && !searchModesAvailable) return;
+  const form = $('search-form');
+  if (save) searchDrafts[searchMode] = Object.fromEntries(['firstName','lastName','aliases'].map(k=>[k,form.elements[k].value]));
+  searchMode = mode;
+  const draft = searchDrafts[mode] || {}, litigant = mode === 'litigant';
+  for (const field of ['firstName','lastName','aliases']) form.elements[field].value = draft[field] || '';
+  for (const kind of ['attorney','litigant']) {const tab=$('search-'+kind);tab.setAttribute('aria-selected',String(kind===mode));tab.tabIndex=kind===mode ? 0 : -1;}
+  form.setAttribute('aria-labelledby','search-'+mode);
+  $('search-last-label').textContent = litigant ? 'Last name / Entity name' : 'Last name';
+  $('search-last').placeholder = litigant ? 'Smith or Acme Corporation' : 'Agnifilo';
+  $('search-last').maxLength = litigant ? 200 : 100;
+  $('search-first').required = !litigant; $('search-first').placeholder = litigant ? 'Jane (leave blank for an entity)' : 'Marc';
+  $('search-first-optional').hidden = !litigant; $('search-aliases').hidden = litigant; form.elements.aliases.disabled = litigant;
+  $('litigant-search-note').hidden = !litigant; $('search-step').textContent = litigant ? 'Explore matches' : 'Choose dockets';
+  $('search-method').textContent = litigant ? 'Find cases involving a person or organization as a litigant, on either side. This first step provides the case index and downloads; litigant docket enrichment and Document Grabber will follow.' : 'The API search uses the first and last names above. Aliases help match counsel on selected dockets; they do not submit extra searches.';
+  $('search-budget-note').textContent = litigant ? 'This cap covers the litigant case search only. Narrow the dates or courts to control cost. No dockets or documents are purchased.' : 'This cap covers the case search only. Docket reports are optional: choose cases and set a separate cap afterward.';
+}
 const alphabet = new Intl.Collator('en', {sensitivity:'base', numeric:true});
 const facetDefinitions = [
   ['court','Court'],['type','Case type'],['status','Case status'],['role','Role'],['year','Filing year'],
@@ -38,7 +59,7 @@ function adoptAccountView(view, preserveAuth=false) {
   tableStamp = sidebarStamp = ''; page = partyPage = 0; reportView = 'cases';
   for (const dialog of document.querySelectorAll('dialog[open]')) if (!preserveAuth || dialog.id !== 'auth-dialog') dialog.close();
   if (!preserveAuth) {afterLogin = null; authSubmitted = false; authTarget = ''; clearCredentials(); $('auth-username').value = ''; $('auth-client').value = '';}
-  if (!preserveAuth || connection.signedIn && connection.username !== authTarget) $('search-form').reset();
+  if (!preserveAuth || connection.signedIn && connection.username !== authTarget) {$('search-form').reset(); searchDrafts={}; setSearchMode('attorney',false);}
   for (const id of ['runs','case-rows','party-rows','exports','receipt-list','facet-groups','active-filters',
     'party-name','party-source-names','party-case-count','party-case-list','detail-number','detail-title','detail-fields','detail-nature','detail-parties','detail-issues',
     'rules-list','rule-impact','rule-comparisons','rules-message','quote-cases','quote-text','quote-cost','quote-budget','docket-cap-message',
@@ -76,8 +97,8 @@ async function openRun(id) {
 }
 function setButtons() {
   const busy = Boolean(activeRun) || busyAction || connection.connecting || shuttingDown;
-  $('name-rules').disabled = busy || !rulesAvailable;
-  $('name-rules').title = rulesAvailable ? 'Saved name corrections and organization groups' : 'Restart ROC to load name rules';
+  $('name-rules').disabled = busy || !rulesAvailable || litigantRun();
+  $('name-rules').title = litigantRun() ? 'Name rules currently apply to attorney client reports' : rulesAvailable ? 'Saved name corrections and organization groups' : 'Restart ROC to load name rules';
   $('group-names').disabled = busy || !rulesAvailable || selectedNames.size === 0;
   $('refresh-reports').disabled = busy || !clientReportsAvailable;
   for (const id of ['rule-label','rule-kind','rule-names','preview-rule','new-rule','delete-rule']) $(id).disabled = busy || rulesBusy;
@@ -92,6 +113,8 @@ function setButtons() {
   $('stop-roc').disabled = shuttingDown;
   for (const id of ['auth-username','auth-password','auth-otp','auth-client','auth-redact','auth-submit']) $(id).disabled = connection.connecting || authSending || authSubmitted || shuttingDown;
   $('search-submit').disabled = busy; $('demo').disabled = busy;
+  $('search-attorney').disabled = busy; $('search-litigant').disabled = busy || !searchModesAvailable;
+  $('search-litigant').title = searchModesAvailable ? 'Search a person or entity as a party' : 'Stop ROC and reopen Start ROC to enable litigant search';
   $('preview').disabled = busy || !docketBudgetsAvailable || !current || !current.indexReady || selected.size === 0;
   $('preview').title = docketBudgetsAvailable ? 'Review only selected cases and set a docket cap' : 'Stop ROC and reopen Start ROC to load separate docket caps';
   $('choose-dockets').disabled = busy || !docketBudgetsAvailable;
@@ -103,7 +126,7 @@ function setButtons() {
   $('confirm-retrieve').disabled = busy || !docketCapValid();
   $('docket-cap').disabled = busy || !quote?.newReports;
   if (current) {
-    $('view-clients').disabled = !current.partyReports;
+    $('view-clients').disabled = litigantRun() || !current.partyReports;
     $('pause').hidden = !current.busy; $('pause').disabled = busyAction || current.pauseRequested;
     $('pause').textContent = current.pauseRequested ? "Pause requested…" : "Pause after current request";
     $('resume').hidden = !['stopped','interrupted'].includes(current.state);
@@ -121,9 +144,10 @@ async function refresh() {
     if (authSending) return;
     adoptAccountView(listing.connection.viewId,authSubmitted && listing.connection.username === authTarget);
     activeRun = listing.active; connection = listing.connection;
+    searchModesAvailable = listing.searchModesVersion === 1;
     capStoppedRun = listing.jobs.find(j=>j.docketCapStopped && j.id !== currentId) || null;
     $('other-cap-stop').hidden = !capStoppedRun;
-    if (capStoppedRun) $('other-cap-stop-text').textContent = `Docket retrieval for ${capStoppedRun.lawyer.firstName} ${capStoppedRun.lawyer.lastName} stopped at its spending limit. Purchased reports and results are saved.`;
+    if (capStoppedRun) $('other-cap-stop-text').textContent = `Docket retrieval for ${runName(capStoppedRun)} stopped at its spending limit. Purchased reports and results are saved.`;
     rulesAvailable = Number.isInteger(listing.nameRulesRevision);
     docketBudgetsAvailable = listing.docketBudgetVersion === 2;
     clientReportsAvailable = listing.clientReportVersion === 1;
@@ -149,8 +173,8 @@ async function refresh() {
       if (connection.accountMode && !connection.signedIn) $('runs').append(node('p', 'Saved searches will appear here after you sign in with PACER.', 'help'));
       else if (!listing.jobs.length) $('runs').append(node('p', 'Your searches will be saved here.', 'help'));
       for (const job of listing.jobs) {
-        const b = node('button', `${job.lawyer.firstName} ${job.lawyer.lastName}`, `run-link${job.id === currentId ? ' active' : ''}`);
-        b.append(node('small', `${job.demo ? 'Demo · ' : ''}${job.caseCount} cases · ${job.state === 'running' ? 'In progress' : job.createdUtc.slice(0,10)}`));
+        const b = node('button', runName(job), `run-link${job.id === currentId ? ' active' : ''}`);
+        b.append(node('small', `${job.demo ? 'Demo · ' : job.searchType === 'litigant' ? 'Litigant · ' : 'Attorney · '}${job.caseCount} cases · ${job.state === 'running' ? 'In progress' : job.createdUtc.slice(0,10)}`));
         b.addEventListener('click', () => openRun(job.id).catch(error)); $('runs').append(b);
       }
     }
@@ -163,9 +187,13 @@ async function refresh() {
 }
 function renderRun() {
   const r = current;
-  $('breadcrumb').textContent = `Workspace / ${r.lawyer.firstName} ${r.lawyer.lastName}`;
-  $('run-kind').textContent = r.demo ? 'FREE DEMO · FICTIONAL RECORD' : 'CASE RESEARCH';
-  $('run-name').textContent = `${r.lawyer.firstName} ${r.lawyer.lastName}`;
+  $('breadcrumb').textContent = `Workspace / ${runName(r)}`;
+  $('run-kind').textContent = r.demo ? 'FREE DEMO · FICTIONAL RECORD' : litigantRun() ? 'LITIGANT SEARCH' : 'ATTORNEY SEARCH';
+  $('run-name').textContent = runName(r);
+  for (const id of ['view-clients','document-launch','docket-selection']) $(id).hidden = litigantRun();
+  $('case-filter-help').textContent = 'Options and case counts come from all results in this saved run. Check any values within a category; cases must match each category you use. ' + (litigantRun() ? 'Party names are the matched names returned by PCL.' : 'Party names reflect saved dockets and name rules.');
+  for (const dir of ['asc','desc']) $('sort').querySelector(`[value="party-${dir}"]`).textContent = `${litigantRun() ? 'Litigant' : 'Client'} name · ${dir === 'asc' ? 'A–Z' : 'Z–A'}`;
+  $('run-help').textContent = 'Nature of Case clips long entries. Click a case to read the full values and source findings.' + (litigantRun() ? '' : ' Docket retrieval does not buy filings; use Document Grabber separately for selected PDFs.');
   const dates = r.search.dateFiledFrom || r.search.dateFiledTo ? `${r.search.dateFiledFrom || 'Any date'} → ${r.search.dateFiledTo || 'Present'}` : 'All filing dates';
   $('run-scope').textContent = `${r.search.courtId?.length ? r.search.courtId.join(', ').toUpperCase() : 'All federal courts'} · ${dates} · Saved ${r.createdUtc.slice(0,10)}`;
   $('stat-cases').textContent = r.caseCount.toLocaleString(); $('stat-dockets').textContent = r.enrichedCount.toLocaleString();
@@ -179,13 +207,15 @@ function renderRun() {
   const missing = missingDockets().length, unsupported = r.cases.filter(c=>!c.eligible && !c.enriched).length;
   $('clients-docket-scope').textContent = `${missing} supported cases still lack a parsed docket. Default: run all of them, newest filed first, within your cap. Saved dockets are reused.${unsupported ? ` ${unsupported} other cases have no supported retrieval; see the Case index.` : ''}`;
   const newStamp = JSON.stringify([r.cases,r.partyReports,r.busy,activeRun,rulesAvailable,docketBudgetsAvailable]); if (tableStamp !== newStamp) {tableStamp = newStamp; caseRows = buildCaseRows(r.cases,r.partyReports); renderFacetGroups(); renderTable(); renderParties();}
-  $('docket-guidance').hidden = !r.indexReady || !r.cases.some(c=>!c.enriched);
+  $('docket-guidance').hidden = litigantRun() || !r.indexReady || !r.cases.some(c=>!c.enriched);
   const coverage = r.partyReports?.coverage;
   $('report-coverage').textContent = coverage ? `${coverage.parsedDockets} of ${coverage.indexedCases} indexed cases have parsed dockets · ${coverage.indexOnlyCases} index only · Counsel matched in ${coverage.casesWithMatchedClients} cases${coverage.partyTablesNeedingReview ? ` · ${coverage.partyTablesNeedingReview} party tables need review` : ''}. Client summaries cover saved dockets only.` : 'An update is ready. Use Stop ROC, then reopen Start ROC to load party reports. Saved work is retained; reconnect PACER when you next need access.';
+  if (litigantRun()) $('report-coverage').textContent = 'PCL litigant matches · One row per case. Matched names appear below the case title; original party-role codes are in case details and downloads. Names may match different people or entities. Litigant docket enrichment and Document Grabber are not available in this first step.';
   $('exports-stale').hidden = clientReportsAvailable && !r.exportsNeedRefresh;
   $('exports-stale-message').textContent = clientReportsAvailable ? 'Updated reports are available. Refresh this run’s downloads from saved evidence, free.' : 'The Clients view is ready. To update downloads, use Stop ROC and reopen Start ROC, then choose Update exports. Restarting ends the current PACER sign-in; saved data stays available.';
   $('exports').replaceChildren();
   const formats = {'case-index.xlsx':'Excel ↓','case-index.csv':'CSV ↓','party-reports.zip':'Client CSVs ↓','case-index.html':'HTML ↓','evidence.json':'Evidence ↓','review.json':'Findings ↓'};
+  if (litigantRun()) formats['party-reports.zip'] = 'Litigant CSVs ↓';
   for (const [file, title] of Object.entries(formats)) if (r.downloads.includes(file)) {
     const b = node('button', title, 'secondary'); b.addEventListener('click', () => download(file).catch(error)); $('exports').append(b);
   }
@@ -196,6 +226,7 @@ function renderRun() {
 function buildCaseRows(cases, reports) {
   const names = new Map(), sourceNames = new Map(), replacements = new Map();
   const add = (map,key,value) => {if (!value) return; if (!map.has(key)) map.set(key,new Set()); map.get(key).add(value);};
+  for (const c of cases) for (const p of c.indexedParties || []) add(names,c.key,p.name);
   for (const view of ['clients','defendants','plaintiffs']) for (const row of reports?.[view]?.cases || []) {
     add(names,row.caseKey,row.name);
     if (row.groupId) {
@@ -292,6 +323,7 @@ function docketField(c, field, value) {
   const td = node('td');
   const missing = !c.enriched && (field === 'Role' ? !value || /^unresolved/i.test(value) : !value || /^(charges )?not supplied by PCL$|^N\/A$/i.test(value));
   if (!missing) {td.textContent = value || 'Unresolved'; td.title = value || 'Unresolved'; return td;}
+  if (litigantRun()) {td.textContent = 'Not available'; td.title = 'This step provides the PCL case index. See case details for source party-role codes.'; return td;}
   if (!c.eligible) {td.append(node('span','Docket unavailable','pill')); td.title = c.ineligibleReason; return td;}
   const b = node('button','Run docket report','docket-field');
   b.setAttribute('aria-label',`Run docket for ${field} in ${c.caseNumber}`);
@@ -310,7 +342,7 @@ function renderTable() {
     const checkCell = node('td'); checkCell.append(cb); tr.append(checkCell);
     const titleCell = node('td'), b = node('button',c.caseNumber); b.addEventListener('click', () => showCase(c));
     titleCell.append(b, node('span',c.caseTitle,'case-title')); titleCell.title = c.caseTitle;
-    if (c.savedPartyNames.length || $('sort').value.startsWith('party-')) {const names = node('span',c.savedPartyNames.length ? 'Parties: '+c.savedPartyNames.join('; ') : 'No saved party names','case-parties'); names.title = names.textContent; titleCell.append(names);}
+    if (c.savedPartyNames.length || $('sort').value.startsWith('party-')) {const names = node('span',c.savedPartyNames.length ? (litigantRun() ? 'Matched litigants: ' : 'Parties: ')+c.savedPartyNames.join('; ') : 'No saved party names','case-parties'); names.title = names.textContent; titleCell.append(names);}
     tr.append(titleCell);
     for (const value of [c.caseType,c.district,c.dateFiled]) {const td = node('td',value); td.title = value; tr.append(td);}
     tr.append(docketField(c,'Role',c.role || c.team),docketField(c,'Nature of Case',c.nature),node('td',c.status));
@@ -322,10 +354,12 @@ function renderTable() {
   $('previous').disabled = page === 0; $('next').disabled = (page+1)*pageSize >= rows.length; selectionLabel(rows); renderFilterState();
 }
 function showCase(c) {
+  $('detail-parties-heading').textContent = litigantRun() ? 'Matched litigants (PCL)' : 'Parties & counsel matches';
   $('detail-number').textContent = c.caseNumber; $('detail-title').textContent = c.caseTitle; $('detail-nature').textContent = c.nature;
   $('detail-fields').replaceChildren();
-  for (const [key,value] of [['District',c.district],['Filed',c.dateFiled],['Role',c.role || c.team || 'Unresolved — select this docket to investigate'],['Status',c.status],['Represented parties',c.representedParties.join('; ') || 'Not established from the case index']]) $('detail-fields').append(node('p',`${key}: ${value}`));
+  for (const [key,value] of [['District',c.district],['Filed',c.dateFiled],['Role',c.role || c.team || (litigantRun() ? 'See source party-role codes below' : 'Unresolved — select this docket to investigate')],['Status',c.status],...(litigantRun() ? [] : [['Represented parties',c.representedParties.join('; ') || 'Not established from the case index']])]) $('detail-fields').append(node('p',`${key}: ${value}`));
   $('detail-parties').replaceChildren();
+  for (const p of c.indexedParties || []) $('detail-parties').append(node('p',`${p.name} · PCL party role: ${p.role || 'Not supplied'}`));
   for (const p of (current.partyReports?.parties || []).filter(p => p.caseKey === c.key)) {
     const block = node('div',undefined,'party-appearance');
     block.append(node('strong',p.name),node('p',`${p.partyRole} · ${p.relationship}${p.defendantNumbers.length ? ' · Defendant '+p.defendantNumbers.join(', ') : ''}`));
@@ -333,7 +367,7 @@ function showCase(c) {
     $('detail-parties').append(block);
   }
   $('detail-issues').replaceChildren();
-  if (!c.enriched) $('detail-issues').append(node('p','This is index information. Counsel roles and client-specific criminal counts require the selected docket.', 'help'));
+  if (!c.enriched) $('detail-issues').append(node('p',litigantRun() ? 'PCL party-role codes are copied as supplied by the court. This first step does not enrich litigant dockets or infer who filed a claim.' : 'This is index information. Counsel roles and client-specific criminal counts require the selected docket.', 'help'));
   if (!c.issues.length) $('detail-issues').append(node('p','No flagged findings in the available data.', 'help'));
   for (const i of c.issues) {const block = node('div',undefined,'issue'); block.append(node('strong',labels[i.category] || i.category),node('span',i.message)); $('detail-issues').append(block);}
   $('case-dialog').showModal();
@@ -405,9 +439,14 @@ async function download(file) {
 }
 bind('home','click',e => {e.preventDefault(); showSearch();}); bind('new-search','click',showSearch); bind('new-from-run','click',showSearch);
 bind('view-cap-stop','click',()=>capStoppedRun && openRun(capStoppedRun.id));
+for (const mode of ['attorney','litigant']) {
+  bind('search-'+mode,'click',()=>setSearchMode(mode));
+  bind('search-'+mode,'keydown',e=>{if (['ArrowLeft','ArrowRight','Home','End'].includes(e.key)) {e.preventDefault(); const next=e.key==='Home' ? 'attorney' : e.key==='End' ? 'litigant' : mode==='attorney' ? 'litigant' : 'attorney';setSearchMode(next);$('search-'+next).focus();}});
+}
 bind('search-form','submit',async e => {
   e.preventDefault(); const data = new FormData(e.target);
-  const values = {firstName:data.get('firstName'),lastName:data.get('lastName'),aliases:data.get('aliases').split('\n').map(s=>s.trim()).filter(Boolean),courts:data.getAll('courts'),dateFiledFrom:data.get('dateFiledFrom'),dateFiledTo:data.get('dateFiledTo'),budgetCents:cents(data.get('budget'))};
+  const values = {searchType:searchMode,firstName:data.get('firstName'),lastName:data.get('lastName'),aliases:(data.get('aliases') || '').split('\n').map(s=>s.trim()).filter(Boolean),courts:data.getAll('courts'),dateFiledFrom:data.get('dateFiledFrom'),dateFiledTo:data.get('dateFiledTo'),budgetCents:cents(data.get('budget'))};
+  if (!searchModesAvailable) {if (searchMode === 'litigant') throw new Error('Stop ROC and reopen Start ROC to enable litigant search.'); delete values.searchType;}
   await connectedAction('Connect to run the case search you just requested.', () => action(async () => {const result = await api('/api/runs', values); await openRun(result.id);}));
 });
 bind('demo','click',() => action(async () => {const result = await api('/api/demo',{}); await openRun(result.id);}));

@@ -15,6 +15,7 @@ from .review import case_issues
 from .retrieve import CourtRetriever
 from .select import select_dockets, validate_options
 from .store import RunStore
+from .search import search_type, subject, subject_name, counsel_aliases, search_criteria, require_attorney, indexed_parties
 
 
 def resolve(base, value):
@@ -29,15 +30,14 @@ def run(config_path, live=False, publish=False, session_provider=None, checkpoin
     if "nameRulesFile" in config and "nameRules" in config:
         raise RocError("Use nameRules or nameRulesFile, not both.")
     name_rules = snapshot(read_json(resolve(base, config["nameRulesFile"])) if config.get("nameRulesFile") else config.get("nameRules"))
-    lawyer = config["lawyer"]
-    first, last = lawyer["firstName"].strip(), lawyer["lastName"].strip()
-    aliases = [first + " " + last] + lawyer.get("aliases", [])
-    if not first or not last:
-        raise RocError("Both firstName and lastName are required.")
+    kind, target = search_type(config), subject(config)
+    name, aliases = subject_name(config), counsel_aliases(config)
+    if config.get('savedDockets') or config.get('retrieveDockets') or config.get('dockets') is not None or publish:
+        require_attorney(config)
     run_dir = resolve(base, config["runDirectory"])
     output_dir = run_dir / "output"
     budget = config.get("budgetCents", 0)
-    metadata = {"generatedUtc": now(), "lawyer": lawyer, "mode": "live" if live else "offline",
+    metadata = {"generatedUtc": now(), "searchType": kind, ('lawyer' if kind == 'attorney' else 'litigant'): target, "mode": "live" if live else "offline",
                 "countPolicy": "all-listed-source-rows", "nameRules": name_rules,
                 "methods": {"index": "saved records" if config.get("indexFile") else "official PCL API",
                             "dockets": "court web reports" if live else "saved reports"}}
@@ -46,7 +46,7 @@ def run(config_path, live=False, publish=False, session_provider=None, checkpoin
     stop_reason_code = None
     with RunStore(run_dir, budget, checkpoint=checkpoint) as store:
         progress = Progress(run_dir)
-        progress("starting", f"ROC: {first} {last}. Run-folder spending limit: ${budget / 100:.2f}.")
+        progress("starting", f"ROC: {name}. Run-folder spending limit: ${budget / 100:.2f}.")
         store.check_pending()
         store.checkpoint()
         source = config.get("indexFile")
@@ -57,15 +57,16 @@ def run(config_path, live=False, publish=False, session_provider=None, checkpoin
                 raise RocError("Live index search requires a positive configured budget of at least 10 cents.")
             progress("awaiting_sign_in", "Ready for official PACER API sign-in. No new searches have been submitted.")
             session = (session_provider or Session.prompt)()
-            criteria = {"firstName": first, "lastName": last, "partyType": "aty"}
-            if config.get("search"):
-                criteria["courtCase"] = config["search"]
+            criteria = search_criteria(config)
             records = collect_index(session, criteria, store, delay=max(1, config.get("requestDelaySeconds", 5)), progress=progress)
             write_json(run_dir / "pcl-records.json", records)
         else:
             raise RocError("Offline mode needs indexFile. Network access is only enabled with --live.")
         cases = build_index(records, config.get("courtLabels"))
-        progress("index_ready", f"Built {len(cases)} cases from {len(records)} attorney records.", chargedCents=store.spent)
+        if kind == 'litigant':
+            for case in cases:
+                case['indexedParties'] = indexed_parties(case)
+        progress("index_ready", f"Built {len(cases)} cases from {len(records)} {kind} records.", chargedCents=store.spent)
         by_key = {c["key"]: c for c in cases}
         reports = list(config.get("savedDockets", []))
         selected, plan = select_dockets(cases, config)
@@ -137,7 +138,7 @@ def run(config_path, live=False, publish=False, session_provider=None, checkpoin
                                             for category in ("missing-source", "not-tested", "needs-review")}
         metadata["resolvedRoleCases"] = metadata["resolvedTeamCases"]
         metadata["unresolvedRoleCases"] = metadata["unresolvedTeamCases"]
-        title = f"Record of Counsel (ROC): {first} {last}"
+        title = f"Record of Counsel (ROC): {name}" + (' — Litigant search' if kind == 'litigant' else '')
         path = export_local(cases, output_dir, title, metadata)
         if publish:
             if not config.get("googleOAuthFile"):

@@ -307,7 +307,7 @@ class InterfaceBrowserTests(unittest.TestCase):
                     errors = []
                     page.on("pageerror", lambda error: errors.append(str(error)))
                     page.goto(url)
-                    expect(page.get_by_role("heading", name="Follow the lawyer. Find the cases.")).to_be_visible()
+                    expect(page.get_by_role("heading", name="Start with a name. Find the cases.")).to_be_visible()
                     page.get_by_role("button", name="Open free demo").click()
                     expect(page.locator("#run-status")).to_have_text("READY", timeout=15000)
                     expect(page.locator("#stat-dockets")).to_have_text("0")
