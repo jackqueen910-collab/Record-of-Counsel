@@ -116,7 +116,8 @@ class DocumentGrabber:
         self.ws.save(identifier, m)
         self.ws._start(identifier, action)
 
-    def work(self, identifier, action):
+    def work(self, identifier, action, session_provider=None):
+        session_provider = session_provider or self.ws.provider
         m = self.ws.manifest(identifier)
         operation = m.get('documentOperation', {})
         if operation.get('action') != action:
@@ -150,7 +151,7 @@ class DocumentGrabber:
                 raise RocError('Document candidate changed since approval. Make a new preview.')
             source, candidate, analysis_id = candidates[item['candidateId']]
             old = ExpenseLedger(root, 'documents').find(document_key(candidate['url']))
-            session = None if old and old['state'] == 'complete' else self.ws.provider()
+            session = None if old and old['state'] == 'complete' else session_provider()
             download_document(root, source, candidate, session, self.ws.checkpoint, analysis_id=analysis_id)
         return 'Selected documents saved. Download the bundle in Document Grabber.'
 

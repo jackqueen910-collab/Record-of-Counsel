@@ -407,20 +407,21 @@ class Workspace:
         self.save(identifier, m)
         self.active = identifier
         self.pause_event.clear()
-        self.future = self.pool.submit(self._work, identifier, action)
+        self.future = self.pool.submit(self._work, identifier, action, self.provider)
 
     def checkpoint(self):
         if self.pause_event.is_set():
             raise RocError("Paused at your request. Saved results and receipts are retained.")
 
-    def _work(self, identifier, action):
+    def _work(self, identifier, action, session_provider=None):
+        session_provider = session_provider or self.provider
         folder = self.folder(identifier)
         try:
             m = self.manifest(identifier)
             config = dict(m["config"])
             config["nameRules"] = snapshot(self.name_rules.public())
             if action in ('documents-analyze', 'documents-download'):
-                message = self.grabber.work(identifier, action)
+                message = self.grabber.work(identifier, action, session_provider)
                 code = 0
             elif action == "refresh-reports":
                 self._refresh_reports(identifier, config)
@@ -439,7 +440,7 @@ class Workspace:
                                                 for key in m["selected"] if key not in reports]
                 write_json(folder / "config.json", config)
                 code = run(folder / "config.json", live=not m["demo"] and action != "export",
-                           session_provider=self.provider, checkpoint=self.checkpoint)
+                           session_provider=session_provider, checkpoint=self.checkpoint)
                 progress = read_json(folder / "status.json")
                 message = ("Case index ready. Select dockets to enrich, or download the index now." if action == "search" and code == 0
                            else progress["message"])

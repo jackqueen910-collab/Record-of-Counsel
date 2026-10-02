@@ -10,7 +10,7 @@ Name rules group report labels using saved docket evidence. Creating, previewing
 4. **Preview change** shows before/after names and distinct-case totals for the open run, plus the number of saved runs with matching names. Preview is read-only. Changing the form invalidates it. **Save rule** commits the reviewed change.
 5. The open run's downloads rebuild automatically from saved evidence. Other runs display the current grouping immediately and show **Update exports** until their downloads have been rebuilt. Downloads from an outdated rule revision are blocked, so exported totals cannot silently disagree with the current view.
 
-Rules apply to all saved and future searches **in this workspace**, including searches for other lawyers. They survive closing and reopening ROC. They do not alter original PACER names, case captions, attorney aliases, counsel matches, criminal counts, docket files or receipt ledgers.
+Rules apply to all saved and future searches **in this PACER account's workspace**, including searches for other lawyers. They survive closing and reopening ROC and appear after that account signs in. They do not alter original PACER names, case captions, attorney aliases, counsel matches, criminal counts, docket files or receipt ledgers.
 
 Already-grouped rows have a clickable grouping label. Edit them there or through **Name rules**. Add source spellings to an existing rule rather than creating an overlapping group. Source names, including the preferred label, may belong to only one rule. Overlapping groups, chains and cycles are rejected. Unlisted variants remain separate.
 
@@ -24,11 +24,11 @@ Grouped rows retain their source spellings and per-source party roles, defendant
 
 **Edit** changes a rule's label, type or members, with another preview before saving. **Remove rule** previews the ungrouped result and requires confirmation. **Undo last change** previews restoring the previous whole rule set; up to 20 changes are retained. Undo advances the revision, so older exports still require a refresh. All operations preserve the original records; removing rules falls back to ordinary source-name grouping.
 
-A stale tab or a change in relevant saved cases invalidates the preview. Rule edits and report refreshes wait until the workspace is idle. Refreshes take the existing run lock without changing receipts, clearing a pending charge, or resuming an interrupted search/retrieval. They also work while signed out. Interrupted operations retain their Resume action.
+A stale tab or a change in relevant saved cases invalidates the preview. Rule edits and report refreshes wait until the workspace is idle. Refreshes take the existing run lock without changing receipts, clearing a pending charge, or resuming an interrupted search/retrieval. They also work after the PACER connection expires while the ROC account remains signed in. Interrupted operations retain their Resume action.
 
 ## Files and standalone CLI
 
-The private workspace file is `runs/workspace/name-rules.json` (or the equivalent beneath a custom `--directory`). It contains version 1, a monotonically increasing revision, normalized rules and the bounded undo history. Keep it with the workspace when moving or backing up saved runs. An unreadable file is reported rather than silently replaced with empty rules.
+The private account file is `runs/workspace/accounts/<opaque-account-key>/name-rules.json` (or the equivalent beneath a custom `--directory`). It contains version 1, a monotonically increasing revision, normalized rules and the bounded undo history. Keep it with the full workspace, including its account identity key, when moving or backing up saved runs. An unreadable file is reported rather than silently replaced with empty rules.
 
 Each export records the applied revision and rules in `evidence.json` and `party-reports.json`. The CSV ZIP includes `name-rules.json`; Excel includes a Name rules sheet when rules exist. Summary and case sheets identify the grouping type and preserve source names/associations. Original parsed party/counsel records and court report files are preserved.
 
@@ -36,7 +36,7 @@ The CLI can use a workspace rule file or an exported rule snapshot by adding a r
 
 ```json
 {
-  "nameRulesFile": "runs/workspace/name-rules.json"
+  "nameRulesFile": "private/exported-name-rules.json"
 }
 ```
 

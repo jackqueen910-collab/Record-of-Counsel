@@ -25,6 +25,7 @@ small{font-size:11px}
 .new-button{background:#dcebe5;color:var(--navy);text-align:left;width:100%;margin:0 0 32px}
 .section-label{font-size:10px;letter-spacing:1.8px;color:#91a8b2;margin-bottom:12px}
 #runs{overflow:auto;flex:1;min-height:80px}
+#runs .help{color:#b0c3cb}
 .run-link{display:block;width:100%;text-align:left;color:#d8e5e8;padding:12px 10px;background:transparent;border-radius:6px;margin-bottom:4px;font-weight:500}
 .run-link.active{background:#233e4b;border-left:2px solid #95c7b6}
 .run-link small{display:block;color:#a2b7bd;margin-top:5px;font-weight:400}

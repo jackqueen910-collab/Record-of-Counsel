@@ -12,6 +12,7 @@ let capStoppedRun = null;
 let selectedNames = new Map(), rulesAvailable = false, ruleState = null, editingRule = null, pendingRule = null, rulesBusy = false;
 let docketBudgetsAvailable = false, clientReportsAvailable = false;
 let caseRows = [], facetChoices = {};
+let accountView = 'signed-out', accountGeneration = 0, authTarget = '';
 const alphabet = new Intl.Collator('en', {sensitivity:'base', numeric:true});
 const facetDefinitions = [
   ['court','Court'],['type','Case type'],['status','Case status'],['role','Role'],['year','Filing year'],
@@ -22,11 +23,44 @@ const pageSize = 50;
 const money = cents => new Intl.NumberFormat("en-US", {style:"currency", currency:"USD"}).format(cents / 100);
 const labels = {"missing-source":"Missing from source", "needs-review":"Needs review", "not-tested":"Not tested by sample"};
 function node(tag, text, className) {const n = document.createElement(tag); if (text !== undefined) n.textContent = text; if (className) n.className = className; return n;}
-function error(e) {if (stopped) return; $('notice').textContent = shuttingDown ? 'ROC is no longer reachable. Your stop request was sent; reopen the launcher to check saved run status.' : e.message || String(e); $('notice').hidden = false;}
+function error(e) {if (stopped || e.staleAccount) return; $('notice').textContent = shuttingDown ? 'ROC is no longer reachable. Your stop request was sent; reopen the launcher to check saved run status.' : e.message || String(e); $('notice').hidden = false;}
 function bind(id, event, fn) {$(id).addEventListener(event, e => {Promise.resolve().then(() => fn(e)).catch(error);});}
+function checkGeneration(generation) {
+  if (generation !== accountGeneration) {const e = new Error('Account changed.'); e.staleAccount = true; throw e;}
+}
+function requestHeaders() {return {'X-ROC-Token':token, 'X-ROC-View':accountView};}
+function adoptAccountView(view, preserveAuth=false) {
+  if (view === undefined || view === accountView) return;
+  accountView = view; accountGeneration++;
+  currentId = null; current = null; activeRun = null; capStoppedRun = null; quote = null;
+  selected.clear(); selectedNames.clear(); caseRows = []; pageRows = []; facetChoices = {};
+  ruleState = editingRule = pendingRule = null; rulesAvailable = false;
+  tableStamp = sidebarStamp = ''; page = partyPage = 0; reportView = 'cases';
+  for (const dialog of document.querySelectorAll('dialog[open]')) if (!preserveAuth || dialog.id !== 'auth-dialog') dialog.close();
+  if (!preserveAuth) {afterLogin = null; authSubmitted = false; authTarget = ''; clearCredentials(); $('auth-username').value = ''; $('auth-client').value = '';}
+  if (!preserveAuth || connection.signedIn && connection.username !== authTarget) $('search-form').reset();
+  for (const id of ['runs','case-rows','party-rows','exports','receipt-list','facet-groups','active-filters',
+    'party-name','party-source-names','party-case-count','party-case-list','detail-number','detail-title','detail-fields','detail-nature','detail-parties','detail-issues',
+    'rules-list','rule-impact','rule-comparisons','rules-message','quote-cases','quote-text','quote-cost','quote-budget','docket-cap-message',
+    'run-name','run-scope','run-kind','run-status','stat-cases','stat-dockets','stat-spent','stat-cap','result-count','page-summary','party-page-summary',
+    'selection-count','selection-hidden','name-selection-count','progress-message','pending-message','report-coverage','clients-docket-scope','other-cap-stop-text']) $(id).replaceChildren();
+  for (const id of ['filter','party-filter','rule-label','rule-names','cap-input','docket-cap']) $(id).value = '';
+  for (const id of ['notice','other-cap-stop','run-view','rule-preview']) $(id).hidden = true;
+  $('search-view').hidden = false; $('breadcrumb').textContent = 'Workspace / New search'; document.title = 'Record of Counsel';
+  if (window.rocDocumentsReset) window.rocDocumentsReset();
+}
 async function api(path, value) {
-  const response = await fetch(path, {method:value === undefined ? "GET" : "POST", headers:{"X-ROC-Token":token, ...(value === undefined ? {} : {"Content-Type":"application/json"})}, ...(value === undefined ? {} : {body:JSON.stringify(value)})});
-  const result = await response.json(); if (!response.ok) throw new Error(result.error || "Request failed."); return result;
+  const generation = accountGeneration;
+  const response = await fetch(path, {method:value === undefined ? "GET" : "POST", headers:{...requestHeaders(), ...(value === undefined ? {} : {"Content-Type":"application/json"})}, ...(value === undefined ? {} : {body:JSON.stringify(value)})});
+  const result = await response.json(); checkGeneration(generation);
+  if (!response.ok) throw new Error(result.error || "Request failed.");
+  if (value !== undefined && result.viewId) adoptAccountView(result.viewId,path === '/api/connection/sign-in');
+  return result;
+}
+async function downloadBlob(path) {
+  const generation = accountGeneration, response = await fetch(path,{headers:requestHeaders()});
+  if (!response.ok) {const result = await response.json(); checkGeneration(generation); throw new Error(result.error);}
+  const blob = await response.blob(); checkGeneration(generation); return blob;
 }
 function cents(value) {if (!/^\d+(\.\d{1,2})?$/.test(value)) throw new Error("Enter a dollar amount with at most two decimal places."); const result = Math.round(Number(value) * 100); if (!Number.isSafeInteger(result)) throw new Error('Enter a smaller dollar amount.'); return result;}
 async function action(fn) {
@@ -49,9 +83,12 @@ function setButtons() {
   for (const id of ['rule-label','rule-kind','rule-names','preview-rule','new-rule','delete-rule']) $(id).disabled = busy || rulesBusy;
   $('undo-rule').disabled = busy || rulesBusy || !ruleState?.canUndo;
   $('apply-rule').disabled = busy || rulesBusy || !pendingRule;
-  $('connect-pacer').disabled = busy; $('disconnect-pacer').disabled = busy;
-  $('connect-pacer').hidden = connection.connected; $('disconnect-pacer').hidden = !connection.connected;
-  $('connection-status').textContent = stopped ? 'ROC stopped' : shuttingDown ? 'Stopping ROC…' : connection.connecting ? 'Connecting…' : connection.connected ? 'PACER connected' : 'Sign-in required';
+  $('connect-pacer').disabled = busy; $('disconnect-pacer').disabled = busy; $('switch-account').disabled = busy;
+  $('connect-pacer').hidden = connection.connected; $('disconnect-pacer').hidden = !(connection.signedIn || connection.connected);
+  $('switch-account').hidden = !connection.signedIn;
+  $('connect-pacer').textContent = connection.signedIn ? 'Reconnect PACER' : 'Connect PACER';
+  $('disconnect-pacer').textContent = connection.accountMode ? 'Sign out' : 'Disconnect';
+  $('connection-status').textContent = stopped ? 'ROC stopped' : shuttingDown ? 'Stopping ROC…' : connection.connecting ? 'Connecting…' : connection.signedIn ? `${connection.username} · ${connection.connected ? 'PACER connected' : 'Saved searches available'}` : connection.connected ? 'PACER connected' : 'Sign-in required';
   $('stop-roc').disabled = shuttingDown;
   for (const id of ['auth-username','auth-password','auth-otp','auth-client','auth-redact','auth-submit']) $(id).disabled = connection.connecting || authSending || authSubmitted || shuttingDown;
   $('search-submit').disabled = busy; $('demo').disabled = busy;
@@ -77,10 +114,13 @@ function setButtons() {
   }
 }
 async function refresh() {
-  if (refreshing || stopped) return; refreshing = true;
+  if (refreshing || stopped || authSending) return; refreshing = true;
   let continuation = null;
   try {
-    const listing = await api('/api/runs'); activeRun = listing.active; connection = listing.connection;
+    const listing = await api('/api/runs');
+    if (authSending) return;
+    adoptAccountView(listing.connection.viewId,authSubmitted && listing.connection.username === authTarget);
+    activeRun = listing.active; connection = listing.connection;
     capStoppedRun = listing.jobs.find(j=>j.docketCapStopped && j.id !== currentId) || null;
     $('other-cap-stop').hidden = !capStoppedRun;
     if (capStoppedRun) $('other-cap-stop-text').textContent = `Docket retrieval for ${capStoppedRun.lawyer.firstName} ${capStoppedRun.lawyer.lastName} stopped at its spending limit. Purchased reports and results are saved.`;
@@ -103,10 +143,11 @@ async function refresh() {
         $('auth-message').textContent = connection.message; $('auth-message').hidden = false;
       }
     }
-    const stamp = JSON.stringify([currentId, listing.jobs.map(j => [j.id,j.state,j.caseCount,j.spentCents])]);
+    const stamp = JSON.stringify([accountView,connection.signedIn,currentId, listing.jobs.map(j => [j.id,j.state,j.caseCount,j.spentCents])]);
     if (stamp !== sidebarStamp) {
       sidebarStamp = stamp; $('runs').replaceChildren();
-      if (!listing.jobs.length) $('runs').append(node('p', 'Your searches will be saved here.', 'help'));
+      if (connection.accountMode && !connection.signedIn) $('runs').append(node('p', 'Saved searches will appear here after you sign in with PACER.', 'help'));
+      else if (!listing.jobs.length) $('runs').append(node('p', 'Your searches will be saved here.', 'help'));
       for (const job of listing.jobs) {
         const b = node('button', `${job.lawyer.firstName} ${job.lawyer.lastName}`, `run-link${job.id === currentId ? ' active' : ''}`);
         b.append(node('small', `${job.demo ? 'Demo · ' : ''}${job.caseCount} cases · ${job.state === 'running' ? 'In progress' : job.createdUtc.slice(0,10)}`));
@@ -359,9 +400,8 @@ function showParty(summary) {
   $('party-dialog').showModal();
 }
 async function download(file) {
-  const response = await fetch(`/api/runs/${currentId}/download/${file}`,{headers:{'X-ROC-Token':token}});
-  if (!response.ok) throw new Error((await response.json()).error);
-  const url = URL.createObjectURL(await response.blob()), a = node('a'); a.href = url; a.download = file; document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url),1000);
+  const blob = await downloadBlob(`/api/runs/${currentId}/download/${file}`);
+  const url = URL.createObjectURL(blob), a = node('a'); a.href = url; a.download = file; document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url),1000);
 }
 bind('home','click',e => {e.preventDefault(); showSearch();}); bind('new-search','click',showSearch); bind('new-from-run','click',showSearch);
 bind('view-cap-stop','click',()=>capStoppedRun && openRun(capStoppedRun.id));
@@ -449,9 +489,11 @@ function openAuth(context, next) {
   $('auth-submit').textContent = next ? 'Connect and continue' : 'Connect PACER';
   clearCredentials(); $('auth-password').type = 'text'; $('toggle-password').textContent = 'Hide'; $('toggle-password').setAttribute('aria-label','Hide password');
   $('auth-redact').checked = false; $('auth-dialog').showModal(); setButtons();
+  if (connection.signedIn) $('auth-username').value = connection.username;
 }
 async function connectedAction(context, next) {if (connection.connected) await next(); else openAuth(context, next);}
 bind('connect-pacer','click',() => openAuth('Connect your PACER account to this ROC session. Signing in alone does not start a search.', null));
+bind('switch-account','click',() => {openAuth('Sign in with another PACER account to open its saved searches. People sharing a PACER account share its history.',null); $('auth-username').value = ''; $('auth-client').value = ''; $('auth-username').focus();});
 bind('disconnect-pacer','click',() => action(() => api('/api/connection/disconnect',{})));
 bind('close-auth','click',() => $('auth-dialog').close());
 $('auth-dialog').addEventListener('close',() => {clearCredentials(); afterLogin = null;});
@@ -460,7 +502,9 @@ bind('auth-form','submit',async e => {
   e.preventDefault(); if (authSending || authSubmitted || connection.connecting) return;
   authSending = true; $('auth-message').textContent = 'Connecting to the official PACER authentication API…'; $('auth-message').hidden = false; setButtons();
   const fields = {username:$('auth-username').value,password:$('auth-password').value,otp:$('auth-otp').value,clientCode:$('auth-client').value,redact:$('auth-redact').checked};
-  try {await api('/api/connection/sign-in',fields); authSubmitted = true; await refresh();}
+  authTarget = fields.username.trim();
+  if (connection.signedIn && connection.username !== authTarget) afterLogin = null;
+  try {await api('/api/connection/sign-in',fields); authSubmitted = true; authSending = false; await refresh();}
   catch(e) {$('auth-message').textContent = e.message;}
   finally {fields.password = ''; fields.otp = ''; authSending = false; setButtons();}
 });

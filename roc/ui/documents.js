@@ -17,7 +17,7 @@ function docControls() {
 async function docTask(fn) {
   if (docBusy) return;
   docBusy = true; docControls();
-  try {await fn();} catch (e) {docMessage(e.message || String(e));}
+  try {await fn();} catch (e) {if (!e.staleAccount) docMessage(e.message || String(e));}
   finally {docBusy = false; docControls();}
 }
 async function loadDocuments() {
@@ -96,10 +96,15 @@ bind('confirm-documents','click',()=>docTask(async()=>{
 }));
 bind('document-refresh','click',()=>docTask(loadDocuments));
 bind('document-bundle','click',()=>docTask(async()=>{
-  const response=await fetch(`/api/runs/${docRun}/document-bundle`,{headers:{'X-ROC-Token':token}});
-  if (!response.ok) throw new Error((await response.json()).error);
-  const url=URL.createObjectURL(await response.blob()),a=node('a');a.href=url;a.download='roc-document-bundle.zip';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+  const blob=await downloadBlob(`/api/runs/${docRun}/document-bundle`);
+  const url=URL.createObjectURL(blob),a=node('a');a.href=url;a.download='roc-document-bundle.zip';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
 }));
+window.rocDocumentsReset=()=>{
+  docRun=null;docKeys=[];docState=analysisQuote=purchaseQuote=null;docSelected.clear();docStamp=docStatusStamp='';docAvailable=false;
+  for (const id of ['document-candidates','analysis-cases','purchase-items','documents-selection','document-spending','analysis-price','purchase-price','documents-message']) $(id).replaceChildren();
+  $('ai-cap').value='';$('document-cap').value='';$('analysis-preview').hidden=true;$('purchase-preview').hidden=true;
+  docControls();
+};
 window.rocDocumentsUpdate=async available=>{
   docAvailable=available;docControls();
   if ($('documents-dialog').open && !docBusy) {

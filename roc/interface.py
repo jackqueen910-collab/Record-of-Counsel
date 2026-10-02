@@ -1,5 +1,7 @@
 """Loopback-only interface. Credential entry calls the official authentication API."""
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.cookies import SimpleCookie
+from contextlib import nullcontext
 from importlib.resources import files
 import json
 import mimetypes
@@ -10,7 +12,7 @@ import webbrowser
 
 from .common import RocError, write_json
 from .courts import DISTRICT_COURTS
-from .workspace import Workspace
+from .accounts import Accounts
 
 
 def make_server(workspace, port=0):
@@ -25,6 +27,23 @@ def make_server(workspace, port=0):
         timer.start()
 
     class Handler(BaseHTTPRequestHandler):
+        new_cookie = None
+
+        def cookie(self):
+            try:
+                parsed = SimpleCookie(self.headers.get('Cookie', ''))
+                value = parsed.get(f'roc-session-{self.server.server_port}')
+                return value.value if value else ''
+            except Exception:
+                return ''
+
+        def scope(self, mutating=False, require_account=False):
+            if isinstance(workspace, Accounts):
+                return workspace.scope(self.cookie(), mutating, require_account, self.headers.get('X-ROC-View', ''))
+            # Direct Workspace servers remain an internal offline test harness.
+            # The shipped launcher/CLI always constructs Accounts below.
+            return nullcontext(workspace)
+
         def log_message(self, *_):
             pass  # Never log URLs, headers or the local access token.
 
@@ -34,6 +53,8 @@ def make_server(workspace, port=0):
             self.send_response(code)
             self.send_header("Content-Type", content_type)
             self.send_header("Content-Length", str(len(body)))
+            if self.new_cookie:
+                self.send_header('Set-Cookie', f'roc-session-{self.server.server_port}={self.new_cookie}; Path=/; HttpOnly; SameSite=Strict')
             self.send_header("Cache-Control", "no-store")
             self.send_header("X-Content-Type-Options", "nosniff")
             self.send_header("Referrer-Policy", "no-referrer")
@@ -63,28 +84,26 @@ def make_server(workspace, port=0):
                     return self.send(200, files("roc").joinpath("ui", asset).read_bytes(), kind)
                 parts = path.strip("/").split("/")
                 if path == "/api/runs":
-                    return self.send(200, workspace.list())
-                if path == "/api/name-rules":
-                    with workspace.lock:
-                        return self.send(200, workspace.name_rules.public())
+                    return self.send(200, workspace.list(self.cookie()) if isinstance(workspace, Accounts) else workspace.list())
                 if path == "/api/connection":
-                    return self.send(200, {"app": "ROC", **workspace.connection.status(), "stopping": workspace.stopping, "closed": workspace.closed})
+                    status = workspace.status(self.cookie()) if isinstance(workspace, Accounts) else workspace.connection.status()
+                    return self.send(200, {"app": "ROC", **status, "stopping": workspace.stopping, "closed": workspace.closed})
                 if path == "/api/courts":
                     return self.send(200, [{"id": c.court_id, "name": c.district} for c in sorted(DISTRICT_COURTS.values(), key=lambda c: c.district)])
-                if len(parts) == 3 and parts[:2] == ["api", "runs"]:
-                    with workspace.lock:
-                        return self.send(200, workspace.summary(parts[2], detail=True))
-                if len(parts) == 4 and parts[:2] == ['api', 'runs'] and parts[3] == 'documents':
-                    with workspace.lock:
-                        return self.send(200, workspace.grabber.state(parts[2]))
-                if len(parts) == 4 and parts[:2] == ['api', 'runs'] and parts[3] == 'document-bundle':
-                    with workspace.lock:
-                        bundle = workspace.grabber.bundle(parts[2])
-                        return self.send(200, bundle.read_bytes(), 'application/zip', bundle.name)
-                if len(parts) == 5 and parts[:2] == ["api", "runs"] and parts[3] == "download":
-                    with workspace.lock:
-                        file = workspace.download(parts[2], parts[4])
-                        return self.send(200, file.read_bytes(), mimetypes.guess_type(file.name)[0] or "application/octet-stream", file.name)
+                with self.scope() as current:
+                    with current.lock:
+                        if path == '/api/name-rules':
+                            return self.send(200, current.name_rules.public())
+                        if len(parts) == 3 and parts[:2] == ['api', 'runs']:
+                            return self.send(200, current.summary(parts[2], detail=True))
+                        if len(parts) == 4 and parts[:2] == ['api', 'runs'] and parts[3] == 'documents':
+                            return self.send(200, current.grabber.state(parts[2]))
+                        if len(parts) == 4 and parts[:2] == ['api', 'runs'] and parts[3] == 'document-bundle':
+                            bundle = current.grabber.bundle(parts[2])
+                            return self.send(200, bundle.read_bytes(), 'application/zip', bundle.name)
+                        if len(parts) == 5 and parts[:2] == ['api', 'runs'] and parts[3] == 'download':
+                            file = current.download(parts[2], parts[4])
+                            return self.send(200, file.read_bytes(), mimetypes.guess_type(file.name)[0] or 'application/octet-stream', file.name)
                 self.send(404, {"error": "Not found."})
             except RocError as exc:
                 self.send(400, {"error": str(exc)})
@@ -113,34 +132,44 @@ def make_server(workspace, port=0):
                     raise RocError("Expected a JSON object.")
                 parts = urlsplit(self.path).path.strip("/").split("/")
                 if parts == ["api", "connection", "sign-in"]:
+                    if isinstance(workspace, Accounts):
+                        self.new_cookie = workspace.sign_in(self.cookie(), value, self.headers.get('X-ROC-View', ''))
+                        return self.send(200, {'ok': True, 'viewId': workspace.status(self.new_cookie)['viewId']})
                     workspace.sign_in(value)
-                    return self.send(200, {"ok": True})
+                    return self.send(200, {'ok': True})
                 if parts == ["api", "connection", "disconnect"]:
+                    if isinstance(workspace, Accounts):
+                        self.new_cookie = workspace.disconnect(self.cookie(), self.headers.get('X-ROC-View', ''))
+                        return self.send(200, {'ok': True, 'viewId': workspace.status(self.new_cookie)['viewId']})
                     workspace.disconnect()
-                    return self.send(200, {"ok": True})
+                    return self.send(200, {'ok': True})
                 if parts == ["api", "stop"]:
                     if not stopping.is_set():
                         stopping.set()
                         workspace.request_stop()
                         threading.Thread(target=shutdown, daemon=True).start()
                     return self.send(200, {"stopping": True})
-                if parts == ["api", "runs"]:
-                    return self.send(200, {"id": workspace.new(value)})
                 if parts == ["api", "demo"]:
+                    if isinstance(workspace, Accounts):
+                        self.new_cookie, identifier = workspace.demo(self.cookie(), self.headers.get('X-ROC-View', ''))
+                        return self.send(200, {'id': identifier, 'viewId': workspace.status(self.new_cookie)['viewId']})
                     return self.send(200, {"id": workspace.new(demo=True)})
-                if parts == ["api", "name-rules", "preview"]:
-                    return self.send(200, workspace.preview_name_rule(value))
-                if parts == ["api", "name-rules", "apply"]:
-                    return self.send(200, workspace.apply_name_rule(value))
-                if len(parts) == 4 and parts[:2] == ["api", "runs"]:
-                    if parts[3] in ('documents-analysis-quote', 'documents-purchase-quote'):
-                        with workspace.lock:
-                            fn = workspace.grabber.analysis_quote if parts[3] == 'documents-analysis-quote' else workspace.grabber.purchase_quote
-                            return self.send(200, fn(parts[2], value))
-                    if parts[3] == "quote":
-                        return self.send(200, workspace.quote(parts[2], value.get("keys")))
-                    workspace.act(parts[2], parts[3], value)
-                    return self.send(200, {"ok": True})
+                with self.scope(mutating=True, require_account=parts == ['api', 'runs']) as current:
+                    if parts == ['api', 'runs']:
+                        return self.send(200, {'id': current.new(value)})
+                    if parts == ['api', 'name-rules', 'preview']:
+                        return self.send(200, current.preview_name_rule(value))
+                    if parts == ['api', 'name-rules', 'apply']:
+                        return self.send(200, current.apply_name_rule(value))
+                    if len(parts) == 4 and parts[:2] == ['api', 'runs']:
+                        if parts[3] in ('documents-analysis-quote', 'documents-purchase-quote'):
+                            with current.lock:
+                                fn = current.grabber.analysis_quote if parts[3] == 'documents-analysis-quote' else current.grabber.purchase_quote
+                                return self.send(200, fn(parts[2], value))
+                        if parts[3] == 'quote':
+                            return self.send(200, current.quote(parts[2], value.get('keys')))
+                        current.act(parts[2], parts[3], value)
+                        return self.send(200, {'ok': True})
                 self.send(404, {"error": "Not found."})
             except (RocError, ValueError) as exc:
                 self.send(400, {"error": str(exc) if isinstance(exc, RocError) else "Invalid request."})
@@ -160,7 +189,7 @@ def make_server(workspace, port=0):
 
 
 def serve(directory, port=0, open_browser=True):
-    workspace = Workspace(directory)
+    workspace = Accounts(directory)
     try:
         server, url = make_server(workspace, port)
     except Exception:
