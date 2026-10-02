@@ -9,13 +9,14 @@ from .docket import enrich, parse_report
 from .index import build_index, records_from
 from .name_rules import snapshot
 from .output import export_local, publish_google
-from .pacer import Session, collect_index
+from .pacer import Session
+from .search_collection import collect_searches
 from .progress import Progress
 from .review import case_issues
 from .retrieve import CourtRetriever
 from .select import select_dockets, validate_options
 from .store import RunStore
-from .search import search_type, subject, subject_name, counsel_aliases, search_criteria, require_attorney, indexed_parties
+from .search import search_type, subject, subject_name, counsel_aliases, search_plan, require_attorney, indexed_parties
 
 
 def resolve(base, value):
@@ -38,6 +39,7 @@ def run(config_path, live=False, publish=False, session_provider=None, checkpoin
     output_dir = run_dir / "output"
     budget = config.get("budgetCents", 0)
     metadata = {"generatedUtc": now(), "searchType": kind, ('lawyer' if kind == 'attorney' else 'litigant'): target, "mode": "live" if live else "offline",
+                "searchQueries": search_plan(config),
                 "countPolicy": "all-listed-source-rows", "nameRules": name_rules,
                 "methods": {"index": "saved records" if config.get("indexFile") else "official PCL API",
                             "dockets": "court web reports" if live else "saved reports"}}
@@ -57,8 +59,7 @@ def run(config_path, live=False, publish=False, session_provider=None, checkpoin
                 raise RocError("Live index search requires a positive configured budget of at least 10 cents.")
             progress("awaiting_sign_in", "Ready for official PACER API sign-in. No new searches have been submitted.")
             session = (session_provider or Session.prompt)()
-            criteria = search_criteria(config)
-            records = collect_index(session, criteria, store, delay=max(1, config.get("requestDelaySeconds", 5)), progress=progress)
+            records = collect_searches(session, config, store, progress=progress)
             write_json(run_dir / "pcl-records.json", records)
         else:
             raise RocError("Offline mode needs indexFile. Network access is only enabled with --live.")

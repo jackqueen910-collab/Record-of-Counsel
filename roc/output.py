@@ -12,6 +12,7 @@ from .common import RocError, write_json
 from .docket import ROLE_VALUES
 from .parties import CLIENT_REPORT_VERSION, build_party_reports, case_role, coverage_text, report_tables
 from .review import case_issues, issue_text
+from .search import counsel_aliases
 
 HEADERS = ["Case number", "Case title", "Case Type", "Role", "Court", "District", "Date filed", "Nature of Case", "Status (PACER)", "PACER link"]
 FIELDS = ["caseNumber", "caseTitle", "caseType", "role", "court", "district", "dateFiled", "nature", "status", "pacerLink"]
@@ -30,7 +31,7 @@ def csv_safe(value):
 def source_note(case):
     evidence = case.get("enrichment")
     if not evidence:
-        return "Source: official PCL index. " + "; ".join(case["warnings"])
+        return "Source: official PCL index. " + ("Found by: " + "; ".join(case['matchedSearchNames']) + ". " if case.get('matchedSearchNames') else '') + "; ".join(case["warnings"])
     coverage = evidence.get("courtCoverage")
     validation = (" Court retrieval validation at run: " + coverage["validationStatus"] +
                   "; live-verified samples: " + str(coverage["verifiedSamples"]) + "." if coverage else "")
@@ -50,8 +51,7 @@ def export_local(cases, folder, title, metadata):
         writer = csv.writer(stream)
         writer.writerow(HEADERS)
         writer.writerows([csv_safe(x) for x in values(c)] for c in cases)
-    lawyer = metadata.get("lawyer", {})
-    aliases = [clean_name for clean_name in [" ".join([lawyer.get("firstName", ""), lawyer.get("lastName", "")]).strip(), *lawyer.get("aliases", [])] if clean_name]
+    aliases = counsel_aliases(metadata) if metadata.get('lawyer') else []
     reports = build_party_reports(cases, aliases, metadata.get("nameRules"))
     metadata["nameRules"] = reports["nameRules"]
     metadata["partyCoverage"] = reports["coverage"]
@@ -66,6 +66,14 @@ def export_local(cases, folder, title, metadata):
                    'Names match by prefix and may refer to different people or entities. Role codes are not interpreted as proof of who filed a claim. '
                    'Docket enrichment, client reports and Document Grabber are not included for litigant searches in this first step.' if litigant else
                    coverage_text(reports) + "\n" + "\n".join(reports[k] for k in ("countPolicy", "namePolicy", "relationshipPolicy")))
+    queries = metadata.get('searchQueries', [])
+    if len(queries) > 1:
+        report_note += '\nCombined name searches: ' + '; '.join(q['name'] for q in queries) + '. Each court/case is counted once. Grouping does not establish that names are the same person or legal entity.'
+        match_rows = list(dict.fromkeys(tuple([name, ' '.join(str(row.get(k) or '') for k in ('firstName', 'middleName', 'lastName', 'generation')).strip(),
+                           *[c.get(k, '') for k in ('caseNumber', 'caseTitle', 'court', 'district')]])
+                           for c in cases for row in c['sourceRows'] for name in row.get('_rocSearchNames', [])))
+        tables.append({'name': 'Search matches', 'file': 'search-matches.csv',
+                       'headers': ['Search name', 'Name in PCL', 'Case number', 'Case title', 'Court', 'District'], 'rows': match_rows})
     for table in tables:
         with (folder / table["file"]).open("w", encoding="utf-8-sig", newline="") as stream:
             writer = csv.writer(stream)

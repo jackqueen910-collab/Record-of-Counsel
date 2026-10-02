@@ -74,5 +74,6 @@ def build_index(records, court_labels=None):
                        "caseType": kind, "role": "", "team": "", "court": court_type,
                        "district": courts.get(court, court), "dateFiled": dates[0] if dates else "", "nature": nature,
                        "status": status, "pacerLink": link, "allCaseLinks": links,
-                       "warnings": warnings, "sourceRows": entries})
+                       "warnings": warnings, "sourceRows": entries,
+                       "matchedSearchNames": list(dict.fromkeys(n for r in entries for n in r.get('_rocSearchNames', []) if isinstance(n, str)))})
     return sorted(result, key=lambda r: (r["dateFiled"], r["district"], r["caseNumber"]), reverse=True)

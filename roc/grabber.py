@@ -12,7 +12,7 @@ from .claude import MODELS, analyze, analysis_key, estimate, payload
 from .document_download import document_key, download_document
 from .document_ledger import ExpenseLedger
 from .documents import DISCLAIMER, read_entries
-from .search import require_attorney
+from .search import require_attorney, counsel_aliases
 
 
 class DocumentGrabber:
@@ -37,8 +37,7 @@ class DocumentGrabber:
             raise RocError('Select one or more distinct cases.')
         cases = {c['key']: c for c in self.ws.cases(identifier)}
         reports = self.ws.completed_reports(identifier)
-        lawyer = self.ws.manifest(identifier)['config']['lawyer']
-        aliases = [lawyer['firstName'] + ' ' + lawyer['lastName'], *lawyer.get('aliases', [])]
+        aliases = counsel_aliases(self.ws.manifest(identifier)['config'])
         sources = []
         for key in keys:
             if key not in cases:

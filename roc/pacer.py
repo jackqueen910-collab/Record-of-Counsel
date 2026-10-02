@@ -136,9 +136,9 @@ class Session:
         return json.loads(path.read_text(encoding="utf-8"))
 
 
-def collect_index(session, criteria, store, delay=5, max_pages=1000, progress=None):
+def collect_index(session, criteria, store, delay=5, max_pages=1000, progress=None, spent_at_start=None):
     rows, total, seen_pages = [], None, set()
-    spent_at_start = store.spent
+    spent_at_start = store.spent if spent_at_start is None else spent_at_start
     for page in range(max_pages):
         store.checkpoint()
         if page and store.cached("pcl", {"criteria": criteria, "page": page}) is None:

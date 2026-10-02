@@ -27,7 +27,17 @@ def subject(config):
         raise RocError('Aliases must be a list of full names.')
     if kind == 'litigant' and aliases:
         raise RocError('Litigant aliases are not supported in this search step.')
-    return {'firstName': first.strip(), 'lastName': last.strip(), 'aliases': list(dict.fromkeys(a.strip() for a in aliases))}
+    additional = value.get('additionalNames', [])
+    if not isinstance(additional, list) or len(additional) > 30:
+        raise RocError('Add at most 30 additional names.')
+    names = []
+    for item in additional:
+        if not isinstance(item, dict) or set(item) - {'firstName', 'lastName'}:
+            raise RocError('Additional names need separate first and last/entity name fields.')
+        parsed = subject({'searchType': kind, ('lawyer' if kind == 'attorney' else 'litigant'): item})
+        names.append({k: parsed[k] for k in ('firstName', 'lastName')})
+    return {'firstName': first.strip(), 'lastName': last.strip(), 'aliases': list(dict.fromkeys(a.strip() for a in aliases)),
+            'additionalNames': names}
 
 
 def subject_name(config):
@@ -36,17 +46,30 @@ def subject_name(config):
 
 
 def counsel_aliases(config):
-    return [subject_name(config), *subject(config)['aliases']] if search_type(config) == 'attorney' else []
+    if search_type(config) != 'attorney':
+        return []
+    target = subject(config)
+    return list(dict.fromkeys([subject_name(config), *[' '.join((n['firstName'], n['lastName'])) for n in target['additionalNames']], *target['aliases']]))
 
 
-def search_criteria(config):
-    name = subject(config)
+def search_criteria(config, name=None):
+    name = subject(config) if name is None else name
     result = {'lastName': name['lastName'], 'partyType': 'aty' if search_type(config) == 'attorney' else 'pty'}
     if name['firstName']:
         result['firstName'] = name['firstName']
     if config.get('search'):
         result['courtCase'] = config['search']
     return result
+
+
+def search_plan(config):
+    """Skip identical trimmed query names, without guessing other equivalences."""
+    target = subject(config)
+    found = {}
+    for name in [target, *target['additionalNames']]:
+        key = (name['firstName'], name['lastName'])
+        found.setdefault(key, {'name': ' '.join(filter(None, key)), 'criteria': search_criteria(config, name)})
+    return list(found.values())
 
 
 def require_attorney(config):

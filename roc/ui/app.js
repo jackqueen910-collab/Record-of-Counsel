@@ -14,12 +14,39 @@ let docketBudgetsAvailable = false, clientReportsAvailable = false;
 let caseRows = [], facetChoices = {};
 let accountView = 'signed-out', accountGeneration = 0, authTarget = '';
 let searchMode = 'attorney', searchDrafts = {}, searchModesAvailable = false;
+let additionalNamesAvailable = false;
 const litigantRun = () => current?.searchType === 'litigant';
 const runName = run => run.subjectName || [run.lawyer?.firstName,run.lawyer?.lastName].filter(Boolean).join(' ');
+function additionalNameValues() {
+  return [...$('additional-names-list').children].map(row=>({lastName:row.querySelector('[name=additionalLastName]').value,firstName:row.querySelector('[name=additionalFirstName]').value}));
+}
+function updateSearchNameCount() {
+  const names = [{firstName:$('search-first').value,lastName:$('search-last').value},...additionalNameValues()];
+  const count = new Set(names.map(n=>JSON.stringify([n.firstName.trim(),n.lastName.trim()]))).size;
+  $('search-name-count').textContent = `${count} name search${count===1 ? '' : 'es'}${count<names.length ? ' · Identical names searched once' : ''}. Same court and date filters for every name.`;
+}
+function renderAdditionalNames(names=[]) {
+  $('additional-names-list').replaceChildren();
+  names.forEach((name,index)=>{
+    const row=node('fieldset',undefined,'additional-name-row'), legend=node('legend',`Additional name ${index+1}`), fields=node('div',undefined,'additional-name-fields');
+    row.append(legend);
+    for (const [key,label] of [['lastName',searchMode==='litigant' ? 'Last name / Entity name' : 'Last name'],['firstName','First name']]) {
+      const wrap=node('label',label), input=node('input');
+      input.name=key==='lastName' ? 'additionalLastName' : 'additionalFirstName'; input.value=name[key] || ''; input.autocomplete='off';
+      input.maxLength=key==='lastName' && searchMode==='litigant' ? 200 : 100; input.required=key==='lastName' || searchMode==='attorney';
+      if (!input.required) wrap.append(node('span',' optional','optional'));
+      input.addEventListener('input',updateSearchNameCount); wrap.append(input); fields.append(wrap);
+    }
+    const remove=node('button','Remove','text-button'); remove.type='button'; remove.setAttribute('aria-label',`Remove additional name ${index+1}`);
+    remove.addEventListener('click',()=>{const values=additionalNameValues();values.splice(index,1);renderAdditionalNames(values);setButtons();$('add-search-name').focus();});
+    fields.append(remove);row.append(fields);$('additional-names-list').append(row);
+  });
+  updateSearchNameCount();
+}
 function setSearchMode(mode, save=true) {
   if (mode === 'litigant' && !searchModesAvailable) return;
   const form = $('search-form');
-  if (save) searchDrafts[searchMode] = Object.fromEntries(['firstName','lastName','aliases'].map(k=>[k,form.elements[k].value]));
+  if (save) searchDrafts[searchMode] = {...Object.fromEntries(['firstName','lastName','aliases'].map(k=>[k,form.elements[k].value])),additionalNames:additionalNameValues()};
   searchMode = mode;
   const draft = searchDrafts[mode] || {}, litigant = mode === 'litigant';
   for (const field of ['firstName','lastName','aliases']) form.elements[field].value = draft[field] || '';
@@ -31,8 +58,10 @@ function setSearchMode(mode, save=true) {
   $('search-first').required = !litigant; $('search-first').placeholder = litigant ? 'Jane (leave blank for an entity)' : 'Marc';
   $('search-first-optional').hidden = !litigant; $('search-aliases').hidden = litigant; form.elements.aliases.disabled = litigant;
   $('litigant-search-note').hidden = !litigant; $('search-step').textContent = litigant ? 'Explore matches' : 'Choose dockets';
-  $('search-method').textContent = litigant ? 'Find cases involving a person or organization as a litigant, on either side. This first step provides the case index and downloads; litigant docket enrichment and Document Grabber will follow.' : 'The API search uses the first and last names above. Aliases help match counsel on selected dockets; they do not submit extra searches.';
-  $('search-budget-note').textContent = litigant ? 'This cap covers the litigant case search only. Narrow the dates or courts to control cost. No dockets or documents are purchased.' : 'This cap covers the case search only. Docket reports are optional: choose cases and set a separate cap afterward.';
+  $('search-method').textContent = litigant ? 'Find cases involving a person or organization as a litigant, on either side. This first step provides the case index and downloads; litigant docket enrichment and Document Grabber will follow.' : 'Searches use the supplied first and last names. Additional names expand the API search and help match counsel on selected dockets.';
+  $('additional-names-help').textContent = litigant ? 'Add spelling variants, former names or related entities. This combines their case results without treating them as the same person or company.' : 'Add another first or last name used by this attorney. These names also help match counsel on retrieved dockets.';
+  $('search-budget-note').textContent = litigant ? 'One shared cap for all name searches. Narrow the dates or courts to control cost. No dockets or documents are purchased.' : 'One shared cap for all name searches. Docket reports are optional: choose cases and set a separate cap afterward.';
+  renderAdditionalNames(draft.additionalNames || []);
 }
 const alphabet = new Intl.Collator('en', {sensitivity:'base', numeric:true});
 const facetDefinitions = [
@@ -113,6 +142,9 @@ function setButtons() {
   $('stop-roc').disabled = shuttingDown;
   for (const id of ['auth-username','auth-password','auth-otp','auth-client','auth-redact','auth-submit']) $(id).disabled = connection.connecting || authSending || authSubmitted || shuttingDown;
   $('search-submit').disabled = busy; $('demo').disabled = busy;
+  $('add-search-name').disabled = busy || !additionalNamesAvailable || additionalNameValues().length >= 30;
+  $('add-search-name').title = additionalNamesAvailable ? 'Up to 30 additional names' : 'Stop ROC and reopen Start ROC to enable additional names';
+  for (const control of $('additional-names-list').querySelectorAll('input,button')) control.disabled=busy;
   $('search-attorney').disabled = busy; $('search-litigant').disabled = busy || !searchModesAvailable;
   $('search-litigant').title = searchModesAvailable ? 'Search a person or entity as a party' : 'Stop ROC and reopen Start ROC to enable litigant search';
   $('preview').disabled = busy || !docketBudgetsAvailable || !current || !current.indexReady || selected.size === 0;
@@ -145,6 +177,7 @@ async function refresh() {
     adoptAccountView(listing.connection.viewId,authSubmitted && listing.connection.username === authTarget);
     activeRun = listing.active; connection = listing.connection;
     searchModesAvailable = listing.searchModesVersion === 1;
+    additionalNamesAvailable = listing.additionalNamesVersion === 1;
     capStoppedRun = listing.jobs.find(j=>j.docketCapStopped && j.id !== currentId) || null;
     $('other-cap-stop').hidden = !capStoppedRun;
     if (capStoppedRun) $('other-cap-stop-text').textContent = `Docket retrieval for ${runName(capStoppedRun)} stopped at its spending limit. Purchased reports and results are saved.`;
@@ -193,9 +226,9 @@ function renderRun() {
   for (const id of ['view-clients','document-launch','docket-selection']) $(id).hidden = litigantRun();
   $('case-filter-help').textContent = 'Options and case counts come from all results in this saved run. Check any values within a category; cases must match each category you use. ' + (litigantRun() ? 'Party names are the matched names returned by PCL.' : 'Party names reflect saved dockets and name rules.');
   for (const dir of ['asc','desc']) $('sort').querySelector(`[value="party-${dir}"]`).textContent = `${litigantRun() ? 'Litigant' : 'Client'} name · ${dir === 'asc' ? 'A–Z' : 'Z–A'}`;
-  $('run-help').textContent = 'Nature of Case clips long entries. Click a case to read the full values and source findings.' + (litigantRun() ? '' : ' Docket retrieval does not buy filings; use Document Grabber separately for selected PDFs.');
+  $('run-help').textContent = (!r.indexReady && r.cases.length ? 'Partial results from completed name searches. Resume to finish the remaining searches; exports and docket selection become available when the index is complete. ' : '') + 'Nature of Case clips long entries. Click a case to read the full values and source findings.' + (litigantRun() ? '' : ' Docket retrieval does not buy filings; use Document Grabber separately for selected PDFs.');
   const dates = r.search.dateFiledFrom || r.search.dateFiledTo ? `${r.search.dateFiledFrom || 'Any date'} → ${r.search.dateFiledTo || 'Present'}` : 'All filing dates';
-  $('run-scope').textContent = `${r.search.courtId?.length ? r.search.courtId.join(', ').toUpperCase() : 'All federal courts'} · ${dates} · Saved ${r.createdUtc.slice(0,10)}`;
+  $('run-scope').textContent = `${r.search.courtId?.length ? r.search.courtId.join(', ').toUpperCase() : 'All federal courts'} · ${dates}${r.searchQueries?.length > 1 ? ` · ${r.searchQueries.length} name searches` : ''} · Saved ${r.createdUtc.slice(0,10)}`;
   $('stat-cases').textContent = r.caseCount.toLocaleString(); $('stat-dockets').textContent = r.enrichedCount.toLocaleString();
   $('stat-spent').textContent = money(r.spentCents); $('stat-cap').textContent = money(r.budgetCents);
   const states = {running:'IN PROGRESS',ready:'READY',stopped:'STOPPED',interrupted:'INTERRUPTED',new:'NEW'};
@@ -357,6 +390,7 @@ function showCase(c) {
   $('detail-parties-heading').textContent = litigantRun() ? 'Matched litigants (PCL)' : 'Parties & counsel matches';
   $('detail-number').textContent = c.caseNumber; $('detail-title').textContent = c.caseTitle; $('detail-nature').textContent = c.nature;
   $('detail-fields').replaceChildren();
+  if (c.matchedSearchNames?.length) $('detail-fields').append(node('p','Found by search: '+c.matchedSearchNames.join('; ')));
   for (const [key,value] of [['District',c.district],['Filed',c.dateFiled],['Role',c.role || c.team || (litigantRun() ? 'See source party-role codes below' : 'Unresolved — select this docket to investigate')],['Status',c.status],...(litigantRun() ? [] : [['Represented parties',c.representedParties.join('; ') || 'Not established from the case index']])]) $('detail-fields').append(node('p',`${key}: ${value}`));
   $('detail-parties').replaceChildren();
   for (const p of c.indexedParties || []) $('detail-parties').append(node('p',`${p.name} · PCL party role: ${p.role || 'Not supplied'}`));
@@ -439,6 +473,12 @@ async function download(file) {
 }
 bind('home','click',e => {e.preventDefault(); showSearch();}); bind('new-search','click',showSearch); bind('new-from-run','click',showSearch);
 bind('view-cap-stop','click',()=>capStoppedRun && openRun(capStoppedRun.id));
+bind('add-search-name','click',()=>{
+  if (!additionalNamesAvailable) throw new Error('Restart ROC to enable additional names.');
+  const names=additionalNameValues(); if(names.length>=30) return;
+  renderAdditionalNames([...names,{}]);setButtons();$('additional-names-list').lastElementChild.querySelector('input').focus();
+});
+for (const id of ['search-first','search-last']) bind(id,'input',updateSearchNameCount);
 for (const mode of ['attorney','litigant']) {
   bind('search-'+mode,'click',()=>setSearchMode(mode));
   bind('search-'+mode,'keydown',e=>{if (['ArrowLeft','ArrowRight','Home','End'].includes(e.key)) {e.preventDefault(); const next=e.key==='Home' ? 'attorney' : e.key==='End' ? 'litigant' : mode==='attorney' ? 'litigant' : 'attorney';setSearchMode(next);$('search-'+next).focus();}});
@@ -446,6 +486,8 @@ for (const mode of ['attorney','litigant']) {
 bind('search-form','submit',async e => {
   e.preventDefault(); const data = new FormData(e.target);
   const values = {searchType:searchMode,firstName:data.get('firstName'),lastName:data.get('lastName'),aliases:(data.get('aliases') || '').split('\n').map(s=>s.trim()).filter(Boolean),courts:data.getAll('courts'),dateFiledFrom:data.get('dateFiledFrom'),dateFiledTo:data.get('dateFiledTo'),budgetCents:cents(data.get('budget'))};
+  const additional=additionalNameValues();
+  if (additional.length) {if (!additionalNamesAvailable) throw new Error('Restart ROC to enable additional names.');values.additionalNames=additional;}
   if (!searchModesAvailable) {if (searchMode === 'litigant') throw new Error('Stop ROC and reopen Start ROC to enable litigant search.'); delete values.searchType;}
   await connectedAction('Connect to run the case search you just requested.', () => action(async () => {const result = await api('/api/runs', values); await openRun(result.id);}));
 });

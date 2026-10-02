@@ -8,6 +8,8 @@ Both modes use the existing official PCL `POST /pcl-public-api/rest/parties/find
 
 Names use PCL's default prefix matching. There is no automatic variant expansion or entity consolidation, and no party-role filter, so either side and other litigant roles can be returned. These are cases involving matched indexed names, not a verified list of claims filed by a particular unique person/entity. Source party-role codes are preserved without guessing that every court uses them consistently. Attorney records unexpectedly returned in a litigant search cause a review stop; ROC does not fall back to another search.
 
+Both tabs now accept explicit **Additional names**. Enter each alternate person/entity in its own first/last-name fields; ROC searches them separately under the same cap and combines their case results. Original names and the queries that found them are preserved. It does not infer variants, corporate relationships or identity. See [additional names](additional-names.md).
+
 The [official August 2026 PCL API guide](https://pacer.uscourts.gov/sites/default/files/files/PCL-API-08-2026-1.pdf) documents party requests/results and entity-name use in `lastName` (pp. 13–20 and 50–55). Searches run only after explicit submission and sign-in, under the entered search cap. All development tests use synthetic responses; a live party-search acceptance check has not been run.
 
 ## Saved results and exports
@@ -25,7 +27,8 @@ Litigant searches can pause/resume, reopen after sign-in, rebuild exports from s
 ```json
 {
   "searchType": "litigant",
-  "litigant": {"lastName": "Example Corporation", "firstName": ""},
+  "litigant": {"lastName": "Example Corporation", "firstName": "",
+                "additionalNames": [{"lastName": "The Example Company", "firstName": ""}]},
   "search": {"dateFiledFrom": "2020-01-01"},
   "runDirectory": "runs/example-litigant",
   "budgetCents": 1000

@@ -122,6 +122,7 @@ class InterfaceBrowserTests(unittest.TestCase):
                     page.goto(url)
                     page.get_by_label("First name", exact=True).fill("Jordan")
                     page.get_by_label("Last name", exact=True).fill("Lawyer")
+                    page.locator('#search-aliases summary').click()
                     page.locator('textarea[name="aliases"]').fill("Jordan A. Lawyer")
                     page.get_by_text("Courts & filing dates", exact=False).click()
                     page.get_by_label("Filed on or after").fill("2020-01-01")
