@@ -96,7 +96,7 @@ class AccountBrowserTests(unittest.TestCase):
                     expect(page.locator('#run-view')).not_to_be_visible()
                     self.assertEqual(page.evaluate('currentId'), None)
                     # A stale tab cannot accidentally apply an action in the newly selected account.
-                    self.assertTrue(tab.evaluate('api("/api/demo",{}).then(()=>false,e=>e.message.includes("account changed"))'))
+                    self.assertTrue(tab.evaluate('api("/api/name-rules/preview",{}).then(()=>false,e=>e.message.includes("account changed"))'))
                     tab.evaluate('refresh()')
                     expect(tab.locator('#documents-dialog')).not_to_be_visible()
                     self.assertEqual(tab.evaluate('[currentId,docRun,docState,analysisQuote,purchaseQuote]'), [None]*5)
@@ -134,7 +134,7 @@ class AccountBrowserTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder, contextlib.redirect_stdout(io.StringIO()), \
                 patch.object(Session, 'login', side_effect=fake_login) as login:
             hub = Accounts(folder)
-            server, url = make_server(hub)
+            server, url = make_server(hub, enable_demo=True)
             thread = threading.Thread(target=server.serve_forever, daemon=True)
             thread.start()
             try:

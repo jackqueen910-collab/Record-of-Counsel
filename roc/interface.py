@@ -15,7 +15,7 @@ from .courts import DISTRICT_COURTS
 from .accounts import Accounts
 
 
-def make_server(workspace, port=0):
+def make_server(workspace, port=0, *, enable_demo=False):
     token = secrets.token_urlsafe(32)
     stopping = threading.Event()
 
@@ -84,7 +84,8 @@ def make_server(workspace, port=0):
                     return self.send(200, files("roc").joinpath("ui", asset).read_bytes(), kind)
                 parts = path.strip("/").split("/")
                 if path == "/api/runs":
-                    return self.send(200, workspace.list(self.cookie()) if isinstance(workspace, Accounts) else workspace.list())
+                    listing = workspace.list(self.cookie()) if isinstance(workspace, Accounts) else workspace.list()
+                    return self.send(200, listing | {'demoEnabled': enable_demo})
                 if path == "/api/connection":
                     status = workspace.status(self.cookie()) if isinstance(workspace, Accounts) else workspace.connection.status()
                     return self.send(200, {"app": "ROC", **status, "stopping": workspace.stopping, "closed": workspace.closed})
@@ -150,6 +151,8 @@ def make_server(workspace, port=0):
                         threading.Thread(target=shutdown, daemon=True).start()
                     return self.send(200, {"stopping": True})
                 if parts == ["api", "demo"]:
+                    if not enable_demo:
+                        return self.send(404, {'error': 'Demo is available only in the development test interface.'})
                     if isinstance(workspace, Accounts):
                         self.new_cookie, identifier = workspace.demo(self.cookie(), self.headers.get('X-ROC-View', ''))
                         return self.send(200, {'id': identifier, 'viewId': workspace.status(self.new_cookie)['viewId']})

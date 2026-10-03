@@ -15,6 +15,7 @@ let caseRows = [], facetChoices = {};
 let accountView = 'signed-out', accountGeneration = 0, authTarget = '';
 let searchMode = 'attorney', searchDrafts = {}, searchModesAvailable = false;
 let additionalNamesAvailable = false;
+let demoAvailable = false;
 const litigantRun = () => current?.searchType === 'litigant';
 const runName = run => run.subjectName || [run.lawyer?.firstName,run.lawyer?.lastName].filter(Boolean).join(' ');
 function additionalNameValues() {
@@ -141,7 +142,8 @@ function setButtons() {
   $('connection-status').textContent = stopped ? 'ROC stopped' : shuttingDown ? 'Stopping ROC…' : connection.connecting ? 'Connecting…' : connection.signedIn ? `${connection.username} · ${connection.connected ? 'PACER connected' : 'Saved searches available'}` : connection.connected ? 'PACER connected' : 'Sign-in required';
   $('stop-roc').disabled = shuttingDown;
   for (const id of ['auth-username','auth-password','auth-otp','auth-client','auth-redact','auth-submit']) $(id).disabled = connection.connecting || authSending || authSubmitted || shuttingDown;
-  $('search-submit').disabled = busy; $('demo').disabled = busy;
+  $('search-submit').disabled = busy; $('demo').disabled = busy || !demoAvailable;
+  $('demo-callout').hidden = !demoAvailable;
   $('add-search-name').disabled = busy || !additionalNamesAvailable || additionalNameValues().length >= 30;
   $('add-search-name').title = additionalNamesAvailable ? 'Up to 30 additional names' : 'Stop ROC and reopen Start ROC to enable additional names';
   for (const control of $('additional-names-list').querySelectorAll('input,button')) control.disabled=busy;
@@ -178,6 +180,7 @@ async function refresh() {
     activeRun = listing.active; connection = listing.connection;
     searchModesAvailable = listing.searchModesVersion === 1;
     additionalNamesAvailable = listing.additionalNamesVersion === 1;
+    demoAvailable = listing.demoEnabled === true;
     capStoppedRun = listing.jobs.find(j=>j.docketCapStopped && j.id !== currentId) || null;
     $('other-cap-stop').hidden = !capStoppedRun;
     if (capStoppedRun) $('other-cap-stop-text').textContent = `Docket retrieval for ${runName(capStoppedRun)} stopped at its spending limit. Purchased reports and results are saved.`;
@@ -491,7 +494,7 @@ bind('search-form','submit',async e => {
   if (!searchModesAvailable) {if (searchMode === 'litigant') throw new Error('Stop ROC and reopen Start ROC to enable litigant search.'); delete values.searchType;}
   await connectedAction('Connect to run the case search you just requested.', () => action(async () => {const result = await api('/api/runs', values); await openRun(result.id);}));
 });
-bind('demo','click',() => action(async () => {const result = await api('/api/demo',{}); await openRun(result.id);}));
+bind('demo','click',() => {if (demoAvailable) return action(async () => {const result = await api('/api/demo',{}); await openRun(result.id);});});
 for (const view of ['cases','clients']) bind('view-'+view,'click',() => setReportView(view));
 bind('party-filter','input',() => {partyPage = 0; renderParties();});
 bind('party-sort','change',() => {partyPage = 0; renderParties();});
@@ -521,7 +524,7 @@ function updateDocketCap() {
   if (!quote) return;
   let cap = null; try {cap = cents($('docket-cap').value);} catch {}
   $('quote-budget').textContent = `${money(quote.spentCents)} already charged for this run. This new cap is additional to those charges and replaces any unused allowance from the previous cap.`;
-  $('docket-cap-message').textContent = !quote.newReports ? 'No new charges: this selection uses saved or demo reports.' : cap === null ? 'Enter a fresh cap to enable retrieval. Opening this preview buys nothing.' : cap < 300 ? 'At least $3 is needed to reserve the first new report.' : `At most ${money(cap)} in new charges authorized. ${cap < quote.maximumAdditionalCents ? 'Your cap may cover only part of this list. ' : ''}ROC stops and shows a notice before the next $3 reservation would exceed your cap; it may stop with less than $3 unspent. Total run limit: ${money(quote.spentCents + cap)}. Resuming keeps this limit.`;
+  $('docket-cap-message').textContent = !quote.newReports ? 'No new charges: this selection uses saved reports.' : cap === null ? 'Enter a fresh cap to enable retrieval. Opening this preview buys nothing.' : cap < 300 ? 'At least $3 is needed to reserve the first new report.' : `At most ${money(cap)} in new charges authorized. ${cap < quote.maximumAdditionalCents ? 'Your cap may cover only part of this list. ' : ''}ROC stops and shows a notice before the next $3 reservation would exceed your cap; it may stop with less than $3 unspent. Total run limit: ${money(quote.spentCents + cap)}. Resuming keeps this limit.`;
   $('docket-cap-message').classList.toggle('cap-short',quote.newReports > 0 && cap !== null && cap < 300); setButtons();
 }
 async function previewDockets(keys, allMissing = false) {
@@ -532,7 +535,7 @@ async function previewDockets(keys, allMissing = false) {
   $('quote-heading').textContent = allMissing ? 'Run dockets to identify clients' : 'Your docket selection';
   $('quote-scope').textContent = allMissing ? 'Default: all supported cases in this search without parsed dockets, newest filed first. This includes cases outside your current filters. Choose specific cases below to narrow the list.' : 'ROC retrieves cases in the order listed below until they are complete or the spending cap stops the run.';
   $('revise-dockets').textContent = allMissing ? 'Choose specific cases' : 'Back to case selection';
-  $('quote-text').textContent = `${quote.selectedCount} selected · ${quote.newReports} new reports · ${quote.cachedReports} saved or demo reports`;
+  $('quote-text').textContent = `${quote.selectedCount} selected · ${quote.newReports} new reports · ${quote.cachedReports} saved reports`;
   $('quote-cost').textContent = money(quote.maximumAdditionalCents);
   $('docket-cap').value = quote.newReports ? '' : '0.00';
   $('docket-cap').min = quote.newReports ? '3' : '0';

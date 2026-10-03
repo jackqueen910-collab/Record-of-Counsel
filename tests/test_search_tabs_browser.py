@@ -46,6 +46,11 @@ class SearchTabsBrowserTests(unittest.TestCase):
                     page.route('**/*', route)
                     page.on('pageerror', lambda error:errors.append(str(error)))
                     page.goto(url)
+                    # Normal launches do not offer or create demo searches.
+                    expect(page.locator('#demo-callout')).not_to_be_visible()
+                    self.assertTrue(page.evaluate('api("/api/demo",{}).then(()=>false,e=>e.message.includes("only in the development"))'))
+                    self.assertEqual(hub.guests, [])
+                    self.assertEqual(queries, [])
                     expect(page.get_by_role('tab', name='Search Attorney')).to_have_attribute('aria-selected','true')
                     self.assertEqual(page.locator('.search-names input').evaluate_all('(xs)=>xs.map(x=>x.name)'), ['lastName','firstName'])
                     expect(page.get_by_label('Last name', exact=True)).to_be_visible()

@@ -336,7 +336,7 @@ class InterfaceTests(unittest.TestCase):
     def test_loopback_token_origin_and_path_boundaries(self):
         with tempfile.TemporaryDirectory() as folder, contextlib.redirect_stdout(io.StringIO()):
             ws = Workspace(folder)
-            server, url = make_server(ws)
+            server, url = make_server(ws, enable_demo=True)
             thread = threading.Thread(target=server.serve_forever, daemon=True)
             thread.start()
             token = urlsplit(url).fragment

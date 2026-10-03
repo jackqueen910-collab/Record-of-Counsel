@@ -288,7 +288,7 @@ class InterfaceBrowserTests(unittest.TestCase):
                 patch("roc.pacer.Session.prompt", side_effect=AssertionError("No PACER login")), \
                 patch("roc.pacer.request_json", side_effect=AssertionError("No PACER requests")):
             ws = Workspace(folder)
-            server, url = make_server(ws)
+            server, url = make_server(ws, enable_demo=True)
             thread = threading.Thread(target=server.serve_forever, daemon=True)
             thread.start()
             try:
@@ -309,7 +309,7 @@ class InterfaceBrowserTests(unittest.TestCase):
                     page.on("pageerror", lambda error: errors.append(str(error)))
                     page.goto(url)
                     expect(page.get_by_role("heading", name="Start with a name. Find the cases.")).to_be_visible()
-                    page.get_by_role("button", name="Open free demo").click()
+                    page.get_by_role("button", name="Open development demo").click()
                     expect(page.locator("#run-status")).to_have_text("READY", timeout=15000)
                     expect(page.locator("#stat-dockets")).to_have_text("0")
                     expect(page.locator("#case-rows tr")).to_have_count(1)
