@@ -20,6 +20,27 @@ CIVIL_TEAMS = {"Plaintiff": "Civil Plaintiff", "Defendant": "Civil Defense", **{
 TEAM_VALUES = ["Prosecution", "Criminal Defense", *CIVIL_TEAMS.values(), "Multiple roles"]
 ROLE_VALUES = TEAM_VALUES  # Keep the old import for saved integrations.
 NOT_LISTED = "Not listed in source"
+PARTY_ROLE = re.compile(r"(Defendant|Plaintiff|Interested Party|Petitioner|Respondent|Movant|Debtor|Creditor|Claimant|Intervenor|Amicus|Mediator|Notice Party)(?:\s*\((\d+)\))?", re.I)
+
+
+def party_heading(cells, following):
+    """Recognize a boundary before interpreting its role or reading any counts.
+
+    Underlining is presentation, not identity. Unknown headings are retained
+    only when followed by a recognizable party/counsel row, not count sections.
+    """
+    values = [clean(c.text()) for c in cells]
+    if not values[0] or any(values[1:]):
+        return None
+    role = PARTY_ROLE.fullmatch(values[0])
+    if role:
+        return role[1].title(), role[2], False
+    next_values = [clean(c.text()) for c in following]
+    if (len(following) >= 3 and "represented" in next_values[1].lower()
+            and any(following[0].walk("b"))):
+        # Even a role we cannot interpret must end the previous party's counts.
+        return values[0], None, True
+    return None
 
 
 class Node:
@@ -143,18 +164,25 @@ def parse_report(html):
               "heading": heading, "sha256": hashlib.sha256(html.encode()).hexdigest(),
               "parties": [], "warnings": []}
     party, section = None, None
-    for row in root.walk("tr"):
-        cells = [c for c in row.children if isinstance(c, Node) and c.tag in ("td", "th")]
-        if not cells:
-            continue
+    rows = [[c for c in row.children if isinstance(c, Node) and c.tag in ("td", "th")]
+            for row in root.walk("tr")]
+    rows = [cells for cells in rows if cells and not any(list(c.walk("tr")) for c in cells)]
+    for index, cells in enumerate(rows):
         values = [clean(c.text()) for c in cells]
         if len(values) >= 3 and values[0] == "Date Filed" and "Docket Text" in values[-1]:
             break
-        role = re.fullmatch(r"(Defendant|Plaintiff|Interested Party|Petitioner|Respondent|Movant|Debtor|Creditor|Claimant|Intervenor|Amicus|Mediator|Notice Party)(?:\s*\((\d+)\))?", values[0], re.I)
-        if role and any(cells[0].walk("u")):
-            party = {"role": role[1].title(), "defendantNumber": role[2], "name": "", "counsel": [], "counts": [], "warnings": []}
+        boundary = party_heading(cells, rows[index + 1] if index + 1 < len(rows) else [])
+        if boundary:
+            role, number, unfamiliar = boundary
+            # CM/ECF service-list contacts are not a party/client relationship.
+            if role.casefold() == "svc":
+                party, section = None, None
+                continue
+            party = {"role": role, "defendantNumber": number, "name": "", "counsel": [], "counts": [], "warnings": []}
             result["parties"].append(party)
             section = None
+            if unfamiliar:
+                result["warnings"].append("Unfamiliar party role: " + role)
             continue
         if party is None:
             continue
@@ -260,7 +288,8 @@ def enrich(report, aliases):
         result["fieldStatus"]["nature"] = "needs-review"
         return finish()
     if report["caseType"] == "Civil":
-        result["nature"] = report["natureOfSuit"] or NOT_LISTED
+        # Missing source text is not a replacement value for a known PCL NOS.
+        result["nature"] = report["natureOfSuit"]
         result["fieldStatus"]["nature"] = "resolved" if report["natureOfSuit"] else "missing-source"
         if not report["natureOfSuit"]:
             items.append(issue("missing-source", "nature-not-listed", "Civil Nature of Suit is not listed.", field="nature"))

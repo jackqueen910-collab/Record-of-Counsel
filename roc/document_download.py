@@ -18,15 +18,18 @@ from .document_ledger import ExpenseLedger
 from .pacer import NoRedirect
 
 
-def purchase_form(raw, url, number, document_number):
+def price_form(raw, url):
+    """Accept only a recognized, unsubmitted price-confirmation screen."""
     root = Tree(raw).root
     text = clean(root.text())
+    if re.search(r'Transaction\s+Receipt', text, re.I) or list(root.walk('iframe')) or list(root.walk('object')):
+        raise RocError('Unexpected document receipt or viewer. Charge unresolved; no retry.')
     if re.search(r'\btranscript\b', text, re.I):
         raise RocError('Transcript purchase is outside Document Grabber’s scope.')
     case = re.search(r'Case\s+Number\s*:\s*(\S+)', text, re.I)
     doc = re.search(r'Document\s+Number\s*:\s*(\d+)(?![\d-])', text, re.I)
     costs = re.findall(r'\bCost\s*:\s*\$?\s*(\d+\.\d{2})\b', text, re.I)
-    if (not case or normalize_case_number(case[1]) != number or not doc or doc[1] != document_number or
+    if (not case or not doc or
             len(costs) != 1 or not re.search(r'Billable\s+Pages\s*:\s*\d+', text, re.I)):
         raise RocError('Unfamiliar document price screen or wrong case/document. No purchase submitted.')
     price = int(Decimal(costs[0]) * 100)
@@ -67,7 +70,15 @@ def purchase_form(raw, url, number, document_number):
         if name in fields:
             raise RocError('Duplicate purchase field. No purchase submitted.')
         fields[name] = submit[0].attrs.get('value', '')
-    return {'url': action, 'fields': fields, 'priceCents': price}
+    return {'url': action, 'fields': fields, 'priceCents': price,
+            'caseNumber': normalize_case_number(case[1]), 'documentNumber': doc[1]}
+
+
+def purchase_form(raw, url, number, document_number):
+    form = price_form(raw, url)
+    if form['caseNumber'] != number or form['documentNumber'] != document_number:
+        raise RocError('Wrong case/document on price screen. No purchase submitted.')
+    return form
 
 
 class CourtDocumentHTTP:
@@ -131,15 +142,16 @@ def download_document(root, source, candidate, session, checkpoint=lambda: None,
     landing = root / 'prices' / (key + '.html')
     landing.parent.mkdir(parents=True, exist_ok=True)
     landing.write_bytes(raw)
+    t['priceFile'] = str(landing.relative_to(root))
+    ledger.save()
     if raw.startswith(b'%PDF-'):
         raise RocError('Unexpected direct PDF before a price confirmation. Saved response; charge unresolved. No retry.')
-    try:
-        form = purchase_form(raw.decode('utf-8', errors='replace'), url, source['caseNumber'], candidate['number'])
-    except RocError:
-        # A received HTML landing page was not submitted; a future explicit
-        # attempt after an adapter fix can reread this nonbillable price screen.
+    # Unknown HTML may be a charged viewer/receipt. Keep its reservation and
+    # evidence, just as for a direct PDF; never assume every GET is unbilled.
+    form = price_form(raw.decode('utf-8', errors='replace'), url)
+    if form['caseNumber'] != source['caseNumber'] or form['documentNumber'] != candidate['number']:
         ledger.not_submitted(t)
-        raise
+        raise RocError('Wrong case/document on price screen. No purchase submitted.')
     t.update(priceCents=form['priceCents'], priceFile=str(landing.relative_to(root)))
     ledger.save()
     try:
