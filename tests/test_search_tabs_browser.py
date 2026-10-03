@@ -121,6 +121,15 @@ class SearchTabsBrowserTests(unittest.TestCase):
                     expect(page.locator('#detail-parties')).to_contain_text('PCL party role: dft')
                     expect(page.locator('#detail-fields')).to_contain_text('Found by search: Acme Corporation; The Acme Company')
                     page.get_by_role('button', name='Close case', exact=True).click()
+                    page.locator('#result-filters>summary').click()
+                    page.locator('[data-facet="party"]>summary').click()
+                    expect(page.locator('[data-facet="role"]')).to_have_count(0)
+                    expect(page.locator('[data-facet="party"]')).to_contain_text('Uses matched litigants returned by PCL')
+                    page.get_by_role('searchbox',name='Find Party name options').fill('Acme')
+                    page.get_by_role('checkbox',name='Party name: Acme Corporation',exact=True).check()
+                    page.get_by_role('combobox',name='Party role',exact=True).select_option(label='Defendant')
+                    expect(page.locator('#case-rows tr')).to_have_count(1)
+                    self.assertEqual(len(queries),2)  # Filtering saved API results submits no searches.
                     with page.expect_download() as download:
                         page.get_by_role('button',name='Excel ↓',exact=True).click()
                     self.assertEqual(download.value.suggested_filename,'case-index.xlsx')

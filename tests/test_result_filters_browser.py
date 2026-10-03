@@ -58,6 +58,102 @@ def browser_fixture(cases):
 
 @unittest.skipUnless(os.environ.get('ROC_BROWSER_TESTS') == '1','Set ROC_BROWSER_TESTS=1')
 class ResultFilterBrowserTests(unittest.TestCase):
+    def test_party_name_and_role_match_same_appearance_with_counts_and_groups(self):
+        from playwright.sync_api import expect
+        rows=[case(i,f'Case {i}','nysdc','2024-01-01',['3M Company'],'Contract') for i in range(1,6)]
+        rows[0]['role']='Civil Plaintiff'  # Attorney role must not supply the party's role.
+        rows[0]['enrichment']['partyDetails'].append({'name':'Acme','role':'Plaintiff','matchedCounsel':[]})
+        rows[1]['enrichment']['partyDetails'][0]['role']='Plaintiff'
+        rows[1]['enrichment']['partyDetails'].append({'name':'Acme','role':'Defendant','matchedCounsel':[]})
+        rows[2]['enrichment']['partyDetails'] *= 2  # Repeated source block counts once.
+        rows[3]['enrichment']['partyDetails']=[{'name':'3M Subsidiary','role':'Counter Defendant','matchedCounsel':['Jordan Lawyer']}]
+        rows[4]['enrichment']['partyDetails'][0]['role']=''
+        rows.append(case(6,'3M Company v. Acme','nysdc','2024-01-01',[],'Contract'))  # Caption is not evidence.
+        with browser_fixture(rows) as (page,ws,identifier,path,evidence,errors,blocked,mutations):
+            numbers=page.locator('#case-rows td:nth-child(2)>button')
+            page.locator('#result-filters>summary').click()
+            page.locator('[data-facet="party"]>summary').click()
+            query=page.get_by_role('searchbox',name='Find Party name options')
+            role=page.get_by_role('combobox',name='Party role',exact=True)
+            query.fill('3m')
+            company=page.get_by_role('checkbox',name='Party name: 3M Company',exact=True)
+            expect(company.locator('..').locator('small')).to_have_text('4')
+            # Typing only finds options; it does not silently change the case list.
+            expect(numbers).to_have_count(6)
+            company.check()
+            role.select_option(label='Defendant')
+            expect(numbers).to_have_text(['1:24-cv-00001','1:24-cv-00003'])
+            expect(company.locator('..').locator('small')).to_have_text('2')
+            expect(page.locator('#active-filters')).to_contain_text('Party role: Defendant')
+            query.fill('Acme')
+            expect(company).to_be_visible()  # Selection stays visible outside typed suggestions.
+            page.get_by_role('checkbox',name='Party name: Acme',exact=True).check()
+            expect(numbers).to_have_text(['1:24-cv-00001','1:24-cv-00002','1:24-cv-00003'])
+            page.get_by_role('button',name='Remove Party name: Acme',exact=True).click()
+            role.select_option(label='Plaintiff')
+            expect(numbers).to_have_text(['1:24-cv-00002'])
+            role.select_option(label='Not recorded')
+            expect(numbers).to_have_text(['1:24-cv-00005'])
+            role.select_option(label='Counter Defendant')
+            expect(numbers).to_have_count(0)  # A subsidiary is not silently the same entity.
+            page.get_by_role('button',name='Remove Party name: 3M Company',exact=True).click()
+            expect(numbers).to_have_text(['1:24-cv-00004'])  # Role alone matches any named party.
+            page.get_by_role('button',name='Remove Party role: Counter Defendant',exact=True).click()
+            expect(role).to_have_value('')
+            expect(numbers).to_have_count(6)
+            query.fill('3M')
+            company.check()
+            request={'revision':0,'operation':'save','rule':{'label':'3M Group','kind':'organization-group','names':['3M Company','3M Subsidiary']}}
+            _,proposed=ws.name_rules.propose(request);ws.name_rules.commit(request,proposed)
+            group=page.get_by_role('checkbox',name='Party name: 3M Group',exact=True)
+            expect(group).to_be_visible(timeout=10000)
+            expect(numbers).to_have_count(0)  # Retain old choice at zero instead of broadening.
+            expect(company.locator('..').locator('small')).to_have_text('0')
+            page.locator('#clear-filters').click()
+            query.fill('subsidiary')
+            expect(group).to_be_visible()
+            expect(group.locator('..')).to_contain_text('Includes: 3M Subsidiary')
+            group.check()
+            role.select_option(label='Plaintiff')
+            expect(numbers).to_have_text(['1:24-cv-00002'])
+            role.select_option(label='Defendant')
+            expect(numbers).to_have_text(['1:24-cv-00001','1:24-cv-00003'])
+            role.select_option(label='Counter Defendant')
+            expect(numbers).to_have_text(['1:24-cv-00004'])
+            capture=os.environ.get('ROC_UI_SCREENSHOTS')
+            if capture:
+                Path(capture).mkdir(parents=True,exist_ok=True)
+                page.screenshot(path=str(Path(capture)/'party-picker.png'),full_page=True)
+                page.set_viewport_size({'width':480,'height':900})
+                page.screenshot(path=str(Path(capture)/'party-picker-mobile.png'),full_page=True)
+                self.assertLessEqual(page.evaluate('document.documentElement.scrollWidth'),480)
+            page.locator('#clear-filters').click()
+            expect(role).to_have_value('')
+            expect(query).to_have_value('')
+            expect(numbers).to_have_count(6)
+            self.assertEqual(ws.receipts(identifier)['spentCents'],0)
+            self.assertEqual((errors,blocked,mutations),([],[],[]))
+
+    def test_pcl_roles_unknown_codes_and_multiple_roles_stay_attached_to_names(self):
+        from playwright.sync_api import expect
+        rows=[case(i,f'Case {i}','nysdc','2024-01-01',[],'Contract') for i in range(1,6)]
+        for row,role in zip(rows,['dft','pla','pla; dft','custom-code','']):
+            row['indexedParties']=[{'name':'Acme','role':role},{'name':'Other Entity','role':'dft'}]
+        with browser_fixture(rows) as (page,ws,identifier,path,evidence,errors,blocked,mutations):
+            page.locator('#result-filters>summary').click()
+            page.locator('[data-facet="party"]>summary').click()
+            page.get_by_role('searchbox',name='Find Party name options').fill('Acme')
+            page.get_by_role('checkbox',name='Party name: Acme',exact=True).check()
+            numbers=page.locator('#case-rows td:nth-child(2)>button')
+            role=page.get_by_role('combobox',name='Party role',exact=True)
+            for label,expected in [('Defendant',[1,3]),('Plaintiff',[2,3]),('PCL: custom-code',[4]),('Not recorded',[5])]:
+                role.select_option(label=label)
+                expect(numbers).to_have_text([f'1:24-cv-{i:05d}' for i in expected])
+            page.get_by_role('button',name='1:24-cv-00005',exact=True).click()
+            expect(page.locator('#detail-parties')).to_contain_text('Acme · PCL party role: Not supplied')
+            self.assertEqual(read_json(path)['cases'],rows)  # Display labels never rewrite evidence.
+            self.assertEqual((errors,blocked,mutations),([],[],[]))
+
     def test_activity_tracks_current_operation_and_stops_when_paused_or_interrupted(self):
         from playwright.sync_api import expect
         rows=[case(1,'A case','nysdc','2024-01-01',[],'Not supplied by PCL')]
@@ -184,8 +280,10 @@ class ResultFilterBrowserTests(unittest.TestCase):
             ny.uncheck();expect(numbers).to_have_text(['1:24-cv-00002'])  # AND across categories.
             page.locator('#clear-filters').click()
             page.locator('[data-facet="party"]>summary').click()
+            page.get_by_role('searchbox',name='Find Party name options').fill('Zeta')
             page.get_by_role('checkbox',name='Party name: Zeta',exact=True).check()
             expect(numbers).to_have_text(['1:24-cv-00001'])  # Not just the first alphabetical party.
+            page.get_by_role('searchbox',name='Find Party name options').fill('Alpha')
             page.get_by_role('checkbox',name='Party name: Alpha',exact=True).check()
             expect(numbers).to_have_text(['1:24-cv-00002','1:24-cv-00001'])
             page.locator('[data-facet="nature"]>summary').click()
@@ -195,6 +293,7 @@ class ResultFilterBrowserTests(unittest.TestCase):
             page.get_by_role('checkbox',name='Party name: No saved party names',exact=True).check()
             expect(numbers).to_have_text(['1:24-cv-00004'])
             page.locator('#clear-filters').click()
+            page.get_by_role('searchbox',name='Find Party name options').fill('Beta')
             page.get_by_role('checkbox',name='Party name: Beta',exact=True).check()
             # New saved evidence/rules refresh choices, without silently clearing
             # an active filter whose old value no longer exists.
@@ -228,9 +327,10 @@ class ResultFilterBrowserTests(unittest.TestCase):
             page.get_by_role('checkbox',name='Select 1:24-cv-00055',exact=True).check()
             page.locator('#result-filters>summary').click()
             page.locator('[data-facet="party"]>summary').click()
-            expect(page.locator('[data-facet="party"] input[type=checkbox]')).to_have_count(100)
-            page.get_by_role('button',name='Show more options').click()
-            expect(page.locator('[data-facet="party"] input[type=checkbox]')).to_have_count(105)
+            expect(page.locator('[data-facet="party"] input[type=checkbox]')).to_have_count(0)
+            page.get_by_role('searchbox',name='Find Party name options').fill('Party')
+            expect(page.locator('[data-facet="party"] input[type=checkbox]')).to_have_count(20)
+            expect(page.locator('#party-picker-hint')).to_contain_text('20 of 105 matching names')
             page.get_by_role('searchbox',name='Find Party name options').fill('105')
             page.get_by_role('checkbox',name='Party name: Party 105',exact=True).check()
             expect(page.locator('#page-summary')).to_have_text('1–1 of 1 cases')

@@ -75,9 +75,10 @@ function setSearchMode(mode, save=true) {
 }
 const alphabet = new Intl.Collator('en', {sensitivity:'base', numeric:true});
 const facetDefinitions = [
-  ['court','Court'],['type','Case type'],['status','Case status'],['role','Role'],['year','Filing year'],
-  ['party','Party name'],['title','Case title'],['nature','Nature of Case']
+  ['party','Party name'],['court','Court'],['type','Case type'],['status','Case status'],['role','Attorney role'],['year','Filing year'],
+  ['title','Case title'],['nature','Nature of Case']
 ];
+const filterDefinitions = [...facetDefinitions,['partyRole','Party role']];
 const unavailable = value => !value || /^(charges )?not supplied by PCL$|^N\/A$|^unresolved\b/i.test(value);
 const pageSize = 50;
 const money = cents => new Intl.NumberFormat("en-US", {style:"currency", currency:"USD"}).format(cents / 100);
@@ -238,7 +239,7 @@ function renderRun() {
   $('run-kind').textContent = r.demo ? 'FREE DEMO · FICTIONAL RECORD' : litigantRun() ? 'LITIGANT SEARCH' : 'ATTORNEY SEARCH';
   $('run-name').textContent = runName(r);
   for (const id of ['view-clients','document-launch','docket-selection']) $(id).hidden = litigantRun();
-  $('case-filter-help').textContent = 'Options and case counts come from all results in this saved run. Check any values within a category; cases must match each category you use. ' + (litigantRun() ? 'Party names are the matched names returned by PCL.' : 'Party names reflect saved dockets and name rules.');
+  $('case-filter-help').textContent = 'Options and case counts come from saved results. Select any values within a category; cases must match each category you use. Party name and party role must match the same party in a case.';
   for (const dir of ['asc','desc']) $('sort').querySelector(`[value="party-${dir}"]`).textContent = `${litigantRun() ? 'Litigant' : 'Client'} name · ${dir === 'asc' ? 'A–Z' : 'Z–A'}`;
   $('run-help').textContent = (!r.indexReady && r.cases.length ? `Partial results from completed name searches. ${r.busy ? 'The remaining searches are still running' : 'Resume to finish the remaining searches'}; exports and docket selection become available when the index is complete. ` : '') + 'Nature of Case clips long entries. Click a case to read the full values and data notes.' + (litigantRun() ? '' : ' Docket retrieval does not buy filings; use Document Grabber separately for selected PDFs.');
   const dates = r.search.dateFiledFrom || r.search.dateFiledTo ? `${r.search.dateFiledFrom || 'Any date'} → ${r.search.dateFiledTo || 'Present'}` : 'All filing dates';
@@ -280,33 +281,53 @@ function renderRun() {
   if (!r.transactions.length) $('receipt-list').append(node('p', 'No PACER transactions in this run.', 'help'));
   r.transactions.forEach(t => $('receipt-list').append(node('div', `${t.startedUtc.slice(0,19).replace('T',' ')} UTC · ${t.kind === 'docket' ? 'Court docket report' : 'PCL API page'} · ${t.state === 'complete' ? money(t.chargedCents) + ' confirmed' : money(t.reservedCents) + ' reserved; receipt unresolved'}`, 'receipt')));
 }
+function sourcePartyRoles(value, pcl=false) {
+  // Translate only the two standard PCL side codes. Preserve other codes/roles.
+  const known = {dft:'Defendant',pla:'Plaintiff',defendant:'Defendant',plaintiff:'Plaintiff'};
+  const values = (Array.isArray(value) ? value : String(value || '').split(';')).map(v=>String(v).trim()).filter(Boolean);
+  return values.length ? [...new Set(values.map(v=>Object.hasOwn(known,v.toLocaleLowerCase()) ? known[v.toLocaleLowerCase()] : pcl ? `PCL: ${v}` : v))] : [null];
+}
 function buildCaseRows(cases, reports) {
-  const names = new Map(), sourceNames = new Map(), replacements = new Map();
-  const add = (map,key,value) => {if (!value) return; if (!map.has(key)) map.set(key,new Set()); map.get(key).add(value);};
-  for (const c of cases) for (const p of c.indexedParties || []) add(names,c.key,p.name);
+  const parties = new Map(), replacements = new Map();
+  const add = (key,name,roles,sourceNames=[]) => {
+    if (!name) return;
+    if (!parties.has(key)) parties.set(key,new Map());
+    for (const role of roles) {
+      const identity = JSON.stringify([name,role]), byCase = parties.get(key);
+      if (!byCase.has(identity)) byCase.set(identity,{name,role,sourceNames:new Set()});
+      for (const source of [name,...sourceNames]) if (source) byCase.get(identity).sourceNames.add(source);
+    }
+  };
+  // Keep each source party's role when applying an explicitly saved name group.
   for (const view of ['clients','defendants','plaintiffs']) for (const row of reports?.[view]?.cases || []) {
-    add(names,row.caseKey,row.name);
     if (row.groupId) {
       if (!replacements.has(row.caseKey)) replacements.set(row.caseKey,new Map());
-      for (const p of row.sourceParties || []) replacements.get(row.caseKey).set(p.name,row.name);
+      for (const p of row.sourceParties || []) for (const name of [p.name,...(p.sourceNames || [])]) replacements.get(row.caseKey).set(name,row.name);
     }
+    const sources = row.sourceParties?.length ? row.sourceParties : [row];
+    for (const p of sources) add(row.caseKey,row.name,sourcePartyRoles(p.partyRoles || p.partyRole),[p.name,...(p.sourceNames || [])]);
   }
+  for (const c of cases) for (const p of c.indexedParties || []) add(c.key,p.name,sourcePartyRoles(p.role,true));
   for (const p of reports?.parties || []) {
-    add(sourceNames,p.caseKey,p.name); add(names,p.caseKey,replacements.get(p.caseKey)?.get(p.name) || p.name);
+    add(p.caseKey,replacements.get(p.caseKey)?.get(p.name) || p.name,sourcePartyRoles(p.partyRole),[p.name,...(p.sourceNames || [])]);
   }
   return cases.map(c => {
-    const savedPartyNames = [...(names.get(c.key) || [])].sort(alphabet.compare);
+    const partyAppearances = [...(parties.get(c.key)?.values() || [])].map(p=>({...p,sourceNames:[...p.sourceNames]}));
+    const savedPartyNames = [...new Set(partyAppearances.map(p=>p.name))].sort(alphabet.compare);
     const court = c.district ? c.district + (c.court && c.court !== 'U.S. District Court' ? ` · ${c.court}` : '') : c.court || null;
     const nature = unavailable(c.nature) ? null : c.nature, role = unavailable(c.role || c.team) ? null : c.role || c.team;
-    return {...c,savedPartyNames,facetValues:{court:[court],type:[c.caseType || null],status:[c.status || null],role:[role],
+    return {...c,savedPartyNames,partyAppearances,facetValues:{court:[court],type:[c.caseType || null],status:[c.status || null],role:[role],
       year:[c.dateFiled?.slice(0,4) || null],party:savedPartyNames.length ? savedPartyNames : [null],
       title:[c.caseTitle || null],nature:[nature]},
       sortValues:{date:c.dateFiled || null,party:savedPartyNames[0] || null,title:c.caseTitle || null,court,nature},
-      searchText:[c.caseNumber,c.caseTitle,c.caseType,c.district,c.court,c.role || c.team,c.nature,c.status,...savedPartyNames,...(sourceNames.get(c.key) || [])].join(' ').toLocaleLowerCase()};
+      searchText:[c.caseNumber,c.caseTitle,c.caseType,c.district,c.court,c.role || c.team,c.nature,c.status,...savedPartyNames,...partyAppearances.flatMap(p=>p.sourceNames)].join(' ').toLocaleLowerCase()};
   });
 }
+function filterParties(c) {return c.partyAppearances.length ? c.partyAppearances : [{name:null,role:null,sourceNames:[]}];}
 function matchesCaseFilters(c, choices, text='') {
-  return (!text || c.searchText.includes(text)) && Object.entries(choices).every(([key,values])=>!values.size || c.facetValues[key].some(v=>values.has(v)));
+  const names = choices.party, roles = choices.partyRole;
+  const partyMatch = (!names?.size && !roles?.size) || filterParties(c).some(p=>(!names?.size || names.has(p.name)) && (!roles?.size || roles.has(p.role)));
+  return partyMatch && (!text || c.searchText.includes(text)) && Object.entries(choices).every(([key,values])=>['party','partyRole'].includes(key) || !values.size || c.facetValues[key].some(v=>values.has(v)));
 }
 function compareCases(a,b,sort) {
   const field = sort === 'newest' || sort === 'oldest' ? 'date' : sort.split('-')[0];
@@ -321,15 +342,75 @@ function filteredRows() {
   const text = $('filter').value.trim().toLocaleLowerCase(), sort = $('sort').value;
   return caseRows.filter(c=>matchesCaseFilters(c,facetChoices,text)).sort((a,b)=>compareCases(a,b,sort));
 }
-function facetLabel(key,value) {return value === null ? key === 'party' ? 'No saved party names' : 'Not available' : value;}
+function facetLabel(key,value) {return value === null ? key === 'party' ? 'No saved party names' : key === 'partyRole' ? 'Not recorded' : 'Not available' : value;}
 function facetCounts(rows,key) {
   const counts = new Map(); for (const row of rows) for (const value of new Set(row.facetValues[key])) counts.set(value,(counts.get(value) || 0)+1);
   return counts;
 }
-function renderFacetGroups() {
-  const prior = new Map([...$('facet-groups').children].map(group=>[group.dataset.facet,{open:group.open,text:group.querySelector('input[type=search]').value}]));
+function renderPartyPicker(group, priorText='') {
+  const controls = node('div',undefined,'party-picker-controls'), nameLabel = node('label','Find a party'), roleLabel = node('label','Party role');
+  const search = node('input'); search.type = 'search'; search.id = 'party-picker-query'; search.placeholder = 'Type a name, e.g. 3M…'; search.setAttribute('aria-label','Find Party name options'); search.value = priorText;
+  const roleSelect = node('select'); roleSelect.id = 'party-role-filter'; roleSelect.setAttribute('aria-label','Party role');
+  const anyRole = node('option','Any party role'); anyRole.value = ''; roleSelect.append(anyRole);
+  const roles = new Set(caseRows.flatMap(c=>filterParties(c).map(p=>p.role)));
+  for (const role of facetChoices.partyRole || []) roles.add(role);
+  for (const role of [...roles].sort((a,b)=>a === b ? 0 : a === null ? 1 : b === null ? -1 : alphabet.compare(a,b))) {
+    const option = node('option',facetLabel('partyRole',role)); option.value = JSON.stringify(role); roleSelect.append(option);
+  }
+  roleSelect.value = facetChoices.partyRole?.size ? JSON.stringify([...facetChoices.partyRole][0]) : '';
+  nameLabel.append(search); roleLabel.append(roleSelect); controls.append(nameLabel,roleLabel);
+  const chosenLabel = node('p','Selected names','party-picker-label'), chosen = node('div',undefined,'facet-options party-picker-selected');
+  const options = node('div',undefined,'facet-options party-picker-matches'); options.setAttribute('role','group'); options.setAttribute('aria-label','Matching party names');
+  const hint = node('p',undefined,'help'); hint.id = 'party-picker-hint'; hint.setAttribute('role','status'); search.setAttribute('aria-describedby',hint.id);
+  const empty = node('div',undefined,'party-picker-empty');
+  const help = node('p',(litigantRun() ? 'Uses matched litigants returned by PCL, not every party on the docket.' : 'Uses names and roles from saved dockets, including saved name groups. Cases without party data cannot match a named party.') + ' Select a role alone to match any party in that role. Counts reflect that role across all saved cases.','help');
+  const draw = () => {
+    const counts = new Map(), aliases = new Map(), selected = facetChoices.party || new Set(), roles = facetChoices.partyRole;
+    for (const c of caseRows) {
+      const counted = new Set();
+      for (const p of filterParties(c)) if (!roles?.size || roles.has(p.role)) {
+        counted.add(p.name);
+        if (!aliases.has(p.name)) aliases.set(p.name,new Set());
+        for (const name of p.sourceNames) aliases.get(p.name).add(name);
+      }
+      for (const name of counted) counts.set(name,(counts.get(name) || 0)+1);
+    }
+    const text = search.value.trim().toLocaleLowerCase();
+    const option = value => {
+      const row = node('label',undefined,'facet-option'), cb = node('input'); cb.type = 'checkbox'; cb.checked = selected.has(value);
+      const caption = facetLabel('party',value); cb.setAttribute('aria-label',`Party name: ${caption}`);
+      const label = node('span',caption); label.title = caption;
+      if (value && text && !value.toLocaleLowerCase().includes(text)) {
+        const sources = [...(aliases.get(value) || [])].filter(n=>n !== value && n.toLocaleLowerCase().includes(text));
+        if (sources.length) label.append(node('span','Includes: '+sources.slice(0,3).join('; '),'party-source-match'));
+      }
+      const count = counts.get(value) || 0, badge = node('small',String(count)); badge.title = `${count} distinct cases with the chosen party role`;
+      cb.addEventListener('change',()=>{
+        if (!facetChoices.party) facetChoices.party = new Set();
+        cb.checked ? facetChoices.party.add(value) : facetChoices.party.delete(value);
+        page = 0; renderTable(); draw();
+        const replacement = [...group.querySelectorAll('input[type=checkbox]')].find(input=>input.getAttribute('aria-label') === `Party name: ${caption}`);
+        (replacement || search).focus();
+      });
+      row.append(cb,label,badge); return row;
+    };
+    chosen.replaceChildren(...[...selected].sort((a,b)=>alphabet.compare(facetLabel('party',a),facetLabel('party',b))).map(option));
+    chosen.hidden = chosenLabel.hidden = !selected.size;
+    const matches = text ? [...counts.keys()].filter(name=>name !== null && !selected.has(name) && [name,...(aliases.get(name) || [])].some(n=>n.toLocaleLowerCase().includes(text))).sort(alphabet.compare) : [];
+    options.replaceChildren(...matches.slice(0,20).map(option)); options.hidden = !matches.length;
+    hint.textContent = !text ? 'Type a name above, then select matching parties to filter cases.' : matches.length > 20 ? `Showing 20 of ${matches.length} matching names. Keep typing to narrow the list.` : matches.length ? `${matches.length} matching name${matches.length === 1 ? '' : 's'}. Select any to filter cases.` : 'No additional matching names for this role. Try another name or choose Any party role.';
+    empty.replaceChildren();
+    if (!selected.has(null) && caseRows.some(c=>!c.partyAppearances.length)) empty.append(option(null));
+  };
+  roleSelect.addEventListener('change',()=>{facetChoices.partyRole = new Set(roleSelect.value ? [JSON.parse(roleSelect.value)] : []); page = 0; renderTable(); draw();});
+  search.addEventListener('input',draw);
+  group.append(controls,chosenLabel,chosen,options,hint,empty,help); draw();
+}
+function renderFacetGroups(resetSearch=false) {
+  const prior = new Map([...$('facet-groups').children].map(group=>[group.dataset.facet,{open:group.open,text:resetSearch ? '' : group.querySelector('input[type=search]')?.value || ''}]));
   $('facet-groups').replaceChildren();
   for (const [key,label] of facetDefinitions) {
+    if (key === 'role' && litigantRun()) continue;
     const counts = facetCounts(caseRows,key);
     // Retain active values absent from updated evidence so a filter never
     // silently broadens. They remain removable with a visible zero count.
@@ -337,6 +418,9 @@ function renderFacetGroups() {
     if (!counts.size) continue;
     const group = node('details',undefined,'facet-group'); group.dataset.facet = key;
     const heading = node('summary',label), badge = node('span',undefined,'facet-badge'); heading.append(badge); group.append(heading);
+    if (key === 'party') {
+      renderPartyPicker(group,prior.get(key)?.text); group.open = prior.get(key)?.open || false; $('facet-groups').append(group); continue;
+    }
     const search = node('input'); search.type = 'search'; search.placeholder = `Find ${label.toLowerCase()} options…`; search.setAttribute('aria-label',`Find ${label} options`); search.hidden = counts.size <= 8; search.value = search.hidden ? '' : prior.get(key)?.text || '';
     const options = node('div',undefined,'facet-options'), hint = node('p',undefined,'help'); let limit = 100;
     const draw = () => {
@@ -359,14 +443,14 @@ function renderFacetGroups() {
   renderFilterState();
 }
 function renderFilterState() {
-  const active = facetDefinitions.flatMap(([key,label])=>[...(facetChoices[key] || [])].map(value=>({key,label,value})));
-  $('facet-count').textContent = active.length ? `${active.length} checked` : 'All results';
+  const active = filterDefinitions.flatMap(([key,label])=>[...(facetChoices[key] || [])].map(value=>({key,label,value})));
+  $('facet-count').textContent = active.length ? `${active.length} selected` : 'All results';
   $('active-filters').replaceChildren();
   for (const {key,label,value} of active) {
     const caption = `${label}: ${facetLabel(key,value)}`, chip = node('button',caption+' ×','filter-chip'); chip.title = caption; chip.setAttribute('aria-label',`Remove ${caption}`);
     chip.addEventListener('click',()=>{facetChoices[key].delete(value); page = 0; renderFacetGroups(); renderTable();}); $('active-filters').append(chip);
   }
-  for (const group of $('facet-groups').children) {const size = facetChoices[group.dataset.facet]?.size || 0; group.querySelector('.facet-badge').textContent = size ? `${size} checked` : '';}
+  for (const group of $('facet-groups').children) {const size = (facetChoices[group.dataset.facet]?.size || 0) + (group.dataset.facet === 'party' ? facetChoices.partyRole?.size || 0 : 0); group.querySelector('.facet-badge').textContent = size ? `${size} selected` : '';}
   $('filter-state').hidden = !active.length && !$('filter').value;
   $('sort-help').hidden = !$('sort').value.startsWith('party-');
 }
@@ -523,7 +607,7 @@ bind('name-rules','click',() => openRules());
 bind('group-names','click',() => openRules(null,[...selectedNames.values()].flatMap(s=>s.sourceNames)));
 bind('refresh-reports','click',() => action(() => api(`/api/runs/${currentId}/refresh-reports`,{})));
 for (const id of ['filter','sort']) bind(id,id === 'filter' ? 'input' : 'change',() => {page = 0; renderTable();});
-bind('clear-filters','click',()=>{facetChoices = {}; $('filter').value = ''; page = 0; renderFacetGroups(); renderTable();});
+bind('clear-filters','click',()=>{facetChoices = {}; $('filter').value = ''; page = 0; renderFacetGroups(true); renderTable();});
 bind('previous','click',() => {page--; renderTable();}); bind('next','click',() => {page++; renderTable();});
 bind('select-visible','click',() => {pageRows.filter(c=>c.eligible).forEach(c=>selected.add(c.key)); renderTable();});
 bind('clear-selection','click',() => {selected.clear(); renderTable();});
