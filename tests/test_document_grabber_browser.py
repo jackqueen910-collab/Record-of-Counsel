@@ -29,6 +29,10 @@ class DocumentBrowserTests(unittest.TestCase):
             evidence_path=ws.folder(ident)/'output/evidence.json';evidence=read_json(evidence_path)
             evidence['cases'][0].update(CASE);write_json(evidence_path,evidence)
             manifest=ws.manifest(ident);manifest['demo']=False;ws.save(ident,manifest)
+            # A non-demo run needs the completed PCL index, just like a real
+            # search. Evidence alone may belong to a paused partial search.
+            write_json(ws.folder(ident)/'pcl-records.json',read_json(ws.folder(ident)/'demo-index.json'))
+            self.assertTrue(ws.summary(ident)['indexReady'])
             ws.connection.session=Session('test-pacer-token')
             reports={CASE['key']:{'path':str(rawpath)}};transport=FakeTransport()
             server,url=make_server(ws);thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
@@ -46,6 +50,8 @@ class DocumentBrowserTests(unittest.TestCase):
                         else: r.continue_()
                     page.route('**/*',route);page.goto(url)
                     page.get_by_role('button',name='Jordan Lawyer').click()
+                    expect(page.locator('#run-status')).to_have_text('READY')
+                    expect(page.locator('#case-rows input[type=checkbox]')).to_be_enabled()
                     page.locator('#case-rows input[type=checkbox]').check()
                     page.locator('#open-documents').click()
                     expect(page.locator('#documents-method')).to_contain_text('signature block')
