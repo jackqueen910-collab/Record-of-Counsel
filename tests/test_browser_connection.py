@@ -122,7 +122,7 @@ class ConnectionTests(unittest.TestCase):
                 ws.future.result(10)
                 key = ws.cases(identifier)[0]["key"]
                 FakeCourt.bought, FakeCourt.fail_key = [], key
-                with patch("roc.cli.CourtRetriever", FakeCourt):
+                with patch("roc.engine.CourtRetriever", FakeCourt):
                     ws.act(identifier,"retrieve",retrieval_values(ws, identifier, [key]))
                     ws.future.result(10)
                     before = ws.manifest(identifier)

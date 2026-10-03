@@ -25,8 +25,8 @@ def output_directory(run_folder):
     return path
 
 
-def export_metadata(run_folder):
-    directory = output_directory(run_folder)
+def export_metadata(run_folder, directory=None):
+    directory = output_directory(run_folder) if directory is None else directory
     path = directory / 'result.json' if directory.name != 'output' else Path(run_folder) / 'result.json'
     return read_json(path) if path.exists() else {}
 

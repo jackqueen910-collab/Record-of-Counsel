@@ -2,6 +2,7 @@
 import contextlib
 import io
 import os
+import re
 from pathlib import Path
 import tempfile
 import threading
@@ -167,7 +168,7 @@ class ResultFilterBrowserTests(unittest.TestCase):
             def listing(route):
                 response=route.fetch(); data=response.json(); data['active']=active['id']
                 route.fulfill(response=response,json=data)
-            page.route(f'**/api/runs/{identifier}',detail)
+            page.route(re.compile(rf'/api/runs/{identifier}(?:\?.*)?$'),detail)
             page.route('**/api/runs',listing)
             override.update(busy=True,state='running',lastAction='search',indexReady=False)
             active['id']=identifier

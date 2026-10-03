@@ -93,14 +93,14 @@ class AccountTests(unittest.TestCase):
         b = self.sign_in('shared', clientCode='second-client')
         entered, release = threading.Event(), threading.Event()
         seen = []
-        from roc.workspace import run
+        from roc.workspace import run_workflow
         def blocked_run(*args, **kw):
             entered.set()
             if not release.wait(10):
                 raise AssertionError('Timed out waiting for second browser')
             seen.append(kw['session_provider']().client_code)
-            return run(*args, **kw)
-        with patch('roc.workspace.run', side_effect=blocked_run):
+            return run_workflow(*args, **kw)
+        with patch('roc.workspace.run_workflow', side_effect=blocked_run):
             with self.hub.scope(a, require_account=True) as ws:
                 identifier = ws.new(form())
             self.assertTrue(entered.wait(10))

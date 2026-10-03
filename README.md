@@ -90,7 +90,7 @@ python -m roc run examples/demo.json
 python -m unittest discover -v
 ```
 
-The demo is fictional and makes **no network requests**. Open `runs/demo/output/case-index.html` or `case-index.xlsx`. The defendant represented by another lawyer is deliberately excluded from the charge summary.
+The demo is fictional and makes **no network requests**. The command prints the workbook path; `case-index.html` is beside it in the same complete export generation. `runs/demo/output/current.json` identifies that generation. The defendant represented by another lawyer is deliberately excluded from the charge summary.
 
 To process real saved records, copy the example configuration to a local file, set `indexFile`, add `savedDockets`, and supply the lawyer's name and explicitly accepted aliases. Paths are resolved relative to the configuration file. The original ROC consolidated index format and raw PCL `content` records are both accepted. Keep local configs and records outside version control.
 
@@ -285,3 +285,14 @@ The browser regression tests use fictional local forms and block network request
 Public interface references: [PACER authentication API](https://pacer.uscourts.gov/sites/default/files/files/PACER%20Authentication%20API-2025_v2_0.pdf), [PCL API](https://pacer.uscourts.gov/sites/default/files/files/PCL-API-08-2026-1.pdf), [Playwright](https://playwright.dev/python/docs/intro), [Google Sheets API](https://developers.google.com/workspace/sheets/api/reference/rest/v4/spreadsheets/batchUpdate).
 
 Court cookie naming is case-sensitive: the authentication JSON property is `nextGenCSO`, while the court cookie is `NextGenCSO` (also used by [Juriscraper's PACER session implementation](https://github.com/freelawproject/juriscraper/blob/main/juriscraper/pacer/http.py)). ROC scopes that cookie to the selected court host, preserves it only in memory, and stops if the court redirects to login.
+
+
+### Engine and export boundaries
+
+The terminal and local web interface both call `roc.engine.run_workflow(config, base, ...)`. It takes an in-memory configuration, an explicit session provider for live work, and an optional progress callback, and returns a typed `RunResult`. Credential entry and console output belong to callers. Saved configuration remains available as an audit record; the browser does not invoke a terminal command or reread files to obtain the engine's result.
+
+Each export build is staged under `output/generations/<id>/` and published through `output/current.json` only when all artifacts and metadata are complete. Interrupted builds keep the previous complete results visible, block downloads, and show a Resume notice. Resume reuses purchased reports. Older flat output folders remain readable. Use `roc.exports.output_directory(run_folder)` when reading an export programmatically.
+
+The results API accepts a `since` data revision. Unchanged polls contain current progress/receipts without case rows or party reports. The UI retains that revision's rows; changed evidence or name rules trigger a new projection. Every party's name and source role remain available to filters, while duplicate opponent report tables stay in exports.
+
+See the [October review](docs/code-review-2026-10-02.md) and [implemented fixes](docs/review-fixes-2026-10-02.md) for scope and verification.

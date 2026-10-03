@@ -32,12 +32,15 @@ def party_heading(cells, following):
     values = [clean(c.text()) for c in cells]
     if not values[0] or any(values[1:]):
         return None
+    if values[0] in ('Pending Counts', 'Terminated Counts', 'Complaints') or values[0].startswith('Highest Offense Level'):
+        return None
     role = PARTY_ROLE.fullmatch(values[0])
     if role:
         return role[1].title(), role[2], False
     next_values = [clean(c.text()) for c in following]
-    if (len(following) >= 3 and "represented" in next_values[1].lower()
-            and any(following[0].walk("b"))):
+    representation_row = len(following) >= 3 and "represented" in next_values[1].lower()
+    underlined_heading = any(cells[0].walk('u'))
+    if (following and any(following[0].walk("b")) and (representation_row or underlined_heading)):
         # Even a role we cannot interpret must end the previous party's counts.
         return values[0], None, True
     return None
@@ -166,7 +169,8 @@ def parse_report(html):
     party, section = None, None
     rows = [[c for c in row.children if isinstance(c, Node) and c.tag in ("td", "th")]
             for row in root.walk("tr")]
-    rows = [cells for cells in rows if cells and not any(list(c.walk("tr")) for c in cells)]
+    rows = [cells for cells in rows if cells and any(clean(c.text()) for c in cells)
+            and not any(list(c.walk("tr")) for c in cells)]
     for index, cells in enumerate(rows):
         values = [clean(c.text()) for c in cells]
         if len(values) >= 3 and values[0] == "Date Filed" and "Docket Text" in values[-1]:

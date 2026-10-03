@@ -77,6 +77,16 @@ class ReviewRegressions(unittest.TestCase):
         self.assertEqual(case['enrichment']['fieldStatus']['nature'], 'missing-source')
         self.assertEqual(case['enrichment']['nature'], '')
 
+    def test_unknown_unrepresented_party_and_blank_rows_end_previous_counts(self):
+        other = ('<tr><td><u>ThirdParty Defendant</u></td></tr><tr><td> </td></tr>'
+                 '<tr><td><b>Other party without counsel</b></td></tr>'
+                 '<tr><td>Pending Counts</td><td></td><td>Disposition</td></tr>' + count('OTHER', '2'))
+        parsed = parse_report(report(party('Defendant', 'Client', 'Jordan Lawyer', count('CLIENT', '1')) + other))
+        self.assertEqual(len(parsed['parties']), 2)
+        self.assertEqual(len(parsed['parties'][0]['counts']), 1)
+        self.assertEqual(parsed['parties'][1]['counsel'], [])
+        self.assertTrue(parsed['warnings'])
+
     def test_unknown_document_landing_keeps_reservation_and_cannot_repeat(self):
         s = source()
         c = classify_result(candidates(), s)[0]
@@ -107,7 +117,7 @@ class ReviewRegressions(unittest.TestCase):
         previous = output_directory(folder)
         old_xlsx = (previous / 'case-index.xlsx').read_bytes()
         FakeCourt.fail_key = None
-        with patch('roc.cli.CourtRetriever', FakeCourt), patch('openpyxl.workbook.workbook.Workbook.save', side_effect=OSError('Synthetic interruption')):
+        with patch('roc.engine.CourtRetriever', FakeCourt), patch('openpyxl.workbook.workbook.Workbook.save', side_effect=OSError('Synthetic interruption')):
             ws.act(ident, 'retrieve', retrieval_values(ws, ident, ['nysdc|1:24-cr-00001']))
             ws.future.result(20)
         state = ws.summary(ident, detail=True)
@@ -119,7 +129,7 @@ class ReviewRegressions(unittest.TestCase):
         self.assertEqual((previous / 'case-index.xlsx').read_bytes(), old_xlsx)
         with self.assertRaisesRegex(RocError, 'Resume'):
             ws.download(ident, 'case-index.xlsx')
-        with patch('roc.cli.CourtRetriever', side_effect=AssertionError('Must reuse saved docket')):
+        with patch('roc.engine.CourtRetriever', side_effect=AssertionError('Must reuse saved docket')):
             ws.act(ident, 'resume')
             ws.future.result(20)
         self.assertFalse(incomplete_export(folder))
@@ -177,7 +187,7 @@ class ReviewRegressions(unittest.TestCase):
                 self.store.save()
                 raw = report(party('Defendant', 'Client', 'Jordan Lawyer', count('CHARGE', '1')))
                 return self.store.finish(tx, raw.replace('Example District', 'Southern District of New York'))
-        with patch('roc.cli.CourtRetriever', ResumingCourt):
+        with patch('roc.engine.CourtRetriever', ResumingCourt):
             ws.act(ident, 'resume')
             ws.future.result(20)
         self.assertEqual(resumed, ['nysdc|1:24-cr-00001'])
@@ -188,7 +198,7 @@ class ReviewRegressions(unittest.TestCase):
     def test_submitted_confirmation_cannot_resume(self):
         ws, ident = self.workspace()
         self.stopped_confirmation(ws, ident, submitted=True)
-        with patch('roc.cli.CourtRetriever') as retriever:
+        with patch('roc.engine.CourtRetriever') as retriever:
             ws.act(ident, 'resume')
             ws.future.result(20)
             retriever.assert_not_called()
@@ -203,7 +213,7 @@ class ReviewRegressions(unittest.TestCase):
             manifest['selected'] = selected
             manifest['config']['budgetCents'] = budget
             ws.save(ident, manifest)
-            with patch('roc.cli.CourtRetriever') as retriever:
+            with patch('roc.engine.CourtRetriever') as retriever:
                 ws.act(ident, 'resume')
                 ws.future.result(20)
                 retriever.assert_not_called()

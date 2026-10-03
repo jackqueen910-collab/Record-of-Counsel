@@ -7,7 +7,7 @@ import json
 import os
 from pathlib import Path
 
-from .common import RocError
+from .common import RocError, write_json
 
 
 def process_may_exist(pid):
@@ -71,7 +71,7 @@ class ProcessLock:
                         raise RocError(self.message)
                 elif not isinstance(owner, dict) or owner.get('protocol') != 'roc-os-lock-v1':
                     raise RocError('Unrecognized lock marker; confirm its owner before repairing it.')
-            self.path.write_text(json.dumps({'protocol': 'roc-os-lock-v1', 'pid': os.getpid()}), encoding='utf-8')
+            write_json(self.path, {'protocol': 'roc-os-lock-v1', 'pid': os.getpid()})
         except BaseException:
             stream.close()
             raise

@@ -71,7 +71,7 @@ class WorkspaceTests(unittest.TestCase):
         self.addCleanup(self.ws.close)
         FakeCourt.bought = []
         FakeCourt.fail_key = None
-        self.browser = patch("roc.cli.CourtRetriever", FakeCourt)
+        self.browser = patch("roc.engine.CourtRetriever", FakeCourt)
         self.browser.start()
         self.addCleanup(self.browser.stop)
 

@@ -227,7 +227,11 @@ async function refresh() {
       }
     }
     const requested = currentId;
-    if (requested) {const data = await api(`/api/runs/${requested}`); if (requested === currentId) {current = data; renderRun();}}
+    if (requested) {
+      const revision = current?.id === requested ? current.dataRevision : null;
+      const data = await api(`/api/runs/${requested}${revision ? '?since=' + encodeURIComponent(revision) : ''}`);
+      if (requested === currentId) {current = data.dataUnchanged ? {...current,...data} : data; renderRun();}
+    }
     setButtons();
     if (window.rocDocumentsUpdate) await window.rocDocumentsUpdate(listing.documentGrabberVersion === 3);
   } finally {refreshing = false;}
@@ -263,7 +267,17 @@ function renderRun() {
   document.title = r.docketCapStopped ? 'ROC — Docket spending limit reached' : inProgress ? `ROC — ${activity}` : 'Record of Counsel';
   const missing = missingDockets().length, unsupported = r.cases.filter(c=>!c.eligible && !c.enriched).length;
   $('clients-docket-scope').textContent = `${missing} supported cases still lack a parsed docket. Default: run all of them, newest filed first, within your cap. Saved dockets are reused.${unsupported ? ` ${unsupported} other cases have no supported retrieval; see the Case index.` : ''}`;
-  const newStamp = JSON.stringify([r.cases,r.partyReports,r.busy,r.indexReady,activeRun,rulesAvailable,docketBudgetsAvailable]); if (tableStamp !== newStamp) {tableStamp = newStamp; caseRows = buildCaseRows(r.cases,r.partyReports); renderFacetGroups(); renderTable(); renderParties();}
+  const newStamp = JSON.stringify([
+    r.dataRevision || [r.cases,r.partyReports], r.busy, r.indexReady,
+    activeRun, rulesAvailable, docketBudgetsAvailable
+  ]);
+  if (tableStamp !== newStamp) {
+    tableStamp = newStamp;
+    caseRows = buildCaseRows(r.cases,r.partyReports);
+    renderFacetGroups();
+    renderTable();
+    renderParties();
+  }
   $('docket-guidance').hidden = litigantRun() || !r.indexReady || !r.cases.some(c=>!c.enriched);
   const coverage = r.partyReports?.coverage;
   $('report-coverage').textContent = coverage ? `${coverage.parsedDockets} of ${coverage.indexedCases} indexed cases have parsed dockets · ${coverage.indexOnlyCases} index only · Counsel matched in ${coverage.casesWithMatchedClients} cases${coverage.partyTablesNeedingReview ? ` · ${coverage.partyTablesNeedingReview} party tables need review` : ''}. Client summaries cover saved dockets only.` : 'An update is ready. Use Stop ROC, then reopen Start ROC to load party reports. Saved work is retained; reconnect PACER when you next need access.';
@@ -299,7 +313,7 @@ function buildCaseRows(cases, reports) {
     }
   };
   // Keep each source party's role when applying an explicitly saved name group.
-  for (const view of ['clients','defendants','plaintiffs']) for (const row of reports?.[view]?.cases || []) {
+  for (const view of reports?.partyDetails ? [] : ['clients','defendants','plaintiffs']) for (const row of reports?.[view]?.cases || []) {
     if (row.groupId) {
       if (!replacements.has(row.caseKey)) replacements.set(row.caseKey,new Map());
       for (const p of row.sourceParties || []) for (const name of [p.name,...(p.sourceNames || [])]) replacements.get(row.caseKey).set(name,row.name);
@@ -308,8 +322,8 @@ function buildCaseRows(cases, reports) {
     for (const p of sources) add(row.caseKey,row.name,sourcePartyRoles(p.partyRoles || p.partyRole),[p.name,...(p.sourceNames || [])]);
   }
   for (const c of cases) for (const p of c.indexedParties || []) add(c.key,p.name,sourcePartyRoles(p.role,true));
-  for (const p of reports?.parties || []) {
-    add(p.caseKey,replacements.get(p.caseKey)?.get(p.name) || p.name,sourcePartyRoles(p.partyRole),[p.name,...(p.sourceNames || [])]);
+  for (const p of reports?.partyDetails || reports?.parties || []) {
+    add(p.caseKey,p.displayName || replacements.get(p.caseKey)?.get(p.name) || p.name,sourcePartyRoles(p.partyRole),[p.name,...(p.sourceNames || [])]);
   }
   return cases.map(c => {
     const partyAppearances = [...(parties.get(c.key)?.values() || [])].map(p=>({...p,sourceNames:[...p.sourceNames]}));
@@ -500,7 +514,7 @@ function showCase(c) {
   for (const [key,value] of [['District',c.district],['Filed',c.dateFiled],['Role',c.role || c.team || (litigantRun() ? 'See source party-role codes below' : 'Unresolved — select this docket to investigate')],['Status',c.status],...(litigantRun() ? [] : [['Represented parties',c.representedParties.join('; ') || 'Not established from the case index']])]) $('detail-fields').append(node('p',`${key}: ${value}`));
   $('detail-parties').replaceChildren();
   for (const p of c.indexedParties || []) $('detail-parties').append(node('p',`${p.name} · PCL party role: ${p.role || 'Not supplied'}`));
-  for (const p of (current.partyReports?.parties || []).filter(p => p.caseKey === c.key)) {
+  for (const p of (current.partyReports?.partyDetails || current.partyReports?.parties || []).filter(p => p.caseKey === c.key)) {
     const block = node('div',undefined,'party-appearance');
     block.append(node('strong',p.name),node('p',`${p.partyRole} · ${p.relationship}${p.defendantNumbers.length ? ' · Defendant '+p.defendantNumbers.join(', ') : ''}`));
     if (p.matchedCounsel.length) block.append(node('p','Matched counsel: '+p.matchedCounsel.join('; '),'help'));

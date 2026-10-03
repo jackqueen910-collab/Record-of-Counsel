@@ -28,7 +28,7 @@ class SearchTabsBrowserTests(unittest.TestCase):
         session = Session('fake-session', requester=request)
         with tempfile.TemporaryDirectory() as folder, contextlib.redirect_stdout(io.StringIO()), \
                 patch.object(Session, 'login', return_value=session) as login, \
-                patch('roc.cli.CourtRetriever', side_effect=AssertionError('No docket requests')):
+                patch('roc.engine.CourtRetriever', side_effect=AssertionError('No docket requests')):
             hub = Accounts(folder)
             server, url = make_server(hub)
             thread = threading.Thread(target=server.serve_forever, daemon=True)

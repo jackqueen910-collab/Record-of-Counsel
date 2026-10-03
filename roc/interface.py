@@ -7,7 +7,7 @@ import json
 import mimetypes
 import secrets
 import threading
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, parse_qs
 import webbrowser
 
 from .common import RocError, write_json
@@ -96,7 +96,8 @@ def make_server(workspace, port=0, *, enable_demo=False):
                         if path == '/api/name-rules':
                             return self.send(200, current.name_rules.public())
                         if len(parts) == 3 and parts[:2] == ['api', 'runs']:
-                            return self.send(200, current.summary(parts[2], detail=True))
+                            since = parse_qs(urlsplit(self.path).query).get('since', [None])[0]
+                            return self.send(200, current.summary(parts[2], detail=True, since=since, compact=True))
                         if len(parts) == 4 and parts[:2] == ['api', 'runs'] and parts[3] == 'documents':
                             return self.send(200, current.grabber.state(parts[2]))
                         if len(parts) == 4 and parts[:2] == ['api', 'runs'] and parts[3] == 'document-bundle':

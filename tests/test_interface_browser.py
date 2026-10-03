@@ -2,6 +2,7 @@
 import contextlib
 import io
 import os
+import re
 from pathlib import Path
 import tempfile
 import threading
@@ -112,7 +113,7 @@ class InterfaceBrowserTests(unittest.TestCase):
                 raise AssertionError('The browser test did not release the fake search')
             return response([record(seq=1), record(seq=2)])
         FakeCourt.bought, FakeCourt.fail_key = [], None
-        with tempfile.TemporaryDirectory() as folder, contextlib.redirect_stdout(io.StringIO()), patch("roc.cli.CourtRetriever", FakeCourt):
+        with tempfile.TemporaryDirectory() as folder, contextlib.redirect_stdout(io.StringIO()), patch("roc.engine.CourtRetriever", FakeCourt):
             ws = Workspace(folder, lambda: Session("fictional", requester=request))
             ws.connection.session = Session("fictional", requester=request)
             server, url = make_server(ws)
@@ -241,7 +242,7 @@ class InterfaceBrowserTests(unittest.TestCase):
             requests.append(True)
             return response([record(seq=1), record(seq=2), record(seq=3,filed='2024-03-01'), record('gudc',4)])
         FakeCourt.bought,FakeCourt.fail_key=[],None
-        with tempfile.TemporaryDirectory() as folder, contextlib.redirect_stdout(io.StringIO()), patch('roc.cli.CourtRetriever',FakeCourt):
+        with tempfile.TemporaryDirectory() as folder, contextlib.redirect_stdout(io.StringIO()), patch('roc.engine.CourtRetriever',FakeCourt):
             session=Session('fictional',requester=request)
             ws=Workspace(folder,lambda:session); ws.connection.session=session
             identifier=ws.new(form());ws.future.result(10)
@@ -422,23 +423,25 @@ class InterfaceBrowserTests(unittest.TestCase):
                     # A refreshed tab may load new assets before an old, signed-in
                     # server is restarted. Keep the case view usable in that gap.
                     def legacy_reply(route):
-                        reply = route.fetch()
+                        reply = route.fetch(url=route.request.url.split('?')[0])
                         data = reply.json()
+                        data.pop('dataRevision', None)
+                        data.pop('dataUnchanged', None)
                         data.pop('partyReports', None)
                         for row in data['cases']:
                             row.pop('role', None)
                         route.fulfill(response=reply, json=data)
-                    page.route(f'**/api/runs/{identifier}', legacy_reply)
+                    page.route(re.compile(rf'/api/runs/{identifier}(?:\?.*)?$'), legacy_reply)
                     page.reload()
                     page.get_by_role('button',name='Jordan Lawyer').click()
                     expect(page.locator('#report-coverage')).to_contain_text('An update is ready')
                     expect(page.locator('#view-clients')).to_be_disabled()
                     expect(page.locator('#case-rows')).to_contain_text('Criminal Defense')
-                    page.unroute(f'**/api/runs/{identifier}', legacy_reply)
+                    page.unroute(re.compile(rf'/api/runs/{identifier}(?:\?.*)?$'), legacy_reply)
                     # Keep source-supplied civil descriptions, distinguish an
                     # unresolved parsed docket, and do not offer unsupported courts.
                     def mixed_reply(route):
-                        reply = route.fetch(); data = reply.json()
+                        reply = route.fetch(url=route.request.url.split('?')[0]); data = reply.json()
                         parsed = data['cases'][0]
                         parsed.update(role='',team='',nature='Not supplied by PCL')
                         civil = dict(parsed, key='nysdc|1:24-cv-00002',caseNumber='1:24-cv-00002',
@@ -446,7 +449,7 @@ class InterfaceBrowserTests(unittest.TestCase):
                         unavailable = dict(civil, key='gudc|1:24-cv-00003',caseNumber='1:24-cv-00003',
                             nature='Not supplied by PCL',eligible=False,ineligibleReason='Court not enabled')
                         data['cases'].extend([civil,unavailable]);route.fulfill(response=reply,json=data)
-                    page.route(f'**/api/runs/{identifier}',mixed_reply)
+                    page.route(re.compile(rf'/api/runs/{identifier}(?:\?.*)?$'),mixed_reply)
                     page.reload();page.get_by_role('button',name='Jordan Lawyer').click()
                     expect(page.locator('#case-rows tr')).to_have_count(3)
                     civil_row = page.locator('#case-rows tr').filter(has=page.get_by_role('button',name='1:24-cv-00002',exact=True))

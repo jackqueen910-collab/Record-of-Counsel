@@ -84,7 +84,7 @@ class LiveWorkflowTests(unittest.TestCase):
             write_json(config, {"lawyer": {"firstName": "Jordan", "lastName": "Lawyer"},
                 "runDirectory": "run", "budgetCents": 310, "dockets": {"limit": 1}})
             with patch("roc.cli.Session.prompt", return_value=Session("fake", requester=request)), \
-                 patch("roc.cli.CourtRetriever", FakeCourt), contextlib.redirect_stdout(io.StringIO()):
+                 patch("roc.engine.CourtRetriever", FakeCourt), contextlib.redirect_stdout(io.StringIO()):
                 self.assertEqual(run(config, live=True), 0)
             result = read_json(Path(folder) / "run/result.json")
             self.assertEqual(result["chargedCentsThisRunFolder"], 310)
@@ -99,7 +99,7 @@ class LiveWorkflowTests(unittest.TestCase):
             write_json(config, {"lawyer": {"firstName": "Jordan", "lastName": "Lawyer"},
                 "runDirectory": "run", "budgetCents": 1000, "dockets": {"limit": 2}})
             with patch("roc.cli.Session.prompt", side_effect=RocError("Sign-in failed")), \
-                 patch("roc.cli.CourtRetriever") as browser, contextlib.redirect_stdout(io.StringIO()):
+                 patch("roc.engine.CourtRetriever") as browser, contextlib.redirect_stdout(io.StringIO()):
                 with self.assertRaises(RocError):
                     run(config, live=True)
                 browser.assert_not_called()

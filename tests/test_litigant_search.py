@@ -69,7 +69,7 @@ class LitigantSearchTests(unittest.TestCase):
             calls.append((url, payload))
             return response(rows)
         with tempfile.TemporaryDirectory() as folder, contextlib.redirect_stdout(io.StringIO()), \
-                patch('roc.cli.CourtRetriever', side_effect=AssertionError('No court retrieval')), \
+                patch('roc.engine.CourtRetriever', side_effect=AssertionError('No court retrieval')), \
                 patch('roc.claude.analyze', side_effect=AssertionError('No AI')):
             ws = Workspace(folder, lambda:Session('fake-token', requester=request))
             try:

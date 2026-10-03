@@ -7,7 +7,7 @@ import re
 import threading
 import uuid
 
-from .cli import run
+from .engine import run_workflow
 from .common import RocError, case_key, now, read_json, write_json
 from .connection import BrowserConnection
 from .locking import ProcessLock
@@ -17,6 +17,7 @@ from .parties import CLIENT_REPORT_VERSION, build_party_reports, case_role, deta
 from .name_rules import NameRules, fingerprint, party_key, snapshot
 from .exports import output_directory, export_metadata, incomplete_export, publish_exports
 from .review import case_issues
+from .projections import data_revision, compact_reports
 from .store import RunStore
 from .grabber import DocumentGrabber
 from .search import search_type, subject, subject_name, counsel_aliases, search_plan, require_attorney, indexed_parties
@@ -241,9 +242,9 @@ class Workspace:
                 "path": str(self.folder(identifier) / "demo-docket.html")}
         return reports
 
-    def cases(self, identifier):
+    def cases(self, identifier, output=None):
         folder = self.folder(identifier)
-        path = output_directory(folder) / "evidence.json"
+        path = (output_directory(folder) if output is None else output) / "evidence.json"
         if path.exists():
             return read_json(path)["cases"]
         path = folder / "pcl-records.json"
@@ -260,7 +261,7 @@ class Workspace:
                 return []
         return cases
 
-    def summary(self, identifier, detail=False):
+    def summary(self, identifier, detail=False, since=None, compact=False):
         m = self.manifest(identifier)
         receipt = self.receipts(identifier)
         busy = self.active == identifier
@@ -272,13 +273,16 @@ class Workspace:
         progress = read_json(progress_path) if progress_path.exists() else {}
         if busy and m.get('lastAction', '').startswith('documents-'):
             progress = {}  # Do not display an older search/docket operation's progress.
-        cases = self.cases(identifier) if detail else []
         output = output_directory(folder)
-        metadata = export_metadata(folder)
+        metadata = export_metadata(folder, output)
         rules = self.name_rules.public()
+        revision = data_revision(folder, output, m['config'], rules)
+        unchanged = detail and since == revision
+        cases = self.cases(identifier, output) if detail and not unchanged else []
         result = {"id": identifier, "createdUtc": m["createdUtc"], "updatedUtc": m["updatedUtc"],
             "searchType": search_type(m['config']), "subjectName": subject_name(m['config']),
             "searchQueries": search_plan(m['config']),
+            "dataRevision": revision, "dataUnchanged": unchanged,
             **{key: m['config'][key] for key in ('lawyer', 'litigant') if key in m['config']},
             "search": m["config"].get("search", {}), "demo": m["demo"],
             "budgetCents": m["config"]["budgetCents"], "state": state, "busy": busy,
@@ -288,15 +292,20 @@ class Workspace:
             "lastAction": m["lastAction"], "caseCount": len(cases) if detail else metadata.get("caseCount", 0),
             "enrichedCount": sum(bool(c.get("enrichment")) for c in cases) if detail else metadata.get("enrichedCases", 0), **receipt,
             "downloads": [n for n in sorted(DOWNLOADS) if (output / n).is_file()],
-            "exportsIncomplete": incomplete_export(folder),
+            "exportsIncomplete": not busy and incomplete_export(folder),
             "exportsNeedRefresh": (output / "evidence.json").exists() and (
                 snapshot(metadata.get("nameRules")) != snapshot(rules) or metadata.get("clientReportVersion") != CLIENT_REPORT_VERSION),
             "indexReady": (folder / "pcl-records.json").exists() or m["demo"] and (output / "evidence.json").exists()}
         if result['exportsIncomplete']:
-            result['exportNotice'] = 'Export interrupted. Results still show the previous complete set. Choose Resume to rebuild from saved work.'
+            previous = 'Results still show the previous complete set. ' if (output / 'evidence.json').exists() else 'Downloads are not ready. '
+            result['exportNotice'] = 'Export interrupted. ' + previous + 'Choose Resume to rebuild from saved work.'
         if state == "interrupted":
             result["message"] = "The previous process ended. Resume explicitly to reuse saved work; pending receipts still block purchases."
-        if detail:
+        if unchanged:
+            # The client keeps the counts and rows from this exact revision.
+            result.pop('caseCount')
+            result.pop('enrichedCount')
+        elif detail:
             rows = []
             for c in cases:
                 try:
@@ -311,7 +320,8 @@ class Workspace:
                     "representedParties": c.get("enrichment", {}).get("representedParties", []),
                     "indexedParties": c.get('indexedParties', []), "matchedSearchNames": c.get('matchedSearchNames', [])})
             result["cases"] = rows
-            result["partyReports"] = self.party_reports(identifier, cases, rules)
+            reports = self.party_reports(identifier, cases, rules)
+            result["partyReports"] = compact_reports(reports) if compact else reports
         return result
 
     def list(self):
@@ -451,11 +461,11 @@ class Workspace:
                     config["retrieveDockets"] = [{"courtId": key.split("|")[0], "caseNumber": key.split("|")[1]}
                                                 for key in m["selected"] if key not in reports]
                 write_json(folder / "config.json", config)
-                code = run(folder / "config.json", live=not m["demo"] and action != "export",
-                           session_provider=session_provider, checkpoint=self.checkpoint)
-                progress = read_json(folder / "status.json")
+                result = run_workflow(config, folder, live=not m["demo"] and action != "export",
+                                      session_provider=session_provider, checkpoint=self.checkpoint)
+                code = result.exit_code
                 message = (("Case index ready. Download the index or explore matched litigants." if search_type(config) == 'litigant' else "Case index ready. Select dockets to enrich, or download the index now.") if action == "search" and code == 0
-                           else progress["message"])
+                           else result.message)
             with self.lock:
                 m = self.manifest(identifier)
                 # Auxiliary actions never erase an interrupted search/retrieval's Resume control.
@@ -463,7 +473,7 @@ class Workspace:
                 m.update(state="stopped" if code or auxiliary and m.get("needsResume") else "ready", message=message)
                 if not auxiliary:
                     m["needsResume"] = bool(code)
-                    m["docketCapStopped"] = bool(action == "retrieve" and code and progress.get("stopReasonCode") == "budget")
+                    m["docketCapStopped"] = bool(action == "retrieve" and code and result.metadata.get("stopReasonCode") == "budget")
                 self.save(identifier, m)
         except RocError as exc:
             with self.lock:

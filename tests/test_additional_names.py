@@ -157,7 +157,7 @@ class AdditionalNamesTests(unittest.TestCase):
         self.assertEqual(summary['cases'][0]['matchedSearchNames'], ['Robert Lawyer','Jordan Lawyer'])
         key = summary['cases'][0]['key']
         FakeCourt.bought, FakeCourt.fail_key = [], None
-        with patch('roc.cli.CourtRetriever', FakeCourt):
+        with patch('roc.engine.CourtRetriever', FakeCourt):
             ws.act(ident, 'retrieve', retrieval_values(ws, ident, [key]))
             ws.future.result(15)
         summary = ws.summary(ident, True)
