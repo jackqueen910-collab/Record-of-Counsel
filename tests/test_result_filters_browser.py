@@ -58,6 +58,72 @@ def browser_fixture(cases):
 
 @unittest.skipUnless(os.environ.get('ROC_BROWSER_TESTS') == '1','Set ROC_BROWSER_TESTS=1')
 class ResultFilterBrowserTests(unittest.TestCase):
+    def test_activity_tracks_current_operation_and_stops_when_paused_or_interrupted(self):
+        from playwright.sync_api import expect
+        rows=[case(1,'A case','nysdc','2024-01-01',[],'Not supplied by PCL')]
+        with browser_fixture(rows) as (page,ws,identifier,path,evidence,errors,blocked,mutations):
+            override={}
+            active={'id':None}
+            def detail(route):
+                response=route.fetch(); data=response.json(); data.update(override)
+                route.fulfill(response=response,json=data)
+            def listing(route):
+                response=route.fetch(); data=response.json(); data['active']=active['id']
+                route.fulfill(response=response,json=data)
+            page.route(f'**/api/runs/{identifier}',detail)
+            page.route('**/api/runs',listing)
+            override.update(busy=True,state='running',lastAction='search',indexReady=False)
+            active['id']=identifier
+            expect(page.locator('#results-progress-title')).to_have_text('Preparing your results…',timeout=10000)
+            expect(page.locator('#case-rows tr')).to_have_count(1)  # Partial rows stay visible.
+            expect(page.locator('#run-help')).to_contain_text('remaining searches are still running')
+            expect(page.locator('#case-rows input[type=checkbox]')).to_be_disabled()
+            override['pauseRequested']=True
+            expect(page.locator('#results-progress-title')).to_have_text('Pausing after the current request…',timeout=10000)
+            expect(page.locator('#live-progress')).to_be_visible()  # Request still settling.
+            for state in ('stopped','interrupted'):
+                override.update(busy=False,state=state,pauseRequested=False)
+                active['id']=None
+                expect(page.locator('#run-status')).to_have_text(state.upper(),timeout=10000)
+                expect(page.locator('#results-progress')).not_to_be_visible()
+                expect(page.locator('#live-progress')).not_to_be_visible()
+                expect(page.locator('#select-visible')).to_be_disabled()  # Incomplete search.
+                expect(page.locator('#run-help')).to_contain_text('Resume to finish')
+            override.update(busy=True,state='running',lastAction='retrieve',indexReady=True)
+            active['id']=identifier
+            expect(page.locator('#results-progress-title')).to_have_text('Preparing your results…',timeout=10000)
+            override.update(busy=False,state='ready')
+            active['id']='another-run'
+            expect(page.locator('#run-status')).to_have_text('READY',timeout=10000)
+            expect(page.locator('#results-progress')).not_to_be_visible()
+            expect(page.locator('#live-progress')).not_to_be_visible()
+            expect(page).to_have_title('Record of Counsel')
+            self.assertEqual((errors,blocked,mutations),([],[],[]))
+
+    def test_simpler_filters_retain_case_notes_and_source_downloads(self):
+        from playwright.sync_api import expect
+        rows=[case(1,'A case','nysdc','2024-01-01',[],'Not supplied by PCL')]
+        rows[0]['warnings']=['Conflicting counsel association needs review.']
+        with browser_fixture(rows) as (page,ws,identifier,path,evidence,errors,blocked,mutations):
+            expect(page.locator('[data-facet="review"], [data-facet="docket"]')).to_have_count(0)
+            page.get_by_role('button',name='1:24-cv-00001',exact=True).click()
+            expect(page.get_by_role('heading',name='Data notes',exact=True)).to_be_visible()
+            expect(page.locator('#detail-issues')).to_contain_text('Conflicting counsel association needs review.')
+            page.get_by_role('button',name='Close case').click()
+            for label,filename in [('Source data ↓','evidence.json'),('Data notes ↓','review.json')]:
+                button=page.get_by_role('button',name=label,exact=True)
+                self.assertTrue(button.get_attribute('title').startswith('JSON:'))
+                with page.expect_download() as captured:
+                    button.click()
+                download=captured.value
+                self.assertEqual(download.suggested_filename,filename)
+                data=read_json(Path(download.path()))
+                if filename == 'evidence.json':
+                    self.assertEqual(data['cases'],rows)
+                else:
+                    self.assertIsInstance(data,list)
+            self.assertEqual((errors,blocked,mutations),([],[],[]))
+
     def test_client_types_vary_by_case_and_old_server_requires_export_restart(self):
         from playwright.sync_api import expect
         rows=[case(1,'First case','nysdc','2024-01-01',['Shared Client'],'Contract'),

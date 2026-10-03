@@ -104,8 +104,11 @@ class InterfaceBrowserTests(unittest.TestCase):
         from roc.pacer import Session
         from tests.test_workspace import FakeCourt, response, record
         requests = []
+        finish_search = threading.Event()
         def request(url, payload, headers):
             requests.append(payload)
+            if not finish_search.wait(45):
+                raise AssertionError('The browser test did not release the fake search')
             return response([record(seq=1), record(seq=2)])
         FakeCourt.bought, FakeCourt.fail_key = [], None
         with tempfile.TemporaryDirectory() as folder, contextlib.redirect_stdout(io.StringIO()), patch("roc.cli.CourtRetriever", FakeCourt):
@@ -120,8 +123,8 @@ class InterfaceBrowserTests(unittest.TestCase):
                     page = browser.new_page(viewport={"width":1440,"height":1100})
                     page.route("**/*", lambda route: route.continue_() if urlsplit(route.request.url).netloc == urlsplit(url).netloc else route.abort())
                     page.goto(url)
-                    page.get_by_label("First name", exact=True).fill("Jordan")
-                    page.get_by_label("Last name", exact=True).fill("Lawyer")
+                    page.get_by_label("First name", exact=True).fill("jordan")
+                    page.get_by_label("Last name", exact=True).fill("lawyer")
                     page.locator('#search-aliases summary').click()
                     page.locator('textarea[name="aliases"]').fill("Jordan A. Lawyer")
                     page.get_by_text("Courts & filing dates", exact=False).click()
@@ -129,14 +132,42 @@ class InterfaceBrowserTests(unittest.TestCase):
                     page.locator('#court-select').select_option("nysdc")
                     page.locator('input[name="budget"]').fill("0.10")
                     page.get_by_role("button", name="Search cases").click()
+                    expect(page.locator('#run-status')).to_have_text('IN PROGRESS',timeout=15000)
+                    expect(page.locator('#live-progress')).to_be_visible()
+                    expect(page.locator('#results-progress .activity-spinner')).to_be_visible()
+                    expect(page.locator('#results-progress-title')).to_have_text('Preparing your results…')
+                    expect(page.locator('#results-progress-help')).to_contain_text('Docket reports and downloads will be available when the search finishes')
+                    expect(page.locator('#preview')).to_be_disabled()
+                    expect(page.locator('#run-name')).to_have_text('Jordan Lawyer')
+                    expect(page.locator('#runs .run-link')).to_contain_text('Jordan Lawyer')
+                    expect(page.locator('#case-rows')).to_have_attribute('aria-busy','true')
+                    self.assertIsNone(page.locator('#live-progress').get_attribute('aria-valuenow'))
+                    capture = os.environ.get('ROC_UI_SCREENSHOTS')
+                    if capture:
+                        Path(capture).mkdir(parents=True,exist_ok=True)
+                        page.screenshot(path=str(Path(capture)/'search-in-progress.png'),full_page=True)
+                        page.set_viewport_size({'width':480,'height':900})
+                        page.screenshot(path=str(Path(capture)/'search-in-progress-mobile.png'),full_page=True)
+                        page.set_viewport_size({'width':1440,'height':1100})
+                    page.emulate_media(reduced_motion='reduce')
+                    expect(page.locator('.activity-spinner')).to_have_css('animation-name','none')
+                    expect(page.locator('#live-progress')).to_have_css('animation-name','none')
+                    page.emulate_media(reduced_motion='no-preference')
+                    expect(page.locator('.activity-spinner')).to_have_css('animation-name','activity-spin')
+                    expect(page.locator('#live-progress')).to_have_css('animation-name','activity-flow')
+                    finish_search.set()
                     expect(page.locator('#run-status')).to_have_text("READY", timeout=15000)
-                    self.assertEqual(requests, [{"firstName":"Jordan", "lastName":"Lawyer", "partyType":"aty",
+                    expect(page.locator('#live-progress')).not_to_be_visible()
+                    expect(page.locator('#results-progress')).not_to_be_visible()
+                    expect(page.locator('#case-rows')).to_have_attribute('aria-busy','false')
+                    self.assertEqual(requests, [{"firstName":"jordan", "lastName":"lawyer", "partyType":"aty",
                         "courtCase":{"courtId":["nysdc"],"dateFiledFrom":"2020-01-01"}}])
                     self.assertEqual(FakeCourt.bought, [])
                     expect(page.locator('#docket-guidance')).to_contain_text('Many reports can get expensive fast')
                     expect(page.locator('#case-rows .docket-field')).to_have_count(4)
                     page.locator('#choose-dockets').click()
-                    expect(page.locator('#active-filters')).to_contain_text('Without docket report')
+                    expect(page.locator('#active-filters')).to_be_empty()
+                    expect(page.locator('#filter')).to_be_focused()
                     expect(page.locator('#selection-count')).to_have_text('0')
                     capture = os.environ.get('ROC_UI_SCREENSHOTS')
                     if capture:
@@ -181,7 +212,7 @@ class InterfaceBrowserTests(unittest.TestCase):
                     self.assertEqual(FakeCourt.bought, ["nysdc|1:24-cr-00002"])
                     self.assertEqual(len(requests), 1)
                     expect(page.locator('#selection-count')).to_have_text('1')
-                    page.get_by_role('button',name='Remove Docket coverage: Without docket report',exact=True).click()
+                    expect(page.locator('#case-rows tr')).to_have_count(2)  # No hidden coverage filter.
                     expect(page.locator('#case-rows')).to_contain_text('Criminal Defense')
                     expect(page.locator('#case-rows .docket-field')).to_have_count(2)
                     # Re-selecting the saved report needs no new allowance.
@@ -197,6 +228,7 @@ class InterfaceBrowserTests(unittest.TestCase):
                 server.shutdown()
                 server.server_close()
                 thread.join(10)
+                finish_search.set()
                 ws.close()
 
     def test_clients_bulk_preview_selection_cap_stop_and_remaining_reports(self):
@@ -240,7 +272,8 @@ class InterfaceBrowserTests(unittest.TestCase):
                     expect(page.locator('#cases-panel')).to_be_visible()
                     expect(page.locator('#filter')).to_have_value('')
                     expect(page.locator('#selection-count')).to_have_text('0')
-                    expect(page.locator('#active-filters')).to_contain_text('Without docket report')
+                    expect(page.locator('#active-filters')).to_be_empty()
+                    expect(page.locator('#case-rows tr')).to_have_count(4)  # Saved and unsupported cases remain visible.
                     page.locator('#view-clients').click();page.locator('#clients-dockets').click()
                     expect(page.locator('#docket-cap')).to_have_value('')
                     page.locator('#docket-cap').fill('2.99')
@@ -255,6 +288,8 @@ class InterfaceBrowserTests(unittest.TestCase):
                     page.locator('#confirm-retrieve').click()
                     expect(page.locator('#docket-cap-stop')).to_be_visible(timeout=15000)
                     expect(page.locator('#run-status')).to_have_text('STOPPED')
+                    expect(page.locator('#live-progress')).not_to_be_visible()
+                    expect(page.locator('#results-progress')).not_to_be_visible()
                     expect(page.locator('#stat-spent')).to_have_text('$6.10')
                     expect(page.locator('#stat-dockets')).to_have_text('2')
                     expect(page.locator('#party-rows td').last).to_have_text('2')

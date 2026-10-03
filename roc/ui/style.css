@@ -78,9 +78,19 @@ details .two-columns{margin-top:15px}
 .stats span{display:block;color:var(--muted);font-size:12px}
 .stats strong{display:inline-block;font-size:29px;font-weight:500;margin-top:4px;letter-spacing:-.7px}
 .stats button{margin-left:8px}
-.progress-card{display:flex;justify-content:space-between;align-items:center;gap:20px;border-left:3px solid #87b9a9;background:#edf3ef;padding:17px 21px;margin-bottom:30px;border-radius:0 7px 7px 0}
+.progress-card{position:relative;overflow:hidden;display:flex;justify-content:space-between;align-items:center;gap:20px;border-left:3px solid #87b9a9;background:#edf3ef;padding:17px 21px;margin-bottom:30px;border-radius:0 7px 7px 0}
 .progress-card p{margin:8px 0 0}
 .progress-card .help:empty{display:none}
+.progress-card.is-active{border-left-color:var(--green);background:#dceee6;padding-bottom:24px;box-shadow:0 0 0 1px #bdd8cb}
+.progress-card.is-active .tag{background:var(--green);color:white}
+.activity-bar{position:absolute;bottom:0;left:0;right:0;height:6px;background:repeating-linear-gradient(110deg,#136f62 0 16px,#69b49d 16px 32px);background-size:68px 100%;animation:activity-flow 1s linear infinite}
+.results-progress{display:flex;align-items:center;gap:26px;padding:26px 30px;margin:18px 0 24px;background:#fff;border:1px solid #bdd8cb;border-radius:10px}
+.activity-spinner{flex:none;width:68px;height:68px;border:6px solid #e0eee7;border-top-color:var(--green);border-right-color:var(--green);border-radius:50%;animation:activity-spin .9s linear infinite}
+.results-progress strong{display:block;font-size:21px;color:var(--green)}
+.results-progress p{margin:6px 0 0;color:var(--muted);max-width:580px}
+@keyframes activity-flow{to{background-position:68px 0}}
+@keyframes activity-spin{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.activity-bar,.activity-spinner{animation:none}}
 .progress-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;max-width:380px}
 .progress-actions button{font-size:11px;white-space:nowrap}
 .results-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:13px;gap:15px}
