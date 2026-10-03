@@ -9,6 +9,7 @@ import unittest
 from unittest.mock import patch
 from urllib.parse import urlsplit
 
+from roc.exports import output_directory
 from roc.common import read_json, write_json
 from roc.interface import make_server
 from roc.workspace import Workspace
@@ -33,7 +34,7 @@ def browser_fixture(cases):
             patch('roc.pacer.request_json',side_effect=AssertionError('No PACER')):
         ws = Workspace(folder)
         identifier = ws.new(demo=True); ws.future.result(10)
-        path = ws.folder(identifier)/'output/evidence.json'
+        path = output_directory(ws.folder(identifier))/'evidence.json'
         evidence = read_json(path); evidence['cases'] = cases; write_json(path,evidence)
         server,url = make_server(ws)
         thread = threading.Thread(target=server.serve_forever,daemon=True); thread.start()

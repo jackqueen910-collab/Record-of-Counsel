@@ -9,6 +9,7 @@ import unittest
 from unittest.mock import patch
 from urllib.parse import urlsplit
 
+from roc.exports import output_directory
 from roc.common import read_json, write_json
 from roc.interface import make_server
 from roc.workspace import Workspace
@@ -26,7 +27,7 @@ class DocumentBrowserTests(unittest.TestCase):
             owner_store=MemoryCredentialStore()
             ws=Workspace(folder,ai_credentials=ProjectAIKey(owner_store,{}));ident=ws.new(demo=True);ws.future.result(10)
             rawpath=ws.folder(ident)/'demo-docket.html';rawpath.write_text(fixture(),encoding='utf-8')
-            evidence_path=ws.folder(ident)/'output/evidence.json';evidence=read_json(evidence_path)
+            evidence_path=output_directory(ws.folder(ident))/'evidence.json';evidence=read_json(evidence_path)
             evidence['cases'][0].update(CASE);write_json(evidence_path,evidence)
             manifest=ws.manifest(ident);manifest['demo']=False;ws.save(ident,manifest)
             # A non-demo run needs the completed PCL index, just like a real

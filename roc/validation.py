@@ -251,12 +251,9 @@ def run_validation(config_path, live=False, session_provider=None):
                                    allow_unverified=config.get("allowUnverifiedCourts", False))
         if continuation:
             prior = read_json(root / "validation-results.json")
-            matches = [s["case"] for s in prior["samples"] if s.get("case") and
-                       s["case"]["courtId"] == continuation["parameters"]["court"] and
-                       s["case"]["caseNumber"] == continuation["parameters"]["caseNumber"]]
-            if len(matches) != 1:
-                raise RocError("Pending confirmation has no unique saved case selection.")
-            retriever.resume_confirmation(continuation, matches[0])
+            from .retrieve import continuation_case
+            case = continuation_case(store, continuation, [s['case'] for s in prior['samples'] if s.get('case')])
+            retriever.resume_confirmation(continuation, case)
             store.check_pending()
         samples = []
         delay = config.get("requestDelaySeconds", 5)

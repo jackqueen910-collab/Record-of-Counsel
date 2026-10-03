@@ -8,12 +8,13 @@ from .courts import DISTRICT_COURTS, registry_summary
 from .docket import enrich, parse_report
 from .index import build_index, records_from
 from .name_rules import snapshot
-from .output import export_local, publish_google
+from .output import publish_google
+from .exports import publish_exports
 from .pacer import Session
 from .search_collection import collect_searches
 from .progress import Progress
 from .review import case_issues
-from .retrieve import CourtRetriever
+from .retrieve import CourtRetriever, pending_confirmation, continuation_case
 from .select import select_dockets, validate_options
 from .store import RunStore
 from .search import search_type, subject, subject_name, counsel_aliases, search_plan, require_attorney, indexed_parties
@@ -36,7 +37,6 @@ def run(config_path, live=False, publish=False, session_provider=None, checkpoin
     if config.get('savedDockets') or config.get('retrieveDockets') or config.get('dockets') is not None or publish:
         require_attorney(config)
     run_dir = resolve(base, config["runDirectory"])
-    output_dir = run_dir / "output"
     budget = config.get("budgetCents", 0)
     metadata = {"generatedUtc": now(), "searchType": kind, ('lawyer' if kind == 'attorney' else 'litigant'): target, "mode": "live" if live else "offline",
                 "searchQueries": search_plan(config),
@@ -49,11 +49,19 @@ def run(config_path, live=False, publish=False, session_provider=None, checkpoin
     with RunStore(run_dir, budget, checkpoint=checkpoint) as store:
         progress = Progress(run_dir)
         progress("starting", f"ROC: {name}. Run-folder spending limit: ${budget / 100:.2f}.")
-        store.check_pending()
+        continuation = pending_confirmation(store) if live else None
+        if not live:
+            store.check_pending()
         store.checkpoint()
         source = config.get("indexFile")
         if source:
             records = records_from(read_json(resolve(base, source)))
+        elif continuation:
+            # No fresh search may run while a report reservation is unresolved.
+            source = run_dir / 'pcl-records.json'
+            if not source.is_file():
+                raise RocError('Saved case index is needed to resume this report confirmation.')
+            records = records_from(read_json(source))
         elif live:
             if budget < 10:
                 raise RocError("Live index search requires a positive configured budget of at least 10 cents.")
@@ -71,6 +79,7 @@ def run(config_path, live=False, publish=False, session_provider=None, checkpoin
         by_key = {c["key"]: c for c in cases}
         reports = list(config.get("savedDockets", []))
         selected, plan = select_dockets(cases, config)
+        resumed_case = continuation_case(store, continuation, selected) if continuation else None
         write_json(run_dir / "docket-plan.json", plan)
         metadata["docketSelection"] = plan
         if selected:
@@ -86,10 +95,15 @@ def run(config_path, live=False, publish=False, session_provider=None, checkpoin
                 session = (session_provider or Session.prompt)()
             retriever = CourtRetriever(session, store, headless=config.get("headless", True), progress=progress,
                                        allow_unverified=config.get("allowUnverifiedCourts", False))
+            # Finish the existing reservation before any other selected case.
+            if resumed_case:
+                selected = [resumed_case, *[c for c in selected if c is not resumed_case]]
             for case in selected:
                 try:
                     store.checkpoint()
-                    path = retriever.retrieve(case)
+                    path = (retriever.resume_confirmation(continuation, case) if case is resumed_case
+                            else retriever.retrieve(case))
+                    store.check_pending()
                     reports.append({"courtId": case["courtId"], "caseNumber": case["caseNumber"], "path": str(path)})
                 except RocError as exc:
                     stop_reason = str(exc)
@@ -140,7 +154,7 @@ def run(config_path, live=False, publish=False, session_provider=None, checkpoin
         metadata["resolvedRoleCases"] = metadata["resolvedTeamCases"]
         metadata["unresolvedRoleCases"] = metadata["unresolvedTeamCases"]
         title = f"Record of Counsel (ROC): {name}" + (' — Litigant search' if kind == 'litigant' else '')
-        path = export_local(cases, output_dir, title, metadata)
+        path = publish_exports(cases, run_dir, title, metadata)
         if publish:
             if not config.get("googleOAuthFile"):
                 raise RocError("Local outputs saved. Standalone Sheets publishing needs googleOAuthFile; this program does not use the chat connector.")

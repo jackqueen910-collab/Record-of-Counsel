@@ -141,7 +141,7 @@ function setButtons() {
   $('name-rules').disabled = busy || !rulesAvailable || litigantRun();
   $('name-rules').title = litigantRun() ? 'Name rules currently apply to attorney client reports' : rulesAvailable ? 'Saved name corrections and organization groups' : 'Restart ROC to load name rules';
   $('group-names').disabled = busy || !rulesAvailable || selectedNames.size === 0;
-  $('refresh-reports').disabled = busy || !clientReportsAvailable;
+  $('refresh-reports').disabled = busy || !clientReportsAvailable || current?.exportsIncomplete;
   for (const id of ['rule-label','rule-kind','rule-names','preview-rule','new-rule','delete-rule']) $(id).disabled = busy || rulesBusy;
   $('undo-rule').disabled = busy || rulesBusy || !ruleState?.canUndo;
   $('apply-rule').disabled = busy || rulesBusy || !pendingRule;
@@ -179,7 +179,7 @@ function setButtons() {
     $('signin').hidden = current.demo || !['stopped','interrupted'].includes(current.state);
     $('reconcile').hidden = !current.pendingCount && !current.stoppedReason;
     $('edit-cap').hidden = current.demo; $('rebuild').disabled = busy || !current.indexReady;
-    $('exports').querySelectorAll('button').forEach(b => b.disabled = current.busy || current.exportsNeedRefresh || !clientReportsAvailable);
+    $('exports').querySelectorAll('button').forEach(b => b.disabled = current.busy || current.exportsNeedRefresh || current.exportsIncomplete || !clientReportsAvailable);
   }
 }
 async function refresh() {
@@ -268,8 +268,8 @@ function renderRun() {
   const coverage = r.partyReports?.coverage;
   $('report-coverage').textContent = coverage ? `${coverage.parsedDockets} of ${coverage.indexedCases} indexed cases have parsed dockets · ${coverage.indexOnlyCases} index only · Counsel matched in ${coverage.casesWithMatchedClients} cases${coverage.partyTablesNeedingReview ? ` · ${coverage.partyTablesNeedingReview} party tables need review` : ''}. Client summaries cover saved dockets only.` : 'An update is ready. Use Stop ROC, then reopen Start ROC to load party reports. Saved work is retained; reconnect PACER when you next need access.';
   if (litigantRun()) $('report-coverage').textContent = 'PCL litigant matches · One row per case. Matched names appear below the case title; original party-role codes are in case details and downloads. Names may match different people or entities. Litigant docket enrichment and Document Grabber are not available in this first step.';
-  $('exports-stale').hidden = clientReportsAvailable && !r.exportsNeedRefresh;
-  $('exports-stale-message').textContent = clientReportsAvailable ? 'Updated reports are available. Refresh this run’s downloads from saved evidence, free.' : 'The Clients view is ready. To update downloads, use Stop ROC and reopen Start ROC, then choose Update exports. Restarting ends the current PACER sign-in; saved data stays available.';
+  $('exports-stale').hidden = clientReportsAvailable && !r.exportsNeedRefresh && !r.exportsIncomplete;
+  $('exports-stale-message').textContent = r.exportsIncomplete ? r.exportNotice : clientReportsAvailable ? 'Updated reports are available. Refresh this run’s downloads from saved evidence, free.' : 'The Clients view is ready. To update downloads, use Stop ROC and reopen Start ROC, then choose Update exports. Restarting ends the current PACER sign-in; saved data stays available.';
   $('exports').replaceChildren();
   const formats = {'case-index.xlsx':'Excel ↓','case-index.csv':'CSV ↓','party-reports.zip':'Client CSVs ↓','case-index.html':'HTML ↓','evidence.json':'Source data ↓','review.json':'Data notes ↓'};
   const descriptions = {'evidence.json':'JSON: structured case data, source records and audit details. Does not contain filings.', 'review.json':'JSON: missing fields, data conflicts and items needing review. These are data notes, not legal conclusions.'};

@@ -10,6 +10,7 @@ from unittest.mock import patch
 from openpyxl import load_workbook
 
 from roc.cli import run
+from roc.exports import output_directory
 from roc.common import RocError, read_json, write_json
 from roc.name_rules import NameRules, normalize_rules
 from roc.output import export_local
@@ -128,7 +129,7 @@ class WorkspaceNameRuleTests(unittest.TestCase):
     def test_preview_apply_refresh_all_views_without_modifying_ledger(self):
         one=self.demo();two=self.demo()
         folder=self.ws.folder(one)
-        original=read_json(folder/'output/evidence.json')['cases']
+        original=read_json(output_directory(folder)/'evidence.json')['cases']
         ledger=read_json(folder/'ledger.json') if (folder/'ledger.json').exists() else None
         request=self.request(one)
         preview=self.ws.preview_name_rule(request)
@@ -140,7 +141,7 @@ class WorkspaceNameRuleTests(unittest.TestCase):
         self.assertFalse((Path(self.tmp.name)/'name-rules.json').exists())
         with self.assertRaisesRegex(RocError,'Preview'): self.ws.apply_name_rule(request)
         self.apply(request)
-        self.assertEqual(read_json(folder/'output/evidence.json')['cases'],original)
+        self.assertEqual(read_json(output_directory(folder)/'evidence.json')['cases'],original)
         self.assertEqual(read_json(folder/'ledger.json') if (folder/'ledger.json').exists() else None,ledger)
         self.assertEqual(self.ws.summary(one,True)['partyReports']['defendants']['summary'][0]['caseCount'],1)
         self.assertFalse(self.ws.summary(one)['exportsNeedRefresh'])
@@ -155,9 +156,9 @@ class WorkspaceNameRuleTests(unittest.TestCase):
     def test_old_report_layout_requires_free_export_refresh(self):
         identifier=self.demo()
         folder=self.ws.folder(identifier)
-        metadata=read_json(folder/'result.json')
+        metadata=read_json(output_directory(folder)/'result.json')
         metadata.pop('clientReportVersion')
-        write_json(folder/'result.json',metadata)
+        write_json(output_directory(folder)/'result.json',metadata)
         receipts=self.ws.receipts(identifier)
         self.assertTrue(self.ws.summary(identifier)['exportsNeedRefresh'])
         with self.assertRaisesRegex(RocError,'Update exports'):
@@ -171,7 +172,7 @@ class WorkspaceNameRuleTests(unittest.TestCase):
 
     def test_stale_preview_cannot_commit_after_case_changes(self):
         identifier=self.demo();request=self.request(identifier);preview=self.ws.preview_name_rule(request)
-        path=self.ws.folder(identifier)/'output/evidence.json'
+        path=output_directory(self.ws.folder(identifier))/'evidence.json'
         value=read_json(path);value['cases']=[];write_json(path,value)
         with self.assertRaisesRegex(RocError,'Preview'):self.ws.apply_name_rule(request | {'previewId':preview['previewId']})
         self.assertEqual(self.ws.name_rules.public()['revision'],0)
@@ -205,7 +206,7 @@ class WorkspaceNameRuleTests(unittest.TestCase):
         config=read_json(folder/'config.json');config.pop('nameRules',None);config['nameRulesFile']=str(rules_path)
         write_json(folder/'config.json',config)
         self.assertEqual(run(folder/'config.json'),0)
-        r=read_json(folder/'output/party-reports.json')
+        r=read_json(output_directory(folder)/'party-reports.json')
         self.assertEqual(r['defendants']['summary'][0]['name'],'Example group')
         write_json(rules_path,{'revision':2,'rules':[rule(),rule(identifier='b'*32)]})
         with patch('roc.pacer.Session.prompt',side_effect=AssertionError('No sign-in')):

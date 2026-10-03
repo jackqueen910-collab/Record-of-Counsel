@@ -10,6 +10,7 @@ from unittest.mock import patch
 import zipfile
 
 from openpyxl import load_workbook
+from roc.exports import output_directory
 from roc.common import RocError, read_json
 from roc.pacer import Session
 from roc.search import counsel_aliases, search_plan
@@ -72,7 +73,7 @@ class AdditionalNamesTests(unittest.TestCase):
         self.assertEqual(both['matchedSearchNames'], ['Acme','Acme Corporation'])
         self.assertEqual(len(both['sourceRows']), 1)
         self.assertEqual(both['indexedParties'][0]['name'], 'Acme Corporation')
-        output = ws.folder(ident)/'output'
+        output = output_directory(ws.folder(ident))
         with zipfile.ZipFile(output/'party-reports.zip') as bundle:
             exported = list(csv.reader(io.StringIO(bundle.read('search-matches.csv').decode('utf-8-sig'))))
         self.assertEqual(len(exported), 4)
@@ -165,5 +166,5 @@ class AdditionalNamesTests(unittest.TestCase):
         self.assertEqual(len(self.calls), 2)
         sources = ws.grabber.sources(ident, [key])
         self.assertTrue(sources[0]['clients'])
-        self.assertEqual(read_json(ws.folder(ident)/'output/party-reports.json')['clients']['summary'][0]['name'], 'Example Client')
+        self.assertEqual(read_json(output_directory(ws.folder(ident))/'party-reports.json')['clients']['summary'][0]['name'], 'Example Client')
         self.assertEqual(ws.cases(ident)[0]['matchedSearchNames'], ['Robert Lawyer','Jordan Lawyer'])

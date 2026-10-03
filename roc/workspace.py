@@ -3,7 +3,6 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from importlib.resources import files
 from pathlib import Path
-import os
 import re
 import threading
 import uuid
@@ -11,11 +10,12 @@ import uuid
 from .cli import run
 from .common import RocError, case_key, now, read_json, write_json
 from .connection import BrowserConnection
+from .locking import ProcessLock
 from .courts import DISTRICT_COURTS, profile_for_case, require_enabled
 from .index import build_index, records_from
 from .parties import CLIENT_REPORT_VERSION, build_party_reports, case_role, details
 from .name_rules import NameRules, fingerprint, party_key, snapshot
-from .output import export_local
+from .exports import output_directory, export_metadata, incomplete_export, publish_exports
 from .review import case_issues
 from .store import RunStore
 from .grabber import DocumentGrabber
@@ -58,12 +58,7 @@ class Workspace:
         self.root = Path(root).resolve()
         self.root.mkdir(parents=True, exist_ok=True)
         self.process_lock = self.root / ".workspace.lock"
-        try:
-            fd = os.open(self.process_lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-            with os.fdopen(fd, "w") as stream:
-                stream.write(str(os.getpid()))
-        except FileExistsError:
-            raise RocError("This workspace is already open, or its prior process ended unexpectedly. Confirm that process has stopped before removing .workspace.lock.") from None
+        self._process_lock = ProcessLock(self.process_lock, "This workspace is already open in another ROC process.").acquire()
         self.connection = BrowserConnection()
         self.provider = session_provider or self.connection.get
         self.pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="roc-workflow")
@@ -134,14 +129,16 @@ class Workspace:
         folder = self.folder(identifier)
         # Take the normal run lock without reconciling or changing any receipts.
         with RunStore(folder, config["budgetCents"]) as store:
-            evidence_file = folder / "output/evidence.json"
+            if incomplete_export(folder):
+                raise RocError("The last export was interrupted. Choose Resume to rebuild from saved searches and dockets.")
+            evidence_file = output_directory(folder) / "evidence.json"
             metadata = read_json(evidence_file).get("run", {}) if evidence_file.exists() else {}
             cases = self.cases(identifier)
             metadata.update(generatedUtc=now(), nameRules=config["nameRules"], caseCount=len(cases),
                             enrichedCases=sum(bool(c.get("enrichment")) for c in cases), chargedCentsThisRunFolder=store.spent)
             kind = search_type(config)
             metadata.update(searchType=kind, searchQueries=search_plan(config), **{('lawyer' if kind == 'attorney' else 'litigant'): subject(config)})
-            path = export_local(cases, folder / "output", f"Record of Counsel (ROC): {subject_name(config)}" + (' — Litigant search' if kind == 'litigant' else ''), metadata)
+            path = publish_exports(cases, folder, f"Record of Counsel (ROC): {subject_name(config)}" + (' — Litigant search' if kind == 'litigant' else ''), metadata)
             write_json(folder / "result.json", metadata | {"workbook": str(path)})
 
     def close(self, release_lock=True):
@@ -151,7 +148,7 @@ class Workspace:
                 self.pool.shutdown(wait=True)
                 self.closed = True
             if release_lock and not self.lock_released:
-                self.process_lock.unlink(missing_ok=True)
+                self._process_lock.release()
                 self.lock_released = True
 
     def request_stop(self):
@@ -246,7 +243,7 @@ class Workspace:
 
     def cases(self, identifier):
         folder = self.folder(identifier)
-        path = folder / "output/evidence.json"
+        path = output_directory(folder) / "evidence.json"
         if path.exists():
             return read_json(path)["cases"]
         path = folder / "pcl-records.json"
@@ -276,8 +273,8 @@ class Workspace:
         if busy and m.get('lastAction', '').startswith('documents-'):
             progress = {}  # Do not display an older search/docket operation's progress.
         cases = self.cases(identifier) if detail else []
-        result_path = folder / "result.json"
-        metadata = read_json(result_path) if result_path.exists() else {}
+        output = output_directory(folder)
+        metadata = export_metadata(folder)
         rules = self.name_rules.public()
         result = {"id": identifier, "createdUtc": m["createdUtc"], "updatedUtc": m["updatedUtc"],
             "searchType": search_type(m['config']), "subjectName": subject_name(m['config']),
@@ -290,10 +287,13 @@ class Workspace:
             "stage": progress.get("stage", ""), "pauseRequested": busy and self.pause_event.is_set(),
             "lastAction": m["lastAction"], "caseCount": len(cases) if detail else metadata.get("caseCount", 0),
             "enrichedCount": sum(bool(c.get("enrichment")) for c in cases) if detail else metadata.get("enrichedCases", 0), **receipt,
-            "downloads": [n for n in sorted(DOWNLOADS) if (folder / "output" / n).is_file()],
-            "exportsNeedRefresh": (folder / "output/evidence.json").exists() and (
+            "downloads": [n for n in sorted(DOWNLOADS) if (output / n).is_file()],
+            "exportsIncomplete": incomplete_export(folder),
+            "exportsNeedRefresh": (output / "evidence.json").exists() and (
                 snapshot(metadata.get("nameRules")) != snapshot(rules) or metadata.get("clientReportVersion") != CLIENT_REPORT_VERSION),
-            "indexReady": (folder / "pcl-records.json").exists() or m["demo"] and (folder / "output/evidence.json").exists()}
+            "indexReady": (folder / "pcl-records.json").exists() or m["demo"] and (output / "evidence.json").exists()}
+        if result['exportsIncomplete']:
+            result['exportNotice'] = 'Export interrupted. Results still show the previous complete set. Choose Resume to rebuild from saved work.'
         if state == "interrupted":
             result["message"] = "The previous process ended. Resume explicitly to reuse saved work; pending receipts still block purchases."
         if detail:
@@ -485,9 +485,11 @@ class Workspace:
             raise RocError("Unknown export.")
         if self.active == identifier:
             raise RocError("Wait for this operation to finish before downloading its outputs.")
+        if incomplete_export(self.folder(identifier)):
+            raise RocError("The last export was interrupted. Choose Resume to rebuild a complete set from saved work.")
         if self.summary(identifier)["exportsNeedRefresh"]:
             raise RocError("Name rules changed. Use Update exports to rebuild this run's reports from saved evidence for free.")
-        path = (self.folder(identifier) / "output" / name).resolve()
+        path = (output_directory(self.folder(identifier)) / name).resolve()
         if not path.is_relative_to(self.folder(identifier)) or not path.is_file():
             raise RocError("This export is not available yet.")
         return path

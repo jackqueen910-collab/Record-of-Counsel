@@ -9,6 +9,7 @@ import unittest
 from unittest.mock import patch
 from urllib.parse import urlsplit
 
+from roc.exports import output_directory
 from roc.common import write_json
 from roc.interface import make_server
 from roc.workspace import Workspace
@@ -411,7 +412,7 @@ class InterfaceBrowserTests(unittest.TestCase):
                     expect(page.locator("#stat-spent")).to_have_text("$0.00")
                     # Source text cannot execute HTML/scripts, even in case details.
                     identifier = ws.list()["jobs"][0]["id"]
-                    evidence = ws.folder(identifier) / "output/evidence.json"
+                    evidence = output_directory(ws.folder(identifier)) / "evidence.json"
                     from roc.common import read_json
                     data = read_json(evidence)
                     data["cases"][0]["caseTitle"] = '<img src="https://foreign.example/x" onerror="alert(1)">'

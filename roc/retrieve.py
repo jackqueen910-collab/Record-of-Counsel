@@ -59,6 +59,18 @@ def pending_confirmation(store):
     return None
 
 
+def continuation_case(store, transaction, selected):
+    """Validate an explicit resume against its original selection and allowance."""
+    params = transaction['parameters']
+    matches = [c for c in selected if c['courtId'] == params['court'] and c['caseNumber'] == params['caseNumber']]
+    if (len(matches) != 1 or params.get('scope') != 'all-defendants'
+            or params.get('partiesAndCounsel') is not True):
+        raise RocError('Pending confirmation has no unique saved case selection with the original report scope.')
+    if store.spent + transaction['reservedCents'] > store.limit:
+        raise RocError('Remaining budget does not cover the existing report reservation.')
+    return matches[0]
+
+
 def court_cookies(session, origin):
     court_origin(origin)
     cookies = [{"name": COURT_TOKEN_COOKIE, "value": session.token, "url": origin,

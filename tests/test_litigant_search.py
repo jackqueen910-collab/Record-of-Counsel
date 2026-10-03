@@ -10,6 +10,7 @@ import zipfile
 
 from openpyxl import load_workbook
 from roc.cli import run
+from roc.exports import output_directory
 from roc.common import RocError, write_json
 from roc.pacer import Session
 from roc.search import search_criteria, subject_name
@@ -87,7 +88,7 @@ class LitigantSearchTests(unittest.TestCase):
                 self.assertEqual({p['role'] for c in summary['cases'] for p in c['indexedParties']}, {'pla','dft','custom-code'})
                 self.assertFalse(any(c['eligible'] for c in summary['cases']))
                 self.assertEqual(summary['partyReports']['clients']['summary'], [])
-                output = ws.folder(ident) / 'output'
+                output = output_directory(ws.folder(ident))
                 with (output / 'case-index.csv').open(encoding='utf-8-sig', newline='') as stream:
                     exported = list(csv.reader(stream))
                 self.assertEqual(len(exported), 3)

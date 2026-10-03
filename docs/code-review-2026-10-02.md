@@ -8,7 +8,7 @@ ROC has a sound core and does not need a rewrite. Search, court retrieval, parsi
 
 The most valuable cleanup is at the boundaries between those modules: parser uncertainty, interrupted operations, publication of exports, and the browser's representation of run state. I confirmed six actionable issues with seven offline reproductions. Two deserve priority because they can produce incorrectly attributed data or release an uncertain spending reservation.
 
-This was a review, not a repair pass. No application code, existing tests, running ROC process, PACER session, account workspace, or production credential was changed. No PACER, Google, or model requests were submitted. The report is local and has not been committed or pushed.
+This was a review, not a repair pass. No application code, existing tests, running ROC process, PACER session, account workspace, or production credential was changed. No PACER, Google, or model requests were submitted. This section describes the review snapshot before the authorized repair pass; implementation follow-up is recorded in [review fixes](review-fixes-2026-10-02.md).
 
 ## Findings, ordered by priority
 

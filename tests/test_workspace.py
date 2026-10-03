@@ -11,6 +11,7 @@ import unittest
 from unittest.mock import patch
 from urllib.parse import urlsplit
 
+from roc.exports import output_directory
 from roc.common import RocError, read_json, write_json
 from roc.interface import make_server
 from roc.pacer import Session
@@ -107,7 +108,7 @@ class WorkspaceTests(unittest.TestCase):
         self.assertTrue(self.ws.download(identifier, "case-index.xlsx").is_file())
         files = "".join(p.read_text(encoding="utf-8") for p in self.ws.folder(identifier).rglob("*.json"))
         self.assertNotIn("test-secret-token", files)
-        self.assertEqual(read_json(self.ws.folder(identifier) / "output/evidence.json")["cases"][0]["team"], "Criminal Defense")
+        self.assertEqual(read_json(output_directory(self.ws.folder(identifier)) / "evidence.json")["cases"][0]["team"], "Criminal Defense")
 
     def test_fresh_docket_cap_is_separate_from_search_and_cannot_reset_ledger(self):
         identifier = self.new(1000)

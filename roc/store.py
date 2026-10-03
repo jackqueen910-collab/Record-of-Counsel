@@ -1,9 +1,9 @@
 """Durable spending reservations and response cache; paid requests never auto-retry."""
-import os
 from pathlib import Path
 
 from .common import BudgetStop, RocError, fingerprint, now, read_json, write_json
 from .docket import receipt_cents
+from .locking import ProcessLock
 
 
 def api_fee(raw):
@@ -30,17 +30,16 @@ class RunStore:
         self.path = self.root / "ledger.json"
 
     def __enter__(self):
+        self._process_lock = ProcessLock(self.lock, "Run folder is locked by another ROC process.").acquire()
         try:
-            fd = os.open(self.lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-            with os.fdopen(fd, "w") as stream:
-                stream.write(str(os.getpid()))
-        except FileExistsError as exc:
-            raise RocError("Run folder is locked. Confirm its prior process has stopped before removing .run.lock.") from exc
-        self.ledger = read_json(self.path) if self.path.exists() else {"transactions": []}
+            self.ledger = read_json(self.path) if self.path.exists() else {"transactions": []}
+        except BaseException:
+            self._process_lock.release()
+            raise
         return self
 
     def __exit__(self, *_):
-        self.lock.unlink(missing_ok=True)
+        self._process_lock.release()
 
     @property
     def spent(self):

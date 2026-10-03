@@ -7,12 +7,12 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 import hashlib
 import hmac
-import os
 from pathlib import Path
 import secrets
 
 from .common import RocError
 from .connection import BrowserConnection
+from .locking import ProcessLock
 from .workspace import Workspace
 
 
@@ -51,12 +51,7 @@ class Accounts:
         self.root = Path(root).resolve()
         self.root.mkdir(parents=True, exist_ok=True)
         self.process_lock = self.root / '.workspace.lock'
-        try:
-            fd = os.open(self.process_lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-            with os.fdopen(fd, 'w') as stream:
-                stream.write(str(os.getpid()))
-        except FileExistsError:
-            raise RocError('This workspace is already open. Stop its existing ROC process before reopening.') from None
+        self._process_lock = ProcessLock(self.process_lock, 'This workspace is already open. Stop its existing ROC process before reopening.').acquire()
         self.lock = threading.RLock()
         self.close_lock = threading.Lock()
         self.pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix='roc-account-login')
@@ -221,5 +216,5 @@ class Accounts:
                     ws.close()
                 self.closed = True
             if release_lock and not self.lock_released:
-                self.process_lock.unlink(missing_ok=True)
+                self._process_lock.release()
                 self.lock_released = True

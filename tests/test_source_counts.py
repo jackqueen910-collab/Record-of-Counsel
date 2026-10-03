@@ -7,6 +7,7 @@ import unittest
 from unittest.mock import patch
 
 from roc.cli import run
+from roc.exports import output_directory
 from roc.common import read_json, write_json
 from roc.docket import enrich, parse_report, NOT_LISTED, TEAM_VALUES
 from roc.index import build_index
@@ -102,14 +103,14 @@ class SourceCountsTests(unittest.TestCase):
                 "savedDockets": [{"courtId": "nyedc", "caseNumber": "1:24-cr-1", "path": "docket.html"}]})
             with patch('socket.socket.connect', side_effect=AssertionError('No network')), contextlib.redirect_stdout(io.StringIO()):
                 self.assertEqual(run(root/'config.json'), 0)
-            result = read_json(root/'run/output/evidence.json')['cases'][0]
+            result = read_json(output_directory(root/'run')/'evidence.json')['cases'][0]
             self.assertEqual(result['nature'], NOT_LISTED)
             self.assertFalse(result['warnings'])
-            findings = read_json(root/'run/output/review.json')[0]
+            findings = read_json(output_directory(root/'run')/'review.json')[0]
             self.assertEqual(findings['issues'][0]['category'], 'missing-source')
             self.assertTrue(findings['items'][0].startswith('Missing from source:'))
             from openpyxl import load_workbook
-            book = load_workbook(root/'run/output/case-index.xlsx')
+            book = load_workbook(output_directory(root/'run')/'case-index.xlsx')
             self.assertEqual(book.active['H7'].value, NOT_LISTED)
             self.assertFalse(book.active['H7'].alignment.wrap_text)
             self.assertIn('all listed source rows', book.active['H7'].comment.text)
