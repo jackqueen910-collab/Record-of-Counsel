@@ -3,11 +3,23 @@
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Record of Counsel</title><link rel="stylesheet" href="/style.css"><script defer src="/app.js"></script><script defer src="/documents.js"></script><script defer src="/users.js"></script><script defer src="/surfer.js"></script></head>
 <body>
   <aside class="sidebar">
-    <a class="brand" href="#" id="home"><span class="monogram">R<span>O</span>C</span><span>Record of Counsel</span></a>
-    <p class="sidebar-note">THE CASE RESEARCH WORKSPACE</p>
+    <a class="brand" href="#" id="home" aria-label="Record of Counsel home">
+      <svg class="brand-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 224" aria-hidden="true" focusable="false">
+        <circle cx="128" cy="43" r="15" fill="var(--accent)"/>
+        <path d="M92 77 Q128 62 164 77 L159 99 L144 93 L128 153 L112 93 L97 99Z" fill="var(--accent)"/>
+        <g fill="none" stroke="var(--brand-light)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M106 92 Q72 72 30 88 L30 181 Q82 164 128 187 Q174 164 226 181 L226 88 Q184 72 150 92"/>
+          <path d="M128 159V186"/>
+          <path d="M49 119 Q73 111 94 119 M49 140 Q75 132 104 142 M162 119 Q184 111 207 119 M153 142 Q180 132 207 140" stroke-width="5"/>
+        </g>
+      </svg>
+      <span class="brand-title"><span>Record of</span> <em>Counsel</em></span>
+    </a>
+    <p class="sidebar-note">PACER without the mess</p>
     <button class="new-button" id="new-search">＋ New search</button>
     <button class="rules-launch" id="name-rules" disabled>Name rules</button>
     <button class="rules-launch" id="my-files" disabled>My Files</button><button class="rules-launch" id="import-legacy" hidden>Import older searches</button><div class="section-label">SAVED SEARCHES</div><nav id="runs" aria-label="Saved searches"><p class="help">Saved searches will appear here after you sign in to ROC.</p></nav>
+    <p class="brand-credit">A Queen Endeavors Project</p>
     <div class="sidebar-bottom"><span class="status-dot"></span> Running on this computer<br><small>Official PCL API · court docket reports</small></div>
   </aside>
   <main>
@@ -15,9 +27,9 @@
     <div id="notice" role="alert" hidden></div>
     <div id="other-cap-stop" class="cost-warning" role="alert" hidden><p id="other-cap-stop-text"></p><button id="view-cap-stop" class="secondary">View stopped run</button></div>
     <section id="search-view">
-      <div class="eyebrow">START WITH THE RECORD</div>
-      <h1>Start with a name.<br>Find the cases.</h1>
-      <p class="lead">Find federal cases by attorney, person or organization.<br>Build a case index, then explore the record.</p>
+      <div class="eyebrow">All the cases in one place.</div>
+      <h1>Start with a name<span class="headline-indent">Find cases.</span></h1>
+      <p class="lead">Search an attorney, person or organization. Build an index. Explore.</p>
       <div class="steps"><span><b>01</b> Search</span><span><b>02</b> <span id="search-step">Choose dockets</span></span><span><b>03</b> Review & export</span></div>
       <div class="search-tabs" role="tablist" aria-label="Search by"><button type="button" id="search-attorney" role="tab" aria-selected="true" aria-controls="search-form">Search Attorney</button><button type="button" id="search-litigant" role="tab" aria-selected="false" aria-controls="search-form" tabindex="-1">Search Litigant</button></div>
       <form id="search-form" class="card search-card" role="tabpanel" aria-labelledby="search-attorney">
