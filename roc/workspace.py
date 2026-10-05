@@ -20,7 +20,9 @@ from .review import case_issues
 from .projections import data_revision, compact_reports
 from .store import RunStore
 from .grabber import DocumentGrabber
-from .search import search_type, subject, subject_name, counsel_aliases, search_plan, require_attorney, indexed_parties
+from .library import Library
+from .surfer import DocketSurfer
+from .search import search_type, subject, subject_name, counsel_aliases, search_plan, indexed_parties
 
 DOWNLOADS = {"case-index.xlsx", "case-index.csv", "case-index.html", "evidence.json", "review.json", "party-reports.zip", "party-reports.json"}
 
@@ -73,6 +75,8 @@ class Workspace:
         self.close_lock = threading.Lock()
         self.name_rules = NameRules(self.root / "name-rules.json")
         self.grabber = DocumentGrabber(self, ai_credentials)
+        self.library = Library(self)
+        self.surfer = DocketSurfer(self)
 
     def party_reports(self, identifier, cases=None, rules=None):
         config = self.manifest(identifier)["config"]
@@ -223,11 +227,32 @@ class Workspace:
                                   "reservedCents": t["reservedCents"], "startedUtc": t["startedUtc"]} for t in txs]}
 
     def completed_reports(self, identifier):
+        keys = {c['key'] for c in self.cases(identifier)}
+        reports = {}
+        for manifest in sorted(self.root.glob('*/workspace.json')):
+            run = manifest.parent.name
+            if not re.fullmatch('[a-f0-9]{32}', run):
+                continue
+            if run != identifier and read_json(manifest).get('demo'):
+                continue
+            for key, report in self._own_completed_reports(run, keys, run != identifier).items():
+                if key not in reports or Path(report['path']).stat().st_mtime > Path(reports[key]['path']).stat().st_mtime:
+                    reports[key] = report
+        return reports
+
+    def _own_completed_reports(self, identifier, keys=None, block_pending=False):
         reports = {}
         for tx in self.ledger(identifier)["transactions"]:
-            if tx["kind"] != "docket" or tx["state"] != "complete":
+            if tx["kind"] != "docket":
                 continue
             p = tx["parameters"]
+            key = case_key(p["court"], p["caseNumber"])
+            if keys is not None and key not in keys:
+                continue
+            if tx['state'] != 'complete':
+                if block_pending:
+                    raise RocError('This case has an unresolved docket request in another saved search. Resolve its receipt before retrieving it again.')
+                continue
             # Only the same full-case scope that the court retriever purchases.
             if p.get("scope") != "all-defendants" or p.get("partiesAndCounsel") is not True:
                 continue
@@ -271,7 +296,7 @@ class Workspace:
         folder = self.folder(identifier)
         progress_path = folder / "status.json"
         progress = read_json(progress_path) if progress_path.exists() else {}
-        if busy and m.get('lastAction', '').startswith('documents-'):
+        if busy and m.get('lastAction', '').startswith(('documents-', 'surfer-')):
             progress = {}  # Do not display an older search/docket operation's progress.
         output = output_directory(folder)
         metadata = export_metadata(folder, output)
@@ -309,7 +334,6 @@ class Workspace:
             rows = []
             for c in cases:
                 try:
-                    require_attorney(m['config'])
                     require_enabled(profile_for_case(c))
                     reason = ""
                 except RocError as exc:
@@ -336,7 +360,6 @@ class Workspace:
         with self.lock:
             self.idle()
             m = self.manifest(identifier)
-            require_attorney(m['config'])
             if not self.summary(identifier)["indexReady"]:
                 raise RocError("Finish the case search before selecting dockets.")
             if not isinstance(keys, list) or not keys or any(not isinstance(k, str) for k in keys) or len(set(keys)) != len(keys):
@@ -374,6 +397,9 @@ class Workspace:
             m = self.manifest(identifier)
             if action in ('documents-analyze', 'documents-download'):
                 self.grabber.approve(identifier, action, values)
+                return
+            if action == 'surfer-download':
+                self.surfer.approve(identifier, values)
                 return
             if action == "budget":
                 cap = values.get("budgetCents")
@@ -420,10 +446,11 @@ class Workspace:
         m = self.manifest(identifier)
         if m["state"] == "running":
             m["needsResume"] = True  # Prior process interruption, not automatic completion.
-        if action in ("search", "retrieve", "documents-analyze", "documents-download"):
+        if action in ("search", "retrieve", "documents-analyze", "documents-download", "surfer-download"):
             m["lastAction"] = action
             m["docketCapStopped"] = False
         message = {'documents-analyze': 'Analyzing selected docket entries with Claude. No document purchases.',
+                   'surfer-download': 'Saving your selected documents to My Files.',
                    'documents-download': 'Retrieving selected PDFs under the approved document spending cap.'}.get(action, 'Starting ' + action + '.')
         m.update(state="running", message=message)
         self.save(identifier, m)
@@ -444,6 +471,9 @@ class Workspace:
             config["nameRules"] = snapshot(self.name_rules.public())
             if action in ('documents-analyze', 'documents-download'):
                 message = self.grabber.work(identifier, action, session_provider)
+                code = 0
+            elif action == 'surfer-download':
+                message = self.surfer.work(identifier, session_provider)
                 code = 0
             elif action == "refresh-reports":
                 self._refresh_reports(identifier, config)

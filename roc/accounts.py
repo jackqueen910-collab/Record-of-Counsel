@@ -1,19 +1,19 @@
-"""PACER-verified browser identities and isolated local account workspaces.
-
-PACER passwords/tokens and browser identities stay in memory. Only an HMAC
-of the successfully authenticated username names a persistent account folder.
-"""
+"""Personal ROC workspaces with separately connected PACER sessions."""
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 import hashlib
 import hmac
 from pathlib import Path
 import secrets
+import shutil
+import re
+import time
 
 from .common import RocError
 from .connection import BrowserConnection
 from .locking import ProcessLock
 from .workspace import Workspace
+from .users import Users
 
 
 def account_key(root, username):
@@ -39,6 +39,10 @@ class BrowserAccount:
         self.connection = BrowserConnection()
         self.owner = ''
         self.username = ''
+        self.email = ''
+        self.role = ''
+        self.version = 0
+        self.expires = time.time() + 12 * 3600
         self.guest = None
         self.future = None
         self.authenticating = False
@@ -59,6 +63,8 @@ class Accounts:
         self.workspaces = {}
         self.guests = []
         self.ai_credentials = ai_credentials
+        self.users = Users(self.root)
+        self.reset_sender = None
         self.stopping = self.closed = self.lock_released = False
 
     def _workspace(self, context):
@@ -71,7 +77,78 @@ class Accounts:
             raise RocError('ROC is stopping. Reopen it before signing in.')
 
     def _context(self, cookie):
-        return self.browsers.get(cookie)
+        context = self.browsers.get(cookie)
+        if context and context.owner:
+            user = self.users.get(context.owner)
+            if not user or user['version'] != context.version or time.time() > context.expires:
+                # Do not invalidate an in-flight request's own session object.
+                self.browsers.pop(cookie, None)
+                return None
+        return context
+
+    def user_sign_in(self, cookie, values, create=False, expected_view=None):
+        with self.lock:
+            self._check()
+            self._check_view(cookie, expected_view)
+            old = self._context(cookie)
+            self._idle(old)
+            allowed = {'email', 'password', 'confirmation'} if create else {'email', 'password'}
+            if set(values) - allowed:
+                raise RocError('Unexpected account fields.')
+            user = self.users.create(values) if create else self.users.login(values)
+            if user['id'] not in self.workspaces:
+                self.workspaces[user['id']] = Workspace(self.root / 'users' / user['id'], ai_credentials=self.ai_credentials)
+            if old:
+                old.connection.disconnect()
+                self.browsers.pop(cookie, None)
+            new_cookie, context = self._new_context()
+            context.owner, context.email, context.role, context.version = user['id'], user['email'], user['role'], user['version']
+            return new_cookie
+
+    def sign_out(self, cookie, expected_view=None):
+        with self.lock:
+            self._check_view(cookie, expected_view)
+            old = self._context(cookie)
+            self._idle(old)
+            if old:
+                old.connection.disconnect()
+            self.browsers.pop(cookie, None)
+            return self._new_context()[0]
+
+    def reset_password(self, values):
+        with self.lock:
+            owner = self.users.reset(values)
+            if owner in self.workspaces:
+                self.workspaces[owner].pause_event.set()
+            for cookie, context in list(self.browsers.items()):
+                if context.owner == owner:
+                    context.connection.stop()
+                    self.browsers.pop(cookie,None)
+
+    def import_legacy(self, cookie, expected_view=None):
+        """Explicit owner-only copy after PACER verification; never move/delete history."""
+        with self.lock:
+            self._check_view(cookie, expected_view)
+            context = self._context(cookie)
+            if not context or context.role != 'owner' or not context.connection.status()['connected']:
+                raise RocError('The ROC owner must connect the original PACER account before importing its old workspace.')
+            self._idle(context)
+            source = self.root / 'accounts' / account_key(self.root, context.username)
+            target = self._workspace(context).root
+            count = 0
+            for manifest in source.glob('*/workspace.json'):
+                identity = manifest.parent.name
+                if not re.fullmatch('[a-f0-9]{32}', identity) or (target / identity).exists():
+                    continue
+                temp = target / ('import-' + identity)
+                if temp.exists():
+                    raise RocError('An earlier import was interrupted. Its files are preserved; ask the owner to inspect it.')
+                shutil.copytree(manifest.parent, temp, ignore=shutil.ignore_patterns('.run.lock', '*.tmp'))
+                temp.rename(target / identity)
+                count += 1
+            if (source/'name-rules.json').is_file() and not (target/'name-rules.json').exists():
+                shutil.copy2(source/'name-rules.json',target/'name-rules.json')
+            return {'imported': count}
 
     def _new_context(self):
         key = secrets.token_urlsafe(32)
@@ -96,23 +173,15 @@ class Accounts:
         with self.lock:
             self._check()
             self._check_view(cookie, expected_view)
-            old = self._context(cookie)
-            self._idle(old)
-            context = BrowserAccount()
+            context = self._context(cookie)
+            if not context or not context.owner:
+                raise RocError('Sign in to ROC before connecting PACER.')
+            self._idle(context)
             fields = context.connection.prepare(values)
             username = fields['username']
-            # A reconnect preserves the existing ROC identity even if PACER is
-            # unavailable. Switching usernames hides the old account immediately.
-            if old and old.owner and old.username == username:
-                context.owner, context.username, context.view = old.owner, old.username, old.view
-            if old:
-                old.connection.disconnect()
-                self.browsers.pop(cookie, None)
-            new_cookie = secrets.token_urlsafe(32)
-            self.browsers[new_cookie] = context
             context.authenticating = True
             context.future = self.pool.submit(self._authenticate, context, username, fields)
-            return new_cookie
+            return cookie
 
     def _authenticate(self, context, username, fields):
         context.connection.authenticate(fields)
@@ -123,16 +192,7 @@ class Accounts:
                 return
             if not context.connection.status()['connected']:
                 return
-            try:
-                owner = account_key(self.root, username)
-                if owner not in self.workspaces:
-                    self.workspaces[owner] = Workspace(self.root / 'accounts' / owner, ai_credentials=self.ai_credentials)
-                if context.owner != owner:
-                    context.view = secrets.token_urlsafe(18)
-                context.owner, context.username = owner, username
-            except Exception:
-                context.connection.disconnect()
-                context.connection.message = 'PACER accepted sign-in, but ROC could not open this account’s saved searches. No search was submitted.'
+            context.username = username
 
     def disconnect(self, cookie, expected_view=None):
         with self.lock:
@@ -141,8 +201,8 @@ class Accounts:
             self._idle(context)
             if context:
                 context.connection.disconnect()
-                self.browsers.pop(cookie, None)
-            return self._new_context()[0]
+                context.username = ''
+            return cookie
 
     def status(self, cookie):
         with self.lock:
@@ -152,6 +212,8 @@ class Accounts:
                 state.update(connecting=True, connected=False)
             return {**state, 'signedIn': bool(context and context.owner),
                     'username': context.username if context and context.owner else '',
+                    'email': context.email if context else '', 'role': context.role if context else '',
+                    'personalAccounts': True, 'recoveryAvailable': self.reset_sender is not None,
                     'viewId': context.view if context else 'signed-out',
                     'accountMode': True}
 
@@ -172,12 +234,12 @@ class Accounts:
             self._check_view(cookie, expected_view)
             context = self._context(cookie)
             if not context or (require_account and not context.owner):
-                raise RocError('Sign in with PACER to access your saved searches.')
+                raise RocError('Sign in to ROC to access your saved searches.')
             if mutating and context.authenticating:
                 raise RocError('Wait for PACER sign-in to finish.')
             ws = self._workspace(context)
             if not ws:
-                raise RocError('Sign in with PACER to access your saved searches.')
+                raise RocError('Sign in to ROC to access your saved searches.')
             with ws.lock:
                 # Each operation captures this browser's own PACER connection.
                 # Sharing history never swaps an in-flight request's credentials.

@@ -1,7 +1,8 @@
 "use strict";
 const $ = id => document.getElementById(id);
-const token = location.hash.slice(1) || sessionStorage.getItem("roc-token") || "";
+const token = (location.hash.startsWith("#reset=") ? "" : location.hash.slice(1)) || sessionStorage.getItem("roc-token") || "";
 if (token) sessionStorage.setItem("roc-token", token);
+const resetToken = location.hash.startsWith("#reset=") ? location.hash.slice(7) : "";
 history.replaceState(null, "", location.pathname);
 let currentId = null, current = null, selected = new Set(), page = 0, pageRows = [], quote = null;
 let busyAction = false, refreshing = false, tableStamp = "", sidebarStamp = "", activeRun = null;
@@ -68,7 +69,7 @@ function setSearchMode(mode, save=true) {
   $('search-first').required = !litigant; $('search-first').placeholder = litigant ? 'Jane (leave blank for an entity)' : 'Marc';
   $('search-first-optional').hidden = !litigant; $('search-aliases').hidden = litigant; form.elements.aliases.disabled = litigant;
   $('litigant-search-note').hidden = !litigant; $('search-step').textContent = litigant ? 'Explore matches' : 'Choose dockets';
-  $('search-method').textContent = litigant ? 'Find cases involving a person or organization as a litigant, on either side. This first step provides the case index and downloads; litigant docket enrichment and Document Grabber will follow.' : 'Searches use the supplied first and last names. Additional names expand the API search and help match counsel on selected dockets.';
+  $('search-method').textContent = litigant ? 'Find cases involving a person or organization as a litigant, on either side. This first step provides the case index and downloads; Docket Surfer provides docket and document access for selected cases.' : 'Searches use the supplied first and last names. Additional names expand the API search and help match counsel on selected dockets.';
   $('additional-names-help').textContent = litigant ? 'Add spelling variants, former names or related entities. This combines their case results without treating them as the same person or company.' : 'Add another first or last name used by this attorney. These names also help match counsel on retrieved dockets.';
   $('search-budget-note').textContent = litigant ? 'One shared cap for all name searches. Narrow the dates or courts to control cost. No dockets or documents are purchased.' : 'One shared cap for all name searches. Docket reports are optional: choose cases and set a separate cap afterward.';
   renderAdditionalNames(draft.additionalNames || []);
@@ -110,6 +111,7 @@ function adoptAccountView(view, preserveAuth=false) {
   $('run-progress').classList.remove('is-active'); $('case-rows').setAttribute('aria-busy','false');
   $('search-view').hidden = false; $('breadcrumb').textContent = 'Workspace / New search'; document.title = 'Record of Counsel';
   if (window.rocDocumentsReset) window.rocDocumentsReset();
+  if (window.rocSurferReset) window.rocSurferReset();
 }
 async function api(path, value) {
   const generation = accountGeneration;
@@ -146,11 +148,15 @@ function setButtons() {
   $('undo-rule').disabled = busy || rulesBusy || !ruleState?.canUndo;
   $('apply-rule').disabled = busy || rulesBusy || !pendingRule;
   $('connect-pacer').disabled = busy; $('disconnect-pacer').disabled = busy; $('switch-account').disabled = busy;
-  $('connect-pacer').hidden = connection.connected; $('disconnect-pacer').hidden = !(connection.signedIn || connection.connected);
+  $('connect-pacer').hidden = connection.connected || (connection.personalAccounts && !connection.signedIn); $('disconnect-pacer').hidden = !connection.connected;
   $('switch-account').hidden = !connection.signedIn;
+  $('user-login').hidden = !connection.personalAccounts || connection.signedIn; $('user-login').disabled = busy;
+  $('switch-account').textContent = connection.personalAccounts ? 'Sign out of ROC' : 'Switch account';
+  $('my-files').disabled = !connection.signedIn || busy;
+  $('import-legacy').hidden = connection.role !== 'owner'; $('import-legacy').disabled = busy || !connection.connected;
   $('connect-pacer').textContent = connection.signedIn ? 'Reconnect PACER' : 'Connect PACER';
-  $('disconnect-pacer').textContent = connection.accountMode ? 'Sign out' : 'Disconnect';
-  $('connection-status').textContent = stopped ? 'ROC stopped' : shuttingDown ? 'Stopping ROC…' : connection.connecting ? 'Connecting…' : connection.signedIn ? `${connection.username} · ${connection.connected ? 'PACER connected' : 'Saved searches available'}` : connection.connected ? 'PACER connected' : 'Sign-in required';
+  $('disconnect-pacer').textContent = 'Disconnect PACER';
+  $('connection-status').textContent = stopped ? 'ROC stopped' : shuttingDown ? 'Stopping ROC…' : connection.connecting ? 'Connecting…' : connection.signedIn ? `${connection.email || connection.username} · ${connection.connected ? 'PACER connected' : 'Saved searches available'}` : connection.connected ? 'PACER connected' : 'Sign-in required';
   $('stop-roc').disabled = shuttingDown;
   for (const id of ['auth-username','auth-password','auth-otp','auth-client','auth-redact','auth-submit']) $(id).disabled = connection.connecting || authSending || authSubmitted || shuttingDown;
   $('search-submit').disabled = busy; $('demo').disabled = busy || !demoAvailable;
@@ -218,7 +224,7 @@ async function refresh() {
     const stamp = JSON.stringify([accountView,connection.signedIn,currentId, listing.jobs.map(j => [j.id,j.state,j.caseCount,j.spentCents])]);
     if (stamp !== sidebarStamp) {
       sidebarStamp = stamp; $('runs').replaceChildren();
-      if (connection.accountMode && !connection.signedIn) $('runs').append(node('p', 'Saved searches will appear here after you sign in with PACER.', 'help'));
+      if (connection.accountMode && !connection.signedIn) $('runs').append(node('p', 'Saved searches will appear here after you sign in to ROC.', 'help'));
       else if (!listing.jobs.length) $('runs').append(node('p', 'Your searches will be saved here.', 'help'));
       for (const job of listing.jobs) {
         const b = node('button', runName(job), `run-link${job.id === currentId ? ' active' : ''}`);
@@ -242,10 +248,10 @@ function renderRun() {
   $('breadcrumb').textContent = `Workspace / ${runName(r)}`;
   $('run-kind').textContent = r.demo ? 'FREE DEMO · FICTIONAL RECORD' : litigantRun() ? 'LITIGANT SEARCH' : 'ATTORNEY SEARCH';
   $('run-name').textContent = runName(r);
-  for (const id of ['view-clients','document-launch','docket-selection']) $(id).hidden = litigantRun();
+  $('view-clients').hidden=litigantRun(); $('document-launch').hidden=false; $('docket-selection').hidden=false;
   $('case-filter-help').textContent = 'Options and case counts come from saved results. Select any values within a category; cases must match each category you use. Party name and party role must match the same party in a case.';
   for (const dir of ['asc','desc']) $('sort').querySelector(`[value="party-${dir}"]`).textContent = `${litigantRun() ? 'Litigant' : 'Client'} name · ${dir === 'asc' ? 'A–Z' : 'Z–A'}`;
-  $('run-help').textContent = (!r.indexReady && r.cases.length ? `Partial results from completed name searches. ${r.busy ? 'The remaining searches are still running' : 'Resume to finish the remaining searches'}; exports and docket selection become available when the index is complete. ` : '') + 'Nature of Case clips long entries. Click a case to read the full values and data notes.' + (litigantRun() ? '' : ' Docket retrieval does not buy filings; use Document Grabber separately for selected PDFs.');
+  $('run-help').textContent = (!r.indexReady && r.cases.length ? `Partial results from completed name searches. ${r.busy ? 'The remaining searches are still running' : 'Resume to finish the remaining searches'}; exports and docket selection become available when the index is complete. ` : '') + 'Nature of Case clips long entries. Click a case to read the full values and data notes.' + (litigantRun() ? '' : ' Docket retrieval does not buy filings; use Docket Surfer to choose PDFs.');
   const dates = r.search.dateFiledFrom || r.search.dateFiledTo ? `${r.search.dateFiledFrom || 'Any date'} → ${r.search.dateFiledTo || 'Present'}` : 'All filing dates';
   $('run-scope').textContent = `${r.search.courtId?.length ? r.search.courtId.join(', ').toUpperCase() : 'All federal courts'} · ${dates}${r.searchQueries?.length > 1 ? ` · ${r.searchQueries.length} name searches` : ''} · Saved ${r.createdUtc.slice(0,10)}`;
   $('stat-cases').textContent = r.caseCount.toLocaleString(); $('stat-dockets').textContent = r.enrichedCount.toLocaleString();
@@ -281,7 +287,7 @@ function renderRun() {
   $('docket-guidance').hidden = litigantRun() || !r.indexReady || !r.cases.some(c=>!c.enriched);
   const coverage = r.partyReports?.coverage;
   $('report-coverage').textContent = coverage ? `${coverage.parsedDockets} of ${coverage.indexedCases} indexed cases have parsed dockets · ${coverage.indexOnlyCases} index only · Counsel matched in ${coverage.casesWithMatchedClients} cases${coverage.partyTablesNeedingReview ? ` · ${coverage.partyTablesNeedingReview} party tables need review` : ''}. Client summaries cover saved dockets only.` : 'An update is ready. Use Stop ROC, then reopen Start ROC to load party reports. Saved work is retained; reconnect PACER when you next need access.';
-  if (litigantRun()) $('report-coverage').textContent = 'PCL litigant matches · One row per case. Matched names appear below the case title; original party-role codes are in case details and downloads. Names may match different people or entities. Litigant docket enrichment and Document Grabber are not available in this first step.';
+  if (litigantRun()) $('report-coverage').textContent = 'PCL litigant matches · One row per case. Matched names appear below the case title; original party-role codes are in case details and downloads. Names may match different people or entities. Open a case in Docket Surfer to read its docket and choose documents. Attorney-specific client analysis does not apply.';
   $('exports-stale').hidden = clientReportsAvailable && !r.exportsNeedRefresh && !r.exportsIncomplete;
   $('exports-stale-message').textContent = r.exportsIncomplete ? r.exportNotice : clientReportsAvailable ? 'Updated reports are available. Refresh this run’s downloads from saved evidence, free.' : 'The Clients view is ready. To update downloads, use Stop ROC and reopen Start ROC, then choose Update exports. Restarting ends the current PACER sign-in; saved data stays available.';
   $('exports').replaceChildren();
@@ -507,6 +513,7 @@ function renderTable() {
   $('previous').disabled = page === 0; $('next').disabled = (page+1)*pageSize >= rows.length; selectionLabel(rows); renderFilterState();
 }
 function showCase(c) {
+  $('detail-surfer').onclick=()=>{$('case-dialog').close();openSurfer(c.key).catch(error);};
   $('detail-parties-heading').textContent = litigantRun() ? 'Matched litigants (PCL)' : 'Parties & counsel matches';
   $('detail-number').textContent = c.caseNumber; $('detail-title').textContent = c.caseTitle; $('detail-nature').textContent = c.nature;
   $('detail-fields').replaceChildren();
@@ -689,11 +696,11 @@ function openAuth(context, next) {
   $('auth-submit').textContent = next ? 'Connect and continue' : 'Connect PACER';
   clearCredentials(); $('auth-password').type = 'text'; $('toggle-password').textContent = 'Hide'; $('toggle-password').setAttribute('aria-label','Hide password');
   $('auth-redact').checked = false; $('auth-dialog').showModal(); setButtons();
-  if (connection.signedIn) $('auth-username').value = connection.username;
+  if (connection.username) $('auth-username').value = connection.username;
 }
-async function connectedAction(context, next) {if (connection.connected) await next(); else openAuth(context, next);}
+async function connectedAction(context, next) {if (connection.personalAccounts && !connection.signedIn) {openUser('login',()=>connectedAction(context,next)); return;} if (connection.connected) await next(); else openAuth(context, next);}
 bind('connect-pacer','click',() => openAuth('Connect your PACER account to this ROC session. Signing in alone does not start a search.', null));
-bind('switch-account','click',() => {openAuth('Sign in with another PACER account to open its saved searches. People sharing a PACER account share its history.',null); $('auth-username').value = ''; $('auth-client').value = ''; $('auth-username').focus();});
+bind('switch-account','click',() => action(()=>api('/api/account/logout',{})));
 bind('disconnect-pacer','click',() => action(() => api('/api/connection/disconnect',{})));
 bind('close-auth','click',() => $('auth-dialog').close());
 $('auth-dialog').addEventListener('close',() => {clearCredentials(); afterLogin = null;});
@@ -703,7 +710,7 @@ bind('auth-form','submit',async e => {
   authSending = true; $('auth-message').textContent = 'Connecting to the official PACER authentication API…'; $('auth-message').hidden = false; setButtons();
   const fields = {username:$('auth-username').value,password:$('auth-password').value,otp:$('auth-otp').value,clientCode:$('auth-client').value,redact:$('auth-redact').checked};
   authTarget = fields.username.trim();
-  if (connection.signedIn && connection.username !== authTarget) afterLogin = null;
+  if (!connection.personalAccounts && connection.signedIn && connection.username !== authTarget) afterLogin = null;
   try {await api('/api/connection/sign-in',fields); authSubmitted = true; authSending = false; await refresh();}
   catch(e) {$('auth-message').textContent = e.message;}
   finally {fields.password = ''; fields.otp = ''; authSending = false; setButtons();}

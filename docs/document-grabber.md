@@ -1,4 +1,6 @@
-# Document Grabber
+# Document Grabber (optional AI motion finder)
+
+For manual browsing and downloads, use [Docket Surfer](docket-surfer.md); no model is needed. Empty analysis bundles are now rejected.
 
 The local ROC interface can analyze selected, already-saved docket reports and purchase selected candidate PDFs. No chat agent or hosting is required. PACER authentication and case searches stay on the official APIs. PDF downloads use **court-web HTTP requests**, not a PACER document API. No browser login/search fallback is used.
 

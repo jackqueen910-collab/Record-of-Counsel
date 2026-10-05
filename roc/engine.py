@@ -18,7 +18,7 @@ from .review import case_issues
 from .retrieve import CourtRetriever, pending_confirmation, continuation_case
 from .select import select_dockets, validate_options
 from .store import RunStore
-from .search import search_type, subject, subject_name, counsel_aliases, search_plan, require_attorney, indexed_parties
+from .search import search_type, subject, subject_name, counsel_aliases, search_plan, indexed_parties
 
 
 @dataclass(frozen=True)
@@ -49,8 +49,6 @@ def run_workflow(config, base, *, live=False, session_provider=None, checkpoint=
     name_rules = snapshot(read_json(resolve(base, config["nameRulesFile"])) if config.get("nameRulesFile") else config.get("nameRules"))
     kind, target = search_type(config), subject(config)
     name, aliases = subject_name(config), counsel_aliases(config)
-    if config.get('savedDockets') or config.get('retrieveDockets') or config.get('dockets') is not None:
-        require_attorney(config)
     run_dir = resolve(base, config["runDirectory"])
     budget = config.get("budgetCents", 0)
     metadata = {"generatedUtc": now(), "searchType": kind, ('lawyer' if kind == 'attorney' else 'litigant'): target, "mode": "live" if live else "offline",

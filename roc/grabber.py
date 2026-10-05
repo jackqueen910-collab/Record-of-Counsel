@@ -69,6 +69,7 @@ class DocumentGrabber:
 
     def purchase_quote(self, identifier, values):
         self.ws.idle()
+        self.ws.library.check_document_receipts()
         state = self.state(identifier)
         ExpenseLedger(self.root(identifier), 'documents').check()
         ids = values.get('candidateIds')
@@ -89,8 +90,11 @@ class DocumentGrabber:
             prior = ExpenseLedger(self.root(identifier), 'documents').find(key)
             if prior and prior['state'] != 'complete':
                 raise RocError('This document has an unresolved purchase.')
+            shared = self.ws.library.find_document(key)
+            if shared and not shared['available']:
+                raise RocError('A saved PDF is missing. Restore it instead of repurchasing.')
             items.append({'candidateId': ident, 'caseNumber': source['caseNumber'], 'courtId': source['courtId'],
-                          'entryNumber': c['number'], 'kind': c['kind'], 'url': c['url'], 'cached': bool(prior),
+                          'entryNumber': c['number'], 'kind': c['kind'], 'url': c['url'], 'cached': bool(prior or shared),
                           'analysisId': analysis_id, 'evidenceFingerprint': fingerprint(c)})
         quote = {'candidateIds': ids, 'items': items, 'maximumCents': sum(300 for i in items if not i['cached']),
                  'spentCents': state['documents']['spentCents']}
@@ -145,6 +149,7 @@ class DocumentGrabber:
                 write_json(path, results)
             return 'Document candidates ready. Review the evidence, then select PDFs and set a separate document cap.'
         candidates = {c['candidateId']: (r['source'], c, r['analysisId']) for r in results['cases'].values() for c in r['candidates']}
+        self.ws.library.check_document_receipts()
         for item in quote['items']:
             self.ws.checkpoint()
             if (item['candidateId'] not in candidates or
@@ -152,6 +157,11 @@ class DocumentGrabber:
                     candidates[item['candidateId']][2] != item['analysisId']):
                 raise RocError('Document candidate changed since approval. Make a new preview.')
             source, candidate, analysis_id = candidates[item['candidateId']]
+            shared = self.ws.library.find_document(document_key(candidate['url']))
+            if shared:
+                if not shared['available']:
+                    raise RocError('A saved PDF is missing. Restore it instead of repurchasing.')
+                continue
             old = ExpenseLedger(root, 'documents').find(document_key(candidate['url']))
             session = None if old and old['state'] == 'complete' else session_provider()
             download_document(root, source, candidate, session, self.ws.checkpoint, analysis_id=analysis_id)
@@ -161,26 +171,29 @@ class DocumentGrabber:
         self.ws.idle()
         root = self.root(identifier)
         state = self.state(identifier)
+        if not state['results']['cases'] and not any(t['state']=='complete' for t in state['documents']['transactions']):
+            raise RocError('There are no analyzed filings or purchased PDFs to export. Use Docket Surfer to browse a case, or My Files for saved purchases.')
         out = root / 'document-bundle.zip'
         root.mkdir(parents=True, exist_ok=True)
         stream = io.StringIO(newline='')
         writer = csv.writer(stream)
         writer.writerow(['Court', 'Case number', 'Entry', 'Date', 'Kind', 'Client (docket attribution)', 'Status', 'Evidence', 'Docket text', 'PDF file'])
-        pdfs, included = {}, set()
+        pdfs, included, reused = {}, set(), []
         for r in state['results']['cases'].values():
             source = r['source']
             for c in r['candidates']:
                 file = ''
                 if c['url']:
                     key = document_key(c['url'])
-                    t = ExpenseLedger(root, 'documents').find(key)
-                    if t and t['state'] == 'complete':
-                        path = root / 'pdfs' / (key + '.pdf')
-                        if not path.is_file():
+                    saved = self.ws.library.find_document(key)
+                    if saved:
+                        path = saved['_path']
+                        if not saved['available']:
                             raise RocError('A saved PDF is missing. Restore it instead of repurchasing.')
                         file = f"{source['courtId']}/{source['caseNumber'].replace(':','-')}/entry-{c['number']}-{key[:10]}.pdf"
                         pdfs[file] = path
                         included.add(key)
+                        reused.append({k:saved[k] for k in ('id','caseKey','entryNumber','savedUtc','costCents')})
                 values = [source['courtId'], source['caseNumber'], c['number'], c['date'], c['kind'], c['client'], c['status'], c['evidenceQuote'], c['text'], file]
                 writer.writerow(["'" + v if isinstance(v, str) and re.match(r'^(?:\s*[=+@\-]|[\t\r\n])', v) else v for v in values])
         # A later model/source analysis may no longer include an earlier candidate.
@@ -204,7 +217,7 @@ class DocumentGrabber:
                        'Their evidence is retained without reinterpreting or re-running those analyses. '
                        'PDF adapter has offline tests only; no live acceptance yet.\n')
             z.writestr('evidence.json', json.dumps(state['results'], indent=2))
-            z.writestr('spending.json', json.dumps({'ai': state['ai'], 'documents': state['documents']}, indent=2))
+            z.writestr('spending.json', json.dumps({'ai': state['ai'], 'documents': state['documents'], 'includedSavedPurchases': reused}, indent=2))
             for archive in sorted((root / 'analyses').glob('*.json')):
                 z.write(archive, 'analyses/' + archive.name)
             for name, path in pdfs.items():

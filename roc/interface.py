@@ -58,7 +58,7 @@ def make_server(workspace, port=0, *, enable_demo=False):
             self.send_header("Cache-Control", "no-store")
             self.send_header("X-Content-Type-Options", "nosniff")
             self.send_header("Referrer-Policy", "no-referrer")
-            self.send_header("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'")
+            self.send_header("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self'; frame-src blob:; frame-ancestors 'none'; base-uri 'none'; form-action 'none'")
             if filename:
                 self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
             self.end_headers()
@@ -77,7 +77,7 @@ def make_server(workspace, port=0, *, enable_demo=False):
         def do_GET(self):
             try:
                 path = urlsplit(self.path).path
-                asset = {"/": "index.html", "/app.js": "app.js", "/documents.js": "documents.js", "/style.css": "style.css"}.get(path)
+                asset = {"/": "index.html", "/app.js": "app.js", "/documents.js": "documents.js", "/users.js": "users.js", "/surfer.js": "surfer.js", "/style.css": "style.css"}.get(path)
                 self.guard(authenticated=asset is None)
                 if asset:
                     kind = 'text/javascript; charset=utf-8' if asset.endswith('.js') else {"index.html": "text/html; charset=utf-8", "style.css": "text/css; charset=utf-8"}[asset]
@@ -93,6 +93,14 @@ def make_server(workspace, port=0, *, enable_demo=False):
                     return self.send(200, [{"id": c.court_id, "name": c.district} for c in sorted(DISTRICT_COURTS.values(), key=lambda c: c.district)])
                 with self.scope() as current:
                     with current.lock:
+                        if path == '/api/files':
+                            return self.send(200, current.library.public())
+                        if len(parts) == 3 and parts[:2] == ['api', 'files']:
+                            file, name = current.library.file(parts[2])
+                            return self.send(200, file.read_bytes(), 'application/pdf' if file.suffix=='.pdf' else 'text/html; charset=utf-8', name)
+                        if len(parts) == 4 and parts[:2] == ['api','runs'] and parts[3] == 'docket':
+                            key = parse_qs(urlsplit(self.path).query).get('caseKey',[''])[0]
+                            return self.send(200, current.surfer.case(parts[2],key))
                         if path == '/api/name-rules':
                             return self.send(200, current.name_rules.public())
                         if len(parts) == 3 and parts[:2] == ['api', 'runs']:
@@ -126,13 +134,35 @@ def make_server(workspace, port=0, *, enable_demo=False):
                 # Host/origin/token checks still precede parsing and all dispatch.
                 self.connection.settimeout(10)
                 raw = self.rfile.read(size)
-                self.guard()
+                self.guard(authenticated=urlsplit(self.path).path != '/api/account/reset')
                 if self.headers.get("Content-Type") != "application/json":
                     raise RocError("JSON required.")
                 value = json.loads(raw)
                 if not isinstance(value, dict):
                     raise RocError("Expected a JSON object.")
                 parts = urlsplit(self.path).path.strip("/").split("/")
+                if len(parts) == 3 and parts[:2] == ['api', 'account'] and isinstance(workspace, Accounts):
+                    view = self.headers.get('X-ROC-View', '')
+                    if parts[2] in ('register', 'login'):
+                        self.new_cookie = workspace.user_sign_in(self.cookie(), value, parts[2] == 'register', view)
+                    elif parts[2] == 'logout':
+                        self.new_cookie = workspace.sign_out(self.cookie(), view)
+                    elif parts[2] == 'import':
+                        return self.send(200, workspace.import_legacy(self.cookie(), view))
+                    elif parts[2] == 'forgot':
+                        if workspace.reset_sender is None:
+                            raise RocError('Password-reset email is not configured on this ROC installation. Contact its owner.')
+                        job = workspace.users.reset_request(value.get('email'))
+                        if job:
+                            # A single attempt; no email address or token in response/logs.
+                            workspace.pool.submit(workspace.reset_sender, job, f'http://127.0.0.1:{server.server_port}/')
+                        return self.send(200, {'message': 'If this email has an account, a recovery link will be sent. Keep ROC running while you use it.'})
+                    elif parts[2] == 'reset':
+                        workspace.reset_password(value)
+                        return self.send(200, {'message': 'Password changed. Sign in to ROC with your new password.'})
+                    else:
+                        raise RocError('Unknown account action.')
+                    return self.send(200, {'ok': True, 'viewId': workspace.status(self.new_cookie)['viewId']})
                 if parts == ["api", "connection", "sign-in"]:
                     if isinstance(workspace, Accounts):
                         self.new_cookie = workspace.sign_in(self.cookie(), value, self.headers.get('X-ROC-View', ''))
@@ -159,6 +189,10 @@ def make_server(workspace, port=0, *, enable_demo=False):
                         return self.send(200, {'id': identifier, 'viewId': workspace.status(self.new_cookie)['viewId']})
                     return self.send(200, {"id": workspace.new(demo=True)})
                 with self.scope(mutating=True, require_account=parts == ['api', 'runs']) as current:
+                    if parts == ['api','files','bundle']:
+                        current.idle()
+                        bundle=current.library.bundle(value.get('ids'))
+                        return self.send(200,bundle.read_bytes(),'application/zip','ROC-My-Files.zip')
                     if parts == ['api', 'runs']:
                         return self.send(200, {'id': current.new(value)})
                     if parts == ['api', 'name-rules', 'preview']:
@@ -166,6 +200,8 @@ def make_server(workspace, port=0, *, enable_demo=False):
                     if parts == ['api', 'name-rules', 'apply']:
                         return self.send(200, current.apply_name_rule(value))
                     if len(parts) == 4 and parts[:2] == ['api', 'runs']:
+                        if parts[3] == 'surfer-quote':
+                            return self.send(200,current.surfer.quote(parts[2],value))
                         if parts[3] in ('documents-analysis-quote', 'documents-purchase-quote'):
                             with current.lock:
                                 fn = current.grabber.analysis_quote if parts[3] == 'documents-analysis-quote' else current.grabber.purchase_quote

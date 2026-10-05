@@ -10,7 +10,7 @@ import urllib.error
 import urllib.request
 from urllib.parse import urlencode, urljoin, urlsplit
 
-from .common import RocError, clean, fingerprint, normalize_case_number, now
+from .common import RocError, clean, fingerprint, normalize_case_number, now, write_json
 from .courts import profile_for_url
 from .docket import Tree
 from .documents import document_url
@@ -18,7 +18,7 @@ from .document_ledger import ExpenseLedger
 from .pacer import NoRedirect
 
 
-def price_form(raw, url):
+def price_form(raw, url, allow_attachments=False):
     """Accept only a recognized, unsubmitted price-confirmation screen."""
     root = Tree(raw).root
     text = clean(root.text())
@@ -27,7 +27,7 @@ def price_form(raw, url):
     if re.search(r'\btranscript\b', text, re.I):
         raise RocError('Transcript purchase is outside Document Grabber’s scope.')
     case = re.search(r'Case\s+Number\s*:\s*(\S+)', text, re.I)
-    doc = re.search(r'Document\s+Number\s*:\s*(\d+)(?![\d-])', text, re.I)
+    doc = re.search(r'Document\s+Number\s*:\s*(' + (r'\d+(?:-\d+)?' if allow_attachments else r'\d+') + r')(?![\d-])', text, re.I)
     costs = re.findall(r'\bCost\s*:\s*\$?\s*(\d+\.\d{2})\b', text, re.I)
     if (not case or not doc or
             len(costs) != 1 or not re.search(r'Billable\s+Pages\s*:\s*\d+', text, re.I)):
@@ -118,7 +118,51 @@ def document_key(url):
     return fingerprint({'url': url})
 
 
-def download_document(root, source, candidate, session, checkpoint=lambda: None, transport=None, analysis_id=''):
+class DocumentMenuFound(RocError):
+    pass
+
+
+def attachment_menu(raw, url, case_number, entry_number):
+    """A narrow, source-bound unsubmitted menu. Unknown pages remain unresolved."""
+    tree = Tree(raw).root
+    text = clean(tree.text())
+    if ('Document Selection Menu' not in text or re.search(r'Transaction\s+Receipt|Billable\s+Pages|Cost\s*:',text,re.I)
+            or list(tree.walk('form')) or list(tree.walk('iframe'))):
+        return None
+    case = re.search(r'Case\s+Number\s*:\s*(\S+)',text,re.I)
+    doc = re.search(r'Document\s+Number\s*:\s*(\d+)(?![\d-])',text,re.I)
+    if not case or normalize_case_number(case[1]) != case_number or not doc or doc[1] != entry_number:
+        return None
+    origin = profile_for_url(url).origin
+    options = []
+    for row in tree.walk('tr'):
+        cells = [c for c in row.children if hasattr(c,'tag') and c.tag in ('td','th')]
+        if len(cells)<2:
+            continue
+        label = clean(cells[0].text())
+        if label.lower() in ('main document','main','0') or label == entry_number:
+            number = entry_number
+        elif re.fullmatch(re.escape(entry_number)+r'-[1-9]\d*',label):
+            number = label
+        else:
+            m = re.fullmatch(r'(?:Attachment\s*)?([1-9]\d*)',label,re.I)
+            if not m:
+                continue
+            number = entry_number+'-'+m[1]
+        links = list(row.walk('a'))
+        if len(links)!=1 or any(k.startswith('on') for k in links[0].attrs):
+            return None
+        try:
+            child = document_url(links[0].attrs.get('href',''),origin)
+        except RocError:
+            return None
+        if child==url or any(o['url']==child or o['number']==number for o in options):
+            return None
+        options.append({'number':number,'url':child,'text':clean(row.text())})
+    return options or None
+
+
+def download_document(root, source, candidate, session, checkpoint=lambda: None, transport=None, analysis_id='', allow_menus=False):
     origin = profile_for_url(candidate['url']).origin
     url = document_url(candidate['url'], origin)
     key = document_key(url)
@@ -148,7 +192,14 @@ def download_document(root, source, candidate, session, checkpoint=lambda: None,
         raise RocError('Unexpected direct PDF before a price confirmation. Saved response; charge unresolved. No retry.')
     # Unknown HTML may be a charged viewer/receipt. Keep its reservation and
     # evidence, just as for a direct PDF; never assume every GET is unbilled.
-    form = price_form(raw.decode('utf-8', errors='replace'), url)
+    decoded = raw.decode('utf-8', errors='replace')
+    if allow_menus:
+        options = attachment_menu(decoded,url,source['caseNumber'],candidate['number'])
+        if options:
+            write_json(root/'menus'/(key+'.json'),{'caseKey':source['caseKey'],'url':url,'options':options})
+            ledger.not_submitted(t)
+            raise DocumentMenuFound('Document menu saved. Reopen this docket to choose the main document or individual attachments. No PDF purchase was submitted for this entry.')
+    form = price_form(decoded, url, allow_attachments=allow_menus)
     if form['caseNumber'] != source['caseNumber'] or form['documentNumber'] != candidate['number']:
         ledger.not_submitted(t)
         raise RocError('Wrong case/document on price screen. No purchase submitted.')

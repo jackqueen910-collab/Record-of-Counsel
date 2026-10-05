@@ -86,7 +86,7 @@ class LitigantSearchTests(unittest.TestCase):
                 self.assertTrue(calls[0][0].startswith('https://pcl.uscourts.gov/pcl-public-api/rest/parties/find'))
                 self.assertEqual(calls[0][1], {'lastName':'Acme Corporation', 'partyType':'pty'})
                 self.assertEqual({p['role'] for c in summary['cases'] for p in c['indexedParties']}, {'pla','dft','custom-code'})
-                self.assertFalse(any(c['eligible'] for c in summary['cases']))
+                self.assertTrue(all(c['eligible'] for c in summary['cases']))
                 self.assertEqual(summary['partyReports']['clients']['summary'], [])
                 output = output_directory(ws.folder(ident))
                 with (output / 'case-index.csv').open(encoding='utf-8-sig', newline='') as stream:
@@ -104,8 +104,8 @@ class LitigantSearchTests(unittest.TestCase):
                 with zipfile.ZipFile(output / 'party-reports.zip') as bundle:
                     self.assertIn('matched-litigants.csv', bundle.namelist())
                     self.assertNotIn('clients-summary.csv', bundle.namelist())
-                for fn in (lambda:ws.quote(ident, [summary['cases'][0]['key']]),
-                           lambda:ws.grabber.analysis_quote(ident, {'keys':[summary['cases'][0]['key']]}),
+                self.assertEqual(ws.quote(ident,[summary['cases'][0]['key']])['newReports'],1)
+                for fn in (lambda:ws.grabber.analysis_quote(ident, {'keys':[summary['cases'][0]['key']]}),
                            lambda:ws.grabber.state(ident)):
                     with self.assertRaisesRegex(RocError, 'not available for litigants'):
                         fn()
@@ -121,17 +121,19 @@ class LitigantSearchTests(unittest.TestCase):
             finally:
                 ws.close()
 
-    def test_litigant_dockets_rejected_before_authentication_or_spending(self):
+    def test_litigant_saved_docket_is_viewable_without_inventing_an_attorney(self):
+        from tests.test_surfer import prepared_workspace
         with tempfile.TemporaryDirectory() as folder:
-            path = Path(folder) / 'config.json'
-            for extra in ({'savedDockets':[{}]}, {'dockets':{'limit':1}},
-                          {'retrieveDockets':[{'courtId':'nysdc','caseNumber':'1:24-cv-00001'}]}):
-                write_json(path, {'searchType':'litigant','litigant':{'lastName':'Example Entity'},
-                                 'runDirectory':'run','budgetCents':100} | extra)
-                with patch.object(Session,'prompt', side_effect=AssertionError('No authentication')):
-                    with self.assertRaisesRegex(RocError, 'not available for litigants'):
-                        run(path, live=True)
-            self.assertFalse((Path(folder) / 'run/ledger.json').exists())
+            ws, ident = prepared_workspace(folder)
+            try:
+                m=ws.manifest(ident);m['config'].pop('lawyer');m['config'].update(searchType='litigant',litigant={'lastName':'Example Client'})
+                ws.save(ident,m)
+                result=ws.surfer.case(ident,'nysdc|1:24-cr-00001')
+                self.assertTrue(result['saved'])
+                self.assertEqual(result['source']['clients'],[])
+                self.assertEqual(len(result['source']['entries']),6)
+                with self.assertRaises(RocError):ws.grabber.analysis_quote(ident,{'keys':['nysdc|1:24-cr-00001']})
+            finally:ws.close()
 
     def test_litigant_pause_resume_reuses_identical_party_query_and_saved_page(self):
         calls = []

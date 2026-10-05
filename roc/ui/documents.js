@@ -9,6 +9,7 @@ function docControls() {
   $('open-documents').title = docAvailable ? 'Analyze saved dockets and choose PDFs' : 'Stop ROC and reopen Start ROC to load Document Grabber';
   for (const id of ['preview-analysis','document-model','document-bundle']) $(id).disabled = busy;
   $('preview-analysis').disabled = busy || !docKeys.length;
+  $('document-bundle').disabled = busy || !(Object.keys(docState?.results?.cases || {}).length || docState?.documents?.transactions?.some(t=>t.state==='complete'));
   $('preview-documents').disabled = busy || !docSelected.size;
   const valid = (quote,id) => {try {return quote && cents($(id).value) >= quote.maximumCents;} catch {return false;}};
   $('confirm-analysis').disabled = busy || current?.demo || !valid(analysisQuote,'ai-cap') || (analysisQuote?.maximumCents > 0 && !docState?.configured);
